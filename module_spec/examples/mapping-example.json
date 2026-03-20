@@ -1,0 +1,18 @@
+[
+  {
+    "fieldId": 101,
+    "equipmentAttributeKey": "power_kva",
+    "operator": "equals",
+    "filterActive": true,
+    "requiredMatch": true,
+    "sortOrder": 1
+  },
+  {
+    "fieldId": 102,
+    "equipmentAttributeKey": "output_voltage",
+    "operator": "equals",
+    "filterActive": true,
+    "requiredMatch": true,
+    "sortOrder": 2
+  }
+]

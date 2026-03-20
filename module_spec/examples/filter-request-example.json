@@ -1,0 +1,6 @@
+{
+  "required": {
+    "power_kva": 100,
+    "output_voltage": 380
+  }
+}

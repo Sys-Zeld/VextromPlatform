@@ -1,0 +1,107 @@
+<%- include("../partials/head", { pageTitle }) %>
+
+<section class="token-console">
+  <div class="card app-card token-hero-card">
+    <div class="card-body token-hero-body">
+      <div class="token-hero-copy">
+        <span class="token-hero-eyebrow">SERVICE REPORT</span>
+        <h1 class="h4 app-card-title mb-1">Clientes e Sites</h1>
+        <p class="text-muted mb-0">Cadastro modular de cliente, tipo e sites atendidos.</p>
+      </div>
+      <div class="token-hero-actions">
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+      </div>
+    </div>
+  </div>
+
+  <% if (created) { %><div class="alert alert-success mb-0">Cadastro salvo com sucesso.</div><% } %>
+
+  <div class="row g-3">
+    <div class="col-12 col-xl-6">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Novo cliente</h2>
+          <form method="post" action="/admin/report-service/customers" class="row g-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <div class="col-12"><input class="form-control" name="name" placeholder="Nome do cliente" required /></div>
+            <div class="col-12">
+              <select class="form-select" name="customer_type">
+                <% ["offshore","onshore","others"].forEach((type) => { %>
+                  <option value="<%= type %>"><%= type %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="Observacoes"></textarea></div>
+            <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit">Salvar cliente</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-6">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Novo site</h2>
+          <form method="post" action="/admin/report-service/sites" class="row g-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <div class="col-12">
+              <select class="form-select" name="customer_id" required>
+                <option value="">Selecione cliente</option>
+                <% customers.forEach((customer) => { %><option value="<%= customer.id %>"><%= customer.name %></option><% }) %>
+              </select>
+            </div>
+            <div class="col-12"><input class="form-control" name="site_name" placeholder="Nome do site" required /></div>
+            <div class="col-12"><input class="form-control" name="site_code" placeholder="Codigo do site" /></div>
+            <div class="col-12"><input class="form-control" name="location" placeholder="Localizacao" /></div>
+            <div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="Observacoes"></textarea></div>
+            <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit">Salvar site</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card app-card">
+    <div class="card-body">
+      <h2 class="h6 app-card-title mb-3">Clientes cadastrados</h2>
+      <div class="table-responsive mb-4">
+        <table class="table table-sm app-table mb-0">
+          <thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Notas</th></tr></thead>
+          <tbody>
+            <% if (!customers.length) { %><tr><td colspan="4" class="text-center text-muted py-4">Sem clientes.</td></tr><% } %>
+            <% customers.forEach((customer) => { %>
+              <tr>
+                <td><%= customer.id %></td>
+                <td><%= customer.name %></td>
+                <td><%= customer.customer_type %></td>
+                <td><%= customer.notes || "-" %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 class="h6 app-card-title mb-3">Sites cadastrados</h2>
+      <div class="table-responsive">
+        <table class="table table-sm app-table mb-0">
+          <thead><tr><th>ID</th><th>Cliente</th><th>Site</th><th>Codigo</th><th>Local</th></tr></thead>
+          <tbody>
+            <% if (!sites.length) { %><tr><td colspan="5" class="text-center text-muted py-4">Sem sites.</td></tr><% } %>
+            <% sites.forEach((site) => { %>
+              <tr>
+                <td><%= site.id %></td>
+                <td><%= site.customer_name %></td>
+                <td><%= site.site_name %></td>
+                <td><%= site.site_code || "-" %></td>
+                <td><%= site.location || "-" %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include("../partials/footer") %>

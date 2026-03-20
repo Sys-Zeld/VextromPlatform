@@ -1,0 +1,397 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card mb-4">
+  <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <div>
+      <h1 class="h4 app-card-title mb-1"><%= t("admin.profilesTitle") %></h1>
+      <p class="text-muted mb-0"><%= t("admin.profilesSubtitle") %></p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-primary btn-sm" href="/admin/profiles/ai"><%= t("admin.profileAiPageButton") %></a>
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/tokens"><%= t("admin.backToTokensButton") %></a>
+    </div>
+  </div>
+</div>
+
+<% if (saved) { %><div class="alert alert-success"><%= t("admin.profilesSaved") %></div><% } %>
+<% if (deleted) { %><div class="alert alert-success"><%= t("admin.profilesDeleted") %></div><% } %>
+<% if (errors.generic) { %><div class="alert alert-danger"><%= errors.generic %></div><% } %>
+<% if (errors.import) { %><div class="alert alert-danger"><%= errors.import %></div><% } %>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-3">
+    <div class="card app-card">
+      <div class="card-body">
+        <h2 class="h6 app-card-title"><%= t("admin.profilesListTitle") %></h2>
+        <div class="list-group list-group-flush">
+          <% profiles.forEach((profile) => { %>
+            <div class="list-group-item profile-list-item">
+              <div class="profile-list-item-text">
+                <div class="fw-semibold"><%= profile.name %></div>
+                <div class="small text-muted"><%= t("admin.profileStats", { fields: profile.fieldsCount, clients: profile.usageCount }) %></div>
+              </div>
+              <div class="profile-list-item-actions">
+                <a class="btn btn-outline-primary btn-sm" href="/admin/profiles?edit=<%= profile.id %>"><%= t("admin.profileEditButton") %></a>
+                <form class="m-0" method="post" action="/admin/profiles/<%= profile.id %>/clone" onsubmit="return confirm('<%= t('admin.profileCloneConfirm') %>')">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button class="btn btn-outline-secondary btn-sm" type="submit"><%= t("admin.profileCloneButton") %></button>
+                </form>
+                <form class="m-0" method="post" action="/admin/profiles/<%= profile.id %>/delete" onsubmit="return confirm('<%= t('admin.profileDeleteConfirm') %>')">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                  <button class="btn btn-outline-danger btn-sm" type="submit"><%= t("admin.profileDeleteButton") %></button>
+                </form>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-9">
+    <div class="card app-card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
+          <h2 class="h6 app-card-title mb-0"><%= editingProfileId ? t("admin.profileEditTitle") : t("admin.profileNewTitle") %></h2>
+          <div class="d-flex gap-2">
+            <% if (editingProfileId) { %>
+              <a class="btn btn-outline-secondary btn-sm" href="/admin/profiles/<%= editingProfileId %>/export"><%= t("admin.profileExportButton") %></a>
+              <button
+                class="btn btn-outline-danger btn-sm"
+                type="submit"
+                formnovalidate
+                formaction="/admin/profiles/<%= editingProfileId %>/clear"
+                onclick="return confirm('<%= t('admin.profileClearConfirm') %>')"
+              >
+                <%= t("admin.profileClearButton") %>
+              </button>
+            <% } %>
+          </div>
+        </div>
+
+        <div class="card app-card border mb-3">
+          <div class="card-body">
+            <h3 class="h6 app-card-title mb-2"><%= t("admin.profileImportTitle") %></h3>
+            <p class="small text-muted mb-2"><%= t("admin.profileImportSubtitle") %></p>
+            <form method="post" action="/admin/profiles/import" class="row g-2" id="profileImportForm">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="profile_json" id="profileJsonInput" />
+              <div class="col-12 col-md-8">
+                <label class="form-label" for="profileJsonFile"><%= t("admin.profileImportFileLabel") %></label>
+                <input class="form-control" type="file" id="profileJsonFile" accept=".json,application/json" required />
+              </div>
+              <div class="col-12 col-md-4 d-flex align-items-end">
+                <button class="btn btn-outline-primary w-100" type="submit"><%= t("admin.profileImportButton") %></button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <form method="post" action="<%= editingProfileId ? `/admin/profiles/${editingProfileId}/update` : '/admin/profiles/create' %>" class="row g-3">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+          <div class="col-12 col-md-8">
+            <label class="form-label"><%= t("admin.profileNameLabel") %></label>
+            <input name="name" class="form-control <%= errors.name ? 'is-invalid' : '' %>" value="<%= formValues.name || '' %>" required />
+            <% if (errors.name) { %><div class="invalid-feedback d-block"><%= errors.name %></div><% } %>
+          </div>
+
+          <div class="col-12 col-md-4 d-flex align-items-end gap-2">
+            <button class="btn btn-primary w-100" type="submit"><%= editingProfileId ? t("admin.profileUpdateButton") : t("admin.profileCreateButton") %></button>
+            <% if (editingProfileId) { %><a class="btn btn-outline-secondary" href="/admin/profiles"><%= t("admin.profileCancelButton") %></a><% } %>
+          </div>
+
+          <% if (errors.fieldIds) { %><div class="col-12 text-danger small"><%= errors.fieldIds %></div><% } %>
+
+          <% if (editingProfileId) { %>
+            <div class="col-12" id="new-field">
+              <div class="card app-card border">
+                <div class="card-body">
+                  <h3 class="h6 app-card-title mb-2"><%= t("admin.profileAddFieldTitle") %></h3>
+                  <div class="small text-muted mb-2"><%= t("admin.profileAddFieldSubtitle") %></div>
+                  <div class="row g-2">
+                    <div class="col-12 col-md-3">
+                      <label class="form-label"><%= t("admin.profileFieldSection") %></label>
+                      <input class="form-control" list="sectionOptions" name="new_field_section" value="<%= newFieldValues.section || '' %>" />
+                    </div>
+                    <div class="col-12 col-md-3">
+                      <label class="form-label"><%= t("admin.profileFieldLabel") %></label>
+                      <input class="form-control" name="new_field_label" value="<%= newFieldValues.label || '' %>" data-new-field-label />
+                    </div>
+                    <div class="col-12 col-md-3">
+                      <label class="form-label">Key</label>
+                      <input class="form-control" name="new_field_key" value="<%= newFieldValues.key || '' %>" data-new-field-key />
+                    </div>
+                    <div class="col-12 col-md-3">
+                      <label class="form-label"><%= t("admin.profileFieldType") %></label>
+                      <select class="form-select" name="new_field_field_type">
+                        <% ['text','number','enum','boolean','time','dimension'].forEach((type) => { %>
+                          <option value="<%= type %>" <%= newFieldValues.field_type === type ? 'selected' : '' %>><%= type %></option>
+                        <% }) %>
+                      </select>
+                    </div>
+                    <div class="col-12 col-md-3">
+                      <label class="form-label"><%= t("admin.profileFieldUnit") %></label>
+                      <input class="form-control" name="new_field_unit" value="<%= newFieldValues.unit || '' %>" />
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label class="form-label"><%= t("admin.profileFieldEnumOptions") %></label>
+                      <textarea class="form-control" name="new_field_enum_options" rows="2"><%= newFieldValues.enum_options || '' %></textarea>
+                    </div>
+                    <div class="col-12 col-md-3 d-flex align-items-center">
+                      <div class="form-check form-switch mt-3">
+                        <input class="form-check-input" type="checkbox" name="new_field_is_required" value="true" <%= newFieldValues.is_required ? 'checked' : '' %> />
+                        <label class="form-check-label"><%= t("admin.profileFieldRequiredToggle") %></label>
+                      </div>
+                    </div>
+                    <div class="col-12 col-md-3 d-flex align-items-center">
+                      <div class="form-check form-switch mt-3">
+                        <input class="form-check-input" type="checkbox" name="new_field_has_default" value="true" <%= newFieldValues.has_default ? 'checked' : '' %> />
+                        <label class="form-check-label"><%= t("admin.profileFieldDefaultToggle") %></label>
+                      </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                      <label class="form-label"><%= t("admin.profileFieldDefaultValue") %></label>
+                      <input class="form-control" name="new_field_default_value" value="<%= newFieldValues.default_value || '' %>" />
+                    </div>
+                    <div class="col-12 col-md-3 d-flex align-items-end">
+                      <button class="btn btn-outline-primary w-100" formaction="/admin/profiles/<%= editingProfileId %>/fields/create" type="submit" formnovalidate>
+                        <%= t("admin.profileAddFieldButton") %>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% } %>
+
+          <div class="col-12">
+            <div class="card app-card">
+              <div class="card-body">
+                <h3 class="h6 app-card-title mb-2"><%= t("admin.profileSectionManagerTitle") %></h3>
+                <div id="bulkSectionFeedback" class="small mb-2"></div>
+                <div class="row g-2">
+                  <div class="col-12 col-md-8">
+                    <label class="form-label" for="bulk_section_name"><%= t("admin.profileNewSectionLabel") %></label>
+                    <input id="bulk_section_name" class="form-control" type="text" list="sectionOptions" />
+                    <datalist id="sectionOptions">
+                      <% const sectionNames = Array.from(new Set(sections.map((s) => s.name))).filter(Boolean); %>
+                      <% sectionNames.forEach((sectionName) => { %>
+                        <option value="<%= sectionName %>"></option>
+                      <% }) %>
+                    </datalist>
+                  </div>
+                  <div class="col-12 col-md-4 d-flex align-items-end">
+                    <button id="applyBulkSectionBtn" class="btn btn-outline-primary w-100" type="button"><%= t("admin.profileApplySectionButton") %></button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <div class="accordion" id="profileAccordion">
+              <% sections.forEach((section, idx) => { %>
+                <div class="accordion-item app-accordion-item mb-2 border rounded-3">
+                  <h2 class="accordion-header d-flex align-items-center">
+                    <button class="accordion-button <%= idx > 0 ? 'collapsed' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#profile_sec_<%= idx %>">
+                      <%= section.name %> (<%= section.fields.length %>)
+                    </button>
+                    <% if (editingProfileId) { %>
+                      <a class="btn btn-outline-primary btn-sm me-2 flex-shrink-0" href="/admin/profiles?edit=<%= editingProfileId %>&new_section=<%= encodeURIComponent(section.name) %>#new-field">
+                        <%= t("admin.newFieldInSection") %>
+                      </a>
+                      <button
+                        class="btn btn-outline-danger btn-sm me-2 flex-shrink-0"
+                        type="submit"
+                        formnovalidate
+                        formaction="/admin/profiles/<%= editingProfileId %>/sections/clear"
+                        name="section_name"
+                        value="<%= section.name %>"
+                        onclick="return confirm('<%= t('admin.profileSectionClearConfirm') %>')"
+                      >
+                        <%= t("admin.profileSectionClearButton") %>
+                      </button>
+                    <% } %>
+                  </h2>
+                  <div id="profile_sec_<%= idx %>" class="accordion-collapse collapse <%= idx === 0 ? 'show' : '' %>" data-bs-parent="#profileAccordion">
+                    <div class="accordion-body">
+                      <% section.fields.forEach((field) => { %>
+                        <div class="border rounded p-2 mb-2">
+                          <input type="hidden" name="pf_display_order_<%= field.fieldId %>" value="<%= field.displayOrder %>" />
+                          <div class="row g-2">
+                            <div class="col-12 col-md-2">
+                              <div class="form-check mt-1 mb-2">
+                                <input class="form-check-input profile-field-select" type="checkbox" id="pf_select_<%= field.fieldId %>" value="<%= field.fieldId %>" />
+                                <label class="form-check-label" for="pf_select_<%= field.fieldId %>"><%= t("admin.profileFieldSelect") %></label>
+                              </div>
+                              <div class="form-check form-switch mt-4">
+                                <input class="form-check-input" type="checkbox" name="pf_enabled_<%= field.fieldId %>" value="true" <%= field.isEnabled ? 'checked' : '' %> />
+                                <label class="form-check-label"><%= t("admin.profileFieldEnabled") %></label>
+                              </div>
+                            </div>
+                            <div class="col-12 col-md-5">
+                              <label class="form-label"><%= t("admin.profileFieldLabel") %></label>
+                              <input class="form-control" name="pf_label_<%= field.fieldId %>" value="<%= field.label || '' %>" />
+                            </div>
+                            <div class="col-12 col-md-5">
+                              <label class="form-label"><%= t("admin.profileFieldSection") %></label>
+                              <input class="form-control profile-section-input" list="sectionOptions" data-field-id="<%= field.fieldId %>" name="pf_section_<%= field.fieldId %>" value="<%= field.section || '' %>" />
+                            </div>
+                            <div class="col-12 col-md-3">
+                              <label class="form-label"><%= t("admin.profileFieldType") %></label>
+                              <select class="form-select" name="pf_field_type_<%= field.fieldId %>">
+                                <% ['text','number','enum','boolean','time','dimension'].forEach((type) => { %>
+                                  <option value="<%= type %>" <%= field.fieldType === type ? 'selected' : '' %>><%= type %></option>
+                                <% }) %>
+                              </select>
+                            </div>
+                            <div class="col-12 col-md-3">
+                              <label class="form-label"><%= t("admin.profileFieldUnit") %></label>
+                              <input class="form-control" name="pf_unit_<%= field.fieldId %>" value="<%= field.unit || '' %>" />
+                            </div>
+                            <div class="col-12 col-md-6">
+                              <label class="form-label"><%= t("admin.profileFieldEnumOptions") %></label>
+                              <textarea class="form-control" name="pf_enum_options_<%= field.fieldId %>" rows="2"><%= Array.isArray(field.enumOptions) ? field.enumOptions.join('\n') : '' %></textarea>
+                            </div>
+                            <div class="col-12 col-md-3">
+                              <div class="form-check form-switch mt-4">
+                                <input class="form-check-input" type="checkbox" name="pf_required_<%= field.fieldId %>" value="true" <%= field.isRequired ? 'checked' : '' %> />
+                                <label class="form-check-label"><%= t("admin.profileFieldRequiredToggle") %></label>
+                              </div>
+                            </div>
+                            <div class="col-12 col-md-3">
+                              <div class="form-check form-switch mt-4">
+                                <input class="form-check-input" type="checkbox" name="pf_has_default_<%= field.fieldId %>" value="true" <%= field.hasDefault ? 'checked' : '' %> />
+                                <label class="form-check-label"><%= t("admin.profileFieldDefaultToggle") %></label>
+                              </div>
+                            </div>
+                            <div class="col-12 col-md-9">
+                              <label class="form-label"><%= t("admin.profileFieldDefaultValue") %></label>
+                              <input class="form-control" name="pf_default_value_<%= field.fieldId %>" value="<%= field.defaultValue === null || field.defaultValue === undefined ? '' : (typeof field.defaultValue === 'string' ? field.defaultValue : JSON.stringify(field.defaultValue)) %>" />
+                            </div>
+                            <% if (editingProfileId) { %>
+                              <div class="col-12 col-md-3 d-flex align-items-end">
+                                <button
+                                  class="btn btn-outline-danger btn-sm"
+                                  formaction="/admin/profiles/<%= editingProfileId %>/fields/<%= field.fieldId %>/delete"
+                                  type="submit"
+                                  formnovalidate
+                                  onclick="return confirm('<%= t('admin.profileFieldDeleteConfirm') %>')"
+                                >
+                                  <%= t("admin.profileFieldDeleteButton") %>
+                                </button>
+                              </div>
+                            <% } %>
+                          </div>
+                        </div>
+                      <% }) %>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    function toSlug(input) {
+      return String(input || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 120);
+    }
+
+    const newFieldLabelInput = document.querySelector("[data-new-field-label]");
+    const newFieldKeyInput = document.querySelector("[data-new-field-key]");
+    let lastGenerated = "";
+
+    if (newFieldLabelInput && newFieldKeyInput) {
+      const initial = toSlug(newFieldLabelInput.value);
+      if (!newFieldKeyInput.value) {
+        newFieldKeyInput.value = initial;
+      }
+      lastGenerated = toSlug(newFieldKeyInput.value);
+
+      newFieldLabelInput.addEventListener("input", function () {
+        const generated = toSlug(newFieldLabelInput.value);
+        const currentKey = toSlug(newFieldKeyInput.value);
+        if (!newFieldKeyInput.value || currentKey === lastGenerated) {
+          newFieldKeyInput.value = generated;
+          lastGenerated = generated;
+        }
+      });
+
+      newFieldKeyInput.addEventListener("input", function () {
+        const sanitized = toSlug(newFieldKeyInput.value);
+        if (newFieldKeyInput.value !== sanitized) {
+          newFieldKeyInput.value = sanitized;
+        }
+        lastGenerated = sanitized;
+      });
+    }
+
+    const applyBtn = document.getElementById("applyBulkSectionBtn");
+    const sectionInput = document.getElementById("bulk_section_name");
+    const feedback = document.getElementById("bulkSectionFeedback");
+    if (applyBtn && sectionInput && feedback) {
+      const messages = {
+        sectionRequired: "<%= t('admin.profileSectionRequired') %>",
+        fieldRequired: "<%= t('admin.profileFieldsRequiredForSection') %>"
+      };
+      applyBtn.addEventListener("click", function () {
+        const sectionName = String(sectionInput.value || "").trim();
+        if (!sectionName) {
+          feedback.className = "small text-danger mb-2";
+          feedback.textContent = messages.sectionRequired;
+          return;
+        }
+        const selected = Array.from(document.querySelectorAll(".profile-field-select:checked")).map((el) => String(el.value));
+        if (!selected.length) {
+          feedback.className = "small text-danger mb-2";
+          feedback.textContent = messages.fieldRequired;
+          return;
+        }
+        const sectionInputs = Array.from(document.querySelectorAll(".profile-section-input"));
+        sectionInputs.forEach((input) => {
+          if (selected.includes(String(input.dataset.fieldId))) {
+            input.value = sectionName;
+          }
+        });
+        feedback.className = "small text-success mb-2";
+        feedback.textContent = "";
+      });
+    }
+
+    const importForm = document.getElementById("profileImportForm");
+    const importFileInput = document.getElementById("profileJsonFile");
+    const profileJsonInput = document.getElementById("profileJsonInput");
+    if (importForm && importFileInput && profileJsonInput) {
+      importForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+        const file = importFileInput.files && importFileInput.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function () {
+          profileJsonInput.value = typeof reader.result === "string" ? reader.result : "";
+          importForm.submit();
+        };
+        reader.onerror = function () {
+          profileJsonInput.value = "";
+        };
+        reader.readAsText(file);
+      });
+    }
+
+  })();
+</script>
+
+<%- include("partials/footer") %>

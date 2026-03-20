@@ -1,0 +1,27 @@
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .app-topbar,
+  .app-footer,
+  .report-preview-actions {
+    display: none !important;
+  }
+
+  .report-doc {
+    width: 100%;
+    gap: 0;
+    background: #fff;
+  }
+
+  .report-page {
+    box-shadow: none;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    min-height: 100vh;
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
+}

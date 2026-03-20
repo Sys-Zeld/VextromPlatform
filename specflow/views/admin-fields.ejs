@@ -1,0 +1,205 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card mb-4">
+  <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <div>
+      <h1 class="h4 app-card-title mb-1"><%= t("admin.fieldsTitle") %></h1>
+      <p class="text-muted mb-0"><%= t("admin.fieldsSubtitle") %></p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/tokens"><%= t("admin.backToTokensButton") %></a>
+      <form method="post" action="/admin/seed-annexd">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <button class="btn btn-outline-primary btn-sm" type="submit">Reaplicar seed Annex D</button>
+      </form>
+      <form method="post" action="/admin/logout">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <button class="btn btn-outline-secondary btn-sm" type="submit"><%= t("admin.logoutButton") %></button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<% if (saved) { %>
+  <div class="alert alert-success"><%= t("admin.fieldsSaved") %></div>
+<% } %>
+<% if (deleted) { %>
+  <div class="alert alert-success">Campo removido com sucesso.</div>
+<% } %>
+<% if (errors.generic) { %>
+  <div class="alert alert-danger"><%= errors.generic %></div>
+<% } %>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-4" id="form">
+    <div class="card app-card">
+      <div class="card-body">
+        <h2 class="h6 app-card-title"><%= editingFieldId ? "Editar campo" : "Novo campo" %></h2>
+        <form method="post" action="<%= editingFieldId ? `/admin/fields/${editingFieldId}/update` : '/admin/fields/create' %>" class="row g-2">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="col-12">
+            <label class="form-label">Key (slug)</label>
+            <input class="form-control <%= errors.key ? 'is-invalid' : '' %>" name="key" value="<%= formValues.key || '' %>" data-key-input required />
+            <% if (errors.key) { %><div class="invalid-feedback d-block"><%= errors.key %></div><% } %>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Label</label>
+            <input class="form-control <%= errors.label ? 'is-invalid' : '' %>" name="label" value="<%= formValues.label || '' %>" data-label-input required />
+            <% if (errors.label) { %><div class="invalid-feedback d-block"><%= errors.label %></div><% } %>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Section</label>
+            <select class="form-select <%= errors.section ? 'is-invalid' : '' %>" name="section" required>
+              <% sectionNames.forEach((name) => { %>
+                <option value="<%= name %>" <%= formValues.section === name ? 'selected' : '' %>><%= name %></option>
+              <% }) %>
+            </select>
+            <% if (errors.section) { %><div class="invalid-feedback d-block"><%= errors.section %></div><% } %>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Type</label>
+            <select class="form-select <%= errors.fieldType ? 'is-invalid' : '' %>" name="field_type" required>
+              <% fieldTypes.forEach((type) => { %>
+                <option value="<%= type %>" <%= formValues.field_type === type ? 'selected' : '' %>><%= type %></option>
+              <% }) %>
+            </select>
+            <% if (errors.fieldType) { %><div class="invalid-feedback d-block"><%= errors.fieldType %></div><% } %>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Unit</label>
+            <input class="form-control" name="unit" value="<%= formValues.unit || '' %>" />
+          </div>
+          <div class="col-12">
+            <label class="form-label">Enum options (uma por linha)</label>
+            <textarea class="form-control <%= errors.enumOptions ? 'is-invalid' : '' %>" name="enum_options" rows="4"><%= formValues.enum_options || '' %></textarea>
+            <% if (errors.enumOptions) { %><div class="invalid-feedback d-block"><%= errors.enumOptions %></div><% } %>
+          </div>
+          <div class="col-12">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" id="has_default" name="has_default" value="true" <%= formValues.has_default ? 'checked' : '' %> />
+              <label class="form-check-label" for="has_default">Usar valor padrão</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label">defaultValue</label>
+            <input class="form-control <%= errors.defaultValue ? 'is-invalid' : '' %>" name="default_value" value="<%= formValues.default_value || '' %>" />
+            <% if (errors.defaultValue) { %><div class="invalid-feedback d-block"><%= errors.defaultValue %></div><% } %>
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary btn-sm" type="submit"><%= editingFieldId ? "Atualizar" : "Criar" %></button>
+            <% if (editingFieldId) { %>
+              <a class="btn btn-outline-secondary btn-sm" href="/admin/fields">Cancelar</a>
+            <% } %>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-8">
+    <div class="accordion" id="fieldsAccordion">
+      <% sections.forEach((section, idx) => { %>
+        <div class="accordion-item mb-2 border rounded-3">
+          <h2 class="accordion-header" id="heading_<%= idx %>">
+            <button class="accordion-button <%= idx > 0 ? 'collapsed' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_<%= idx %>">
+              <%= section.name %> (<%= section.fields.length %>)
+            </button>
+          </h2>
+          <div id="collapse_<%= idx %>" class="accordion-collapse collapse <%= idx === 0 ? 'show' : '' %>" data-bs-parent="#fieldsAccordion">
+            <div class="accordion-body">
+              <div class="table-responsive">
+                <table class="table table-sm align-middle app-table mb-0">
+                  <thead>
+                    <tr>
+                      <th>Key</th>
+                      <th>Label</th>
+                      <th>Type</th>
+                      <th>Default</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% section.fields.forEach((field) => { %>
+                      <tr>
+                        <td><code><%= field.key %></code></td>
+                        <td><%= field.label %></td>
+                        <td><span class="badge text-bg-light border"><%= field.fieldType %></span></td>
+                        <td><%= field.hasDefault ? JSON.stringify(field.defaultValue) : '-' %></td>
+                        <td>
+                          <a class="btn btn-outline-primary btn-sm" href="/admin/fields?edit=<%= field.id %>#form">Editar</a>
+                          <form method="post" action="/admin/fields/<%= field.id %>/delete" class="d-inline" onsubmit="return confirm('Excluir campo?')">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                            <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                          </form>
+                        </td>
+                      </tr>
+                      <% if (String(editingFieldId) === String(field.id)) { %>
+                        <script>
+                          (function () {
+                            const params = new URLSearchParams(window.location.search);
+                            if (!params.get("edit")) return;
+                          })();
+                        </script>
+                      <% } %>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    function toSlug(input) {
+      return String(input || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 120);
+    }
+
+    const labelInput = document.querySelector("[data-label-input]");
+    const keyInput = document.querySelector("[data-key-input]");
+    let lastGenerated = "";
+
+    if (labelInput && keyInput) {
+      const initial = toSlug(labelInput.value);
+      if (!keyInput.value) {
+        keyInput.value = initial;
+      }
+      lastGenerated = toSlug(keyInput.value);
+
+      labelInput.addEventListener("input", function () {
+        const generated = toSlug(labelInput.value);
+        const currentKey = toSlug(keyInput.value);
+        if (!keyInput.value || currentKey === lastGenerated) {
+          keyInput.value = generated;
+          lastGenerated = generated;
+        }
+      });
+
+      keyInput.addEventListener("input", function () {
+        const sanitized = toSlug(keyInput.value);
+        if (keyInput.value !== sanitized) {
+          keyInput.value = sanitized;
+        }
+        lastGenerated = sanitized;
+      });
+    }
+
+    const editId = new URLSearchParams(window.location.search).get("edit");
+    if (!editId) return;
+    const rows = Array.from(document.querySelectorAll("tr"));
+    const row = rows.find((el) => el.innerText.includes(editId));
+    if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+  })();
+</script>
+
+<%- include("partials/footer") %>

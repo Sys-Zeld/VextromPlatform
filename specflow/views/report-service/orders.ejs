@@ -1,0 +1,105 @@
+<%- include("../partials/head", { pageTitle }) %>
+
+<section class="token-console">
+  <div class="card app-card token-hero-card">
+    <div class="card-body token-hero-body">
+      <div class="token-hero-copy">
+        <span class="token-hero-eyebrow">SERVICE REPORT</span>
+        <h1 class="h4 app-card-title mb-1">Ordens de Servico</h1>
+        <p class="text-muted mb-0">Gestao de OS com vinculacao de cliente, site e relatorio tecnico.</p>
+      </div>
+      <div class="token-hero-actions">
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/customers">Clientes</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/equipments">Equipamentos</a>
+      </div>
+    </div>
+  </div>
+
+  <% if (created) { %><div class="alert alert-success mb-0">OS criada com sucesso.</div><% } %>
+  <% if (deleted) { %><div class="alert alert-success mb-0">OS removida com sucesso.</div><% } %>
+
+  <div class="card app-card">
+    <div class="card-body">
+      <h2 class="h6 app-card-title mb-3">Nova ordem de servico</h2>
+      <form method="post" action="/admin/report-service/orders" class="row g-3">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="col-12 col-md-4">
+          <label class="form-label">Cliente</label>
+          <select class="form-select" name="customer_id" required>
+            <option value="">Selecione</option>
+            <% customers.forEach((customer) => { %>
+              <option value="<%= customer.id %>"><%= customer.name %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Site (opcional)</label>
+          <input class="form-control" name="site_id" placeholder="ID do site" />
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Status</label>
+          <select class="form-select" name="status">
+            <% ["draft","in_progress","waiting_review","approved","issued","closed","cancelled"].forEach((status) => { %>
+              <option value="<%= status %>"><%= status %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Titulo</label>
+          <input class="form-control" name="title" required />
+        </div>
+        <div class="col-12">
+          <label class="form-label">Descricao</label>
+          <textarea class="form-control" name="description" rows="2"></textarea>
+        </div>
+        <div class="col-12 d-flex justify-content-end">
+          <button class="btn btn-primary btn-sm" type="submit">Criar OS</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card app-card">
+    <div class="card-body">
+      <h2 class="h6 app-card-title mb-3">Lista de ordens</h2>
+      <div class="table-responsive">
+        <table class="table table-sm app-table mb-0">
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Titulo</th>
+              <th>Cliente</th>
+              <th>Site</th>
+              <th>Status</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!orders.length) { %><tr><td colspan="6" class="text-center text-muted py-4">Sem OS cadastrada.</td></tr><% } %>
+            <% orders.forEach((order) => { %>
+              <tr>
+                <td><code><%= order.service_order_display || "-" %></code></td>
+                <td><%= order.title %></td>
+                <td><%= order.customer_name %></td>
+                <td><%= order.site_name || "-" %></td>
+                <td><span class="badge text-bg-light border"><%= order.status %></span></td>
+                <td>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <a class="btn btn-outline-primary btn-sm" href="/admin/report-service/orders/<%= order.id %>">Abrir Editor</a>
+                    <form method="post" action="/admin/report-service/orders/<%= order.id %>/delete" class="m-0" onsubmit="return confirm('Excluir esta OS e todos os dados vinculados?');">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <button class="btn btn-outline-danger btn-sm" type="submit">Excluir OS</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include("../partials/footer") %>

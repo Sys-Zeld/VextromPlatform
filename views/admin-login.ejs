@@ -1,0 +1,31 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card admin-login-card mx-auto">
+  <div class="card-body">
+    <h1 class="h4 app-card-title mb-3"><%= t("admin.loginTitle") %></h1>
+
+    <% if (invalidCredentials) { %>
+      <div class="alert alert-danger"><%= t("admin.invalidCredentials") %></div>
+    <% } %>
+    <% if (loginRateLimited) { %>
+      <div class="alert alert-warning"><%= t("admin.loginRateLimited") %></div>
+    <% } %>
+
+    <form method="post" action="/admin/login" class="row g-3">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div class="col-12">
+        <label for="username" class="form-label"><%= t("admin.username") %></label>
+        <input id="username" name="username" type="text" class="form-control" required autofocus />
+      </div>
+      <div class="col-12">
+        <label for="password" class="form-label"><%= t("admin.password") %></label>
+        <input id="password" name="password" type="password" class="form-control" required />
+      </div>
+      <div class="col-12 d-grid">
+        <button class="btn btn-primary" type="submit"><%= t("admin.loginButton") %></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%- include("partials/footer") %>

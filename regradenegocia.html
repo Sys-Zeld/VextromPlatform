@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Regra de Negocio - APP-FORM-UPS-IEC</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #5b6472;
+      --border: #d9e2ec;
+      --accent: #0f5f8c;
+      --accent-soft: #e7f3f8;
+      --ok: #0f766e;
+      --warn: #9a3412;
+      --code-bg: #eef4f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #eef4f8 0%, var(--bg) 180px);
+      color: var(--text);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 16px 40px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+    }
+    h1, h2, h3 { margin: 0 0 10px; }
+    h1 { font-size: 1.75rem; }
+    h2 { font-size: 1.2rem; color: var(--accent); }
+    h3 { font-size: 1rem; }
+    p { margin: 6px 0; }
+    ul, ol { margin: 8px 0 0 18px; padding: 0; }
+    li { margin: 5px 0; }
+    .meta { color: var(--muted); }
+    .chips { margin-top: 10px; }
+    .chip {
+      display: inline-block;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid #c5dce8;
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin: 0 6px 6px 0;
+      font-size: 0.85rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f8fbfd; }
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1px 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.9em;
+    }
+    .ok { color: var(--ok); font-weight: 600; }
+    .warn { color: var(--warn); font-weight: 600; }
+    .cols {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    @media (max-width: 860px) {
+      .cols { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>Regra de Negocio do Sistema</h1>
+      <p class="meta">Aplicacao: APP-FORM-UPS-IEC</p>
+      <p class="meta">Baseado no comportamento implementado em <code>src/app.js</code> e nos servicos de dominio do projeto.</p>
+      <div class="chips">
+        <span class="chip">Formulario dinamico</span>
+        <span class="chip">Perfis reutilizaveis</span>
+        <span class="chip">Tokens por cliente</span>
+        <span class="chip">Fluxo publico controlado</span>
+        <span class="chip">PDF, e-mail e anexos</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>1. Objetivo do sistema</h2>
+      <p>O sistema gerencia a coleta de especificacoes tecnicas de UPS com base no Anexo D da IEC 62040-3. Ele permite montar formularios dinamicos, associar conjuntos de campos a perfis, gerar tokens individuais por cliente e consolidar a resposta final em tela de revisao, PDF, JSON e envio por e-mail.</p>
+    </section>
+
+    <section class="card">
+      <h2>2. Entidades principais</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Entidade</th>
+            <th>Papel de negocio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>fields</code></td>
+            <td>Catalogo mestre de campos do formulario. Cada campo tem secao, tipo, unidade, ordem e opcionalmente valor padrao.</td>
+          </tr>
+          <tr>
+            <td><code>field_profiles</code> e <code>field_profile_fields</code></td>
+            <td>Perfis reutilizaveis que definem quais campos ficam habilitados e como cada campo pode ser customizado dentro do perfil.</td>
+          </tr>
+          <tr>
+            <td><code>equipments</code></td>
+            <td>Registro de cada solicitacao de cliente. Guarda token, dados do cliente, perfil aplicado e status do fluxo.</td>
+          </tr>
+          <tr>
+            <td><code>equipment_enabled_fields</code></td>
+            <td>Lista efetiva de campos habilitados para um token especifico.</td>
+          </tr>
+          <tr>
+            <td><code>equipment_field_values</code></td>
+            <td>Valores realmente preenchidos e salvos para cada campo de um equipamento.</td>
+          </tr>
+          <tr>
+            <td><code>equipment_documents</code></td>
+            <td>Anexos PDF vinculados ao token.</td>
+          </tr>
+          <tr>
+            <td><code>public_token_links</code></td>
+            <td>Links publicos que permitem iniciar o preenchimento usando um perfil predefinido.</td>
+          </tr>
+          <tr>
+            <td><code>api_keys</code>, <code>admin_users</code> e sessoes</td>
+            <td>Camada de autenticacao e autorizacao do painel e das APIs.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>3. Logica central de preenchimento</h2>
+      <ol>
+        <li>O admin define os campos base do sistema em <code>/admin/fields</code>.</li>
+        <li>O admin cria perfis em <code>/admin/profiles</code>, podendo habilitar ou desabilitar campos, alterar label, secao, tipo, obrigatoriedade, ordem e default dentro do perfil.</li>
+        <li>Ao cadastrar um cliente em <code>/admin/clients/new</code>, o sistema cria um <code>equipment</code> com token unico e associa os campos habilitados.</li>
+        <li>O formulario de um token mostra apenas os campos efetivamente habilitados para aquele equipamento.</li>
+        <li>O preenchimento pode ser salvo parcialmente enquanto o status estiver em <code>draft</code>.</li>
+        <li>Na etapa de revisao, o usuario pode gerar PDF e enviar e-mail. Quando o e-mail e enviado com sucesso, o token muda para <code>sent</code>.</li>
+        <li>Depois de <code>sent</code>, o formulario fica bloqueado para o publico e so pode ser alterado por sessao admin autenticada.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>4. Regra de valor efetivo dos campos</h2>
+      <p>A exibicao de cada campo no formulario segue uma precedencia fixa implementada em <code>src/services/specifications.js</code>:</p>
+      <ol>
+        <li>Se existir valor salvo em <code>equipment_field_values</code>, esse valor prevalece.</li>
+        <li>Se nao existir valor salvo e o campo tiver <code>hasDefault = true</code>, o sistema usa <code>defaultValue</code>.</li>
+        <li>Se nao houver valor salvo nem default, o campo aparece vazio.</li>
+      </ol>
+      <p>Ao salvar vazio, o registro persistido do campo e removido e a resolucao volta a depender de default ou vazio.</p>
+    </section>
+
+    <section class="card">
+      <h2>5. Tipos de campo e validacoes</h2>
+      <div class="cols">
+        <div>
+          <h3>Tipos suportados</h3>
+          <ul>
+            <li><code>text</code>: texto livre.</li>
+            <li><code>number</code>: converte numero, inclusive com virgula.</li>
+            <li><code>enum</code>: aceita apenas opcoes cadastradas.</li>
+            <li><code>boolean</code>: aceita verdadeiro/falso em formatos padronizados.</li>
+            <li><code>time</code>: exige formato <code>hh:mm</code>.</li>
+            <li><code>dimension</code>: exige formato equivalente a <code>HxWxD</code>.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Regras associadas</h3>
+          <ul>
+            <li>Campos <code>enum</code> precisam de lista de opcoes.</li>
+            <li>Se <code>hasDefault</code> for verdadeiro, o default precisa ser valido para o tipo do campo.</li>
+            <li>A chave <code>key</code> do campo precisa ser unica e seguir padrao slug em minusculas com underscore.</li>
+            <li>Os erros de validacao retornam <code>422</code> nas APIs ou reexibem a tela com mensagens no fluxo web.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>6. Fluxos de negocio</h2>
+      <h3>6.1 Fluxo administrativo principal</h3>
+      <ol>
+        <li>Admin autentica em <code>/admin/login</code>.</li>
+        <li>Admin cria ou ajusta campos base.</li>
+        <li>Admin cria ou ajusta perfis de formulario.</li>
+        <li>Admin cadastra um cliente, opcionalmente aplica um perfil e pode salvar a selecao atual como novo perfil.</li>
+        <li>O sistema gera um token unico para o cliente acessar o formulario.</li>
+      </ol>
+
+      <h3>6.2 Fluxo do cliente por token</h3>
+      <ol>
+        <li>Cliente acessa <code>/form/:token/specification</code>.</li>
+        <li>Preenche dados do cliente e campos tecnicos habilitados.</li>
+        <li>Pode salvar e continuar ou seguir para revisao.</li>
+        <li>Na revisao, pode baixar PDF ou enviar o formulario por e-mail.</li>
+        <li>Quando o e-mail e enviado com sucesso, o status vira <code>sent</code>.</li>
+      </ol>
+
+      <h3>6.3 Fluxo publico</h3>
+      <ol>
+        <li>Um link publico ativo aponta para um perfil predefinido.</li>
+        <li>Ao iniciar, o sistema valida limite por IP e sessao de navegador.</li>
+        <li>Se liberado, gera um token temporario de rascunho.</li>
+        <li>Ao enviar o formulario, o sistema cria um <code>equipment</code> real e salva a especificacao.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>7. Regras sobre perfis</h2>
+      <ul>
+        <li>Perfil e um molde reutilizavel do formulario.</li>
+        <li>Um perfil nao define apenas selecao de campos; ele tambem pode sobrescrever configuracoes do campo no contexto do perfil.</li>
+        <li>Ao aplicar um perfil a um cliente, os IDs dos campos habilitados sao copiados para o equipamento.</li>
+        <li>Depois disso, a configuracao do cliente pode ser personalizada sem alterar o perfil original.</li>
+        <li>O sistema tambem permite criar campos novos diretamente dentro do perfil, gerando uma <code>key</code> unica automaticamente.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>8. Regras sobre status do token</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Significado</th>
+            <th>Efeito pratico</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>draft</code></td>
+            <td>Formulario ainda esta em elaboracao.</td>
+            <td>Pode continuar recebendo edicoes pelo link do token.</td>
+          </tr>
+          <tr>
+            <td><code>sent</code></td>
+            <td>Submissao considerada enviada/finalizada.</td>
+            <td>Edicao publica e bloqueada; apenas admin autenticado pode alterar.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>9. Documentos anexos</h2>
+      <ul>
+        <li>Somente PDF e aceito.</li>
+        <li>Limite por arquivo: <code>10 MB</code>.</li>
+        <li>Limite por equipamento: <code>10</code> documentos.</li>
+        <li>O sistema valida assinatura basica do arquivo PDF antes de salvar.</li>
+        <li>O arquivo vai para <code>dados/docs</code> e o metadado fica salvo no banco.</li>
+        <li>O download e feito por rota controlada, nao por exposicao irrestrita de pasta.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>10. PDF, revisao e envio por e-mail</h2>
+      <ul>
+        <li>A revisao consolida os dados do cliente, os campos respondidos e os documentos anexos.</li>
+        <li>O PDF e gerado sob demanda a partir da especificacao atual do token.</li>
+        <li>O envio de e-mail usa SMTP configurado no ambiente e anexa o PDF da submissao.</li>
+        <li>Existe rate limit para envio de e-mail, reduzindo abuso da funcionalidade.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>11. IA para criacao de perfis</h2>
+      <ul>
+        <li>O modulo de IA recebe documento <code>PDF</code>, <code>TXT</code> ou planilha Excel e um modelo JSON de perfil.</li>
+        <li>A OpenAI e usada para extrair um JSON no formato exigido pelo sistema.</li>
+        <li>O retorno precisa conter <code>name</code> e <code>fields</code>; caso contrario, a importacao e rejeitada.</li>
+        <li>Se a resposta vier truncada por limite de tokens, o sistema tenta novamente com mais capacidade de saida.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>12. Autenticacao, autorizacao e seguranca</h2>
+      <ul>
+        <li>Painel admin usa sessao assinada por cookie.</li>
+        <li>Rotas web protegidas usam <code>CSRF</code>.</li>
+        <li>APIs REST aceitam API key com escopos como <code>fields:read</code>, <code>fields:write</code>, <code>spec:read</code> e <code>spec:write</code>.</li>
+        <li>Sessao admin valida tambem pode operar as APIs internas como fallback.</li>
+        <li>O fluxo publico tem controle de taxa por IP e sessao de navegador, com janela de 12 horas.</li>
+        <li>Cabecalhos de seguranca sao reforcados com <code>helmet</code>.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>13. Regras operacionais e manutencao</h2>
+      <ul>
+        <li>O sistema executa migracao do banco na subida da aplicacao.</li>
+        <li>O seed do Anexo D e aplicado no startup para garantir estrutura minima.</li>
+        <li>O painel de manutencao permite backup, restore, gestao de API keys, usuarios admin e operacoes auxiliares de tokens.</li>
+        <li>Existe catalogo de backups e suporte a importacao de arquivo <code>.sql</code> pela interface administrativa.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>14. Resumo executivo da regra de negocio</h2>
+      <p class="ok">O sistema foi desenhado para transformar um catalogo dinamico de campos em formularios controlados por perfil e por cliente.</p>
+      <p class="ok">A regra principal e: perfil define a estrutura, token identifica a solicitacao, especificacao guarda os valores, e o status controla se o formulario ainda pode ser editado.</p>
+      <p class="warn">Os comportamentos de bloqueio, default, validacao tipada e restricao de documentos sao partes centrais da logica e nao devem ser alterados sem avaliar impacto no fluxo completo.</p>
+    </section>
+  </main>
+</body>
+</html>

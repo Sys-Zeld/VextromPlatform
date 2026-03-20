@@ -1,0 +1,184 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Release Notes - revisoes recentes</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #4b5563;
+      --accent: #0b57d0;
+      --ok: #0f766e;
+      --warn: #9a3412;
+      --border: #dbe3ef;
+      --code-bg: #eef3fb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Segoe UI, Arial, sans-serif;
+      line-height: 1.45;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.6rem; }
+    h2 { margin: 0 0 8px; font-size: 1.15rem; }
+    p { margin: 6px 0; }
+    ul { margin: 8px 0 0 18px; padding: 0; }
+    li { margin: 5px 0; }
+    .meta { color: var(--muted); font-size: .95rem; }
+    .pill {
+      display: inline-block;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin-right: 6px;
+      margin-top: 6px;
+      background: #fff;
+      font-size: .86rem;
+    }
+    code {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1px 5px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: .9em;
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .files {
+      columns: 2;
+      column-gap: 24px;
+    }
+    .files li { break-inside: avoid; }
+    @media (max-width: 900px) {
+      .files { columns: 1; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>Release Notes</h1>
+      <p class="meta">Resumo consolidado das ultimas revisoes aplicadas no workspace.</p>
+      <p class="meta">Escopo: manutencao administrativa, seguranca de rotas, autenticacao/autorizacao, usuarios admin e operacao de backup/restore.</p>
+      <div>
+        <span class="pill">Seguranca reforcada</span>
+        <span class="pill">Usuarios admin no banco</span>
+        <span class="pill">Manutencao revisada</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Resumo executivo</h2>
+      <ul>
+        <li><strong>Painel de manutencao admin</strong> criado em <code>/admin/maintenance</code>, com comandos operacionais de banco, API keys, tokens e sessoes.</li>
+        <li><strong>Catalogo de backups</strong> implementado via tabela <code>backup_files</code> e servico dedicado para sincronizar, listar, restaurar, baixar e deletar backups.</li>
+        <li><strong>Restore ampliado</strong>: restore do ultimo backup, restore selecionado, import de <code>.sql</code> via UI (limite 50MB) e opcao <code>--no-clean</code>.</li>
+        <li><strong>Seguranca de documentos</strong> reforcada: download agora por rota controlada (token/admin), com links internos no formulario/review.</li>
+        <li><strong>Gestao de usuarios admin adicionais</strong> agora persistida no banco em <code>admin_users</code>, com <code>password_hash</code>, <code>salt</code>, CRUD pela area de manutencao e migracao automatica do legado.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Mudancas funcionais (por modulo)</h2>
+      <ul>
+        <li><strong>Manutencao administrativa</strong> (<code>src/app.js</code>, <code>src/views/admin-maintenance.ejs</code>):
+          comandos para <code>db_reseed</code>, <code>db_seed_default</code>, <code>db_backup</code>, <code>db_restore</code>, <code>db_restore_selected</code>, <code>db_delete_selected</code>, <code>api_key_list</code>, <code>api_key_create</code>, <code>api_key_delete</code>, <code>token_set_sent</code>, <code>token_set_draft</code>, <code>admin_sessions_clear</code>.</li>
+        <li><strong>Import de SQL pela UI</strong> (<code>/admin/maintenance/restore-import</code>): upload raw, validacao de extensao <code>.sql</code>, limite de tamanho, salvamento em <code>dados/backups</code> e execucao de restore. O parser bruto foi reposicionado para rodar somente apos autenticacao admin e autorizacao de manutencao.</li>
+        <li><strong>Backups em catalogo</strong> (<code>src/services/backups.js</code>, <code>src/db/migrate.js</code>): tabela <code>backup_files</code>, upsert/list/get/delete, auto-recovery para erro <code>42P01</code> (tabela ausente apos restore).</li>
+        <li><strong>Fluxo backup/restore em scripts</strong>:
+          <code>scripts/backup-database.js</code> passou a registrar backup no catalogo e a excluir dados de <code>public.backup_files</code> no dump;
+          <code>scripts/restore-database.js</code> passou a suportar arquivo alvo, selecao robusta do ultimo backup por timestamp e opcao <code>--no-clean</code>.</li>
+        <li><strong>CLI Postgres cross-platform</strong> (<code>scripts/utils/postgres-cli.js</code>): resolve <code>pg_dump</code>/<code>psql</code> por <code>PG_BIN_DIR</code>, fallback para PATH e mensagens de ajuda para Windows/Linux Bitnami.</li>
+        <li><strong>Admin users</strong> (<code>src/services/adminUsers.js</code>, <code>src/db/migrate.js</code>, <code>src/app.js</code>): CRUD de usuarios admin no banco, hash de senha com <code>scrypt</code>, armazenamento de <code>salt</code> e <code>password_hash</code>, suporte a exclusao de usuario e migracao inicial a partir de <code>dados/admin-users.json</code> quando necessario.</li>
+        <li><strong>Username admin</strong> (<code>src/services/adminUsers.js</code>, <code>src/app.js</code>, <code>src/views/admin-maintenance.ejs</code>): o campo passou a aceitar e preservar maiusculas, minusculas e caracteres especiais, sem forcar conversao para lowercase.</li>
+        <li><strong>API Keys</strong> (<code>src/services/apiKeys.js</code>, <code>scripts/api-key-delete.js</code>, <code>package.json</code>): suporte a delete permanente de chave e comando NPM associado.</li>
+        <li><strong>Status de token</strong> (<code>scripts/token-set-sent.js</code>, <code>scripts/token-set-draft.js</code>): operacao por <code>--token</code>, incluindo novo comando para voltar a <code>draft</code>.</li>
+        <li><strong>Documentos e downloads</strong> (<code>src/services/documents.js</code>, <code>src/app.js</code>, <code>src/views/section.ejs</code>, <code>src/views/review.ejs</code>): links de download internos e rotas <code>/form/:token/documents/:id/download</code> e <code>/admin/documents/:id/download</code>.</li>
+        <li><strong>PDF</strong> (<code>src/services/pdf.js</code>): inclui tabela de documentos anexados no PDF final e mensagens relacionadas no i18n.</li>
+        <li><strong>Perfis</strong> (<code>scripts/seed-profile-bateria-smc.js</code>, <code>src/services/profiles.js</code>, <code>package.json</code>): novo seed de perfil "Bateria SMC" e ajuste no fluxo de perfil default.</li>
+        <li><strong>UI Admin Tokens</strong> (<code>src/views/admin-tokens.ejs</code>): botao de acesso ao painel de manutencao para perfil autorizado.</li>
+        <li><strong>Respostas HTTP padronizadas</strong> (<code>src/app.js</code>, <code>src/i18n/index.js</code>): mensagens de erro do sistema alinhadas por status <code>400</code>, <code>401</code>, <code>403</code>, <code>404</code>, <code>409</code>, <code>422</code>, <code>429</code> e <code>500</code>.</li>
+        <li><strong>Configuracao</strong> (<code>src/config/env.js</code>, <code>.env.example</code>): chaves para sessoes/admin legados e ajuste recomendado de <code>PG_BIN_DIR</code> para Bitnami Ubuntu.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Revisoes de seguranca</h2>
+      <ul>
+        <li><strong>Documentos privados</strong>: retirada de dependencia de URL publica de arquivo e concentracao do acesso em rotas controladas por autenticacao ou token valido.</li>
+        <li><strong>Rate limit publico</strong>: o identificador de IP deixou de confiar em <code>X-Forwarded-For</code> bruto para reduzir bypass em criacao publica de token.</li>
+        <li><strong>CSRF</strong>: cookie de protecao endurecido com atributos explicitos de seguranca.</li>
+        <li><strong>Erros internos</strong>: respostas 5xx e erros sensiveis deixaram de expor mensagens internas do backend ao cliente.</li>
+        <li><strong>Manutencao</strong>: confirmada a restricao por login admin e whitelist de comandos sem execucao arbitraria de bash pelo usuario final.</li>
+        <li><strong>APIs administrativas</strong>: endpoints sensiveis mantidos sob sessao admin; rotas com API key generica foram restringidas quando nao havia ownership real implementado.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Impactos operacionais</h2>
+      <ul>
+        <li class="ok">Maior autonomia operacional via painel de manutencao sem depender de shell para tarefas comuns.</li>
+        <li class="ok">Recuperacao de backup mais previsivel (catalogo + restore selecionado + import .sql).</li>
+        <li class="ok">Melhoria de seguranca no acesso a anexos (download controlado por rota/autorizacao).</li>
+        <li class="ok">Usuarios admin adicionais agora ficam centralizados no banco em vez de arquivo JSON editavel em disco.</li>
+        <li class="warn">Existe mudanca de comportamento no restore padrao: limpeza do schema <code>public</code> antes do restore, salvo uso de <code>--no-clean</code>.</li>
+        <li class="warn">O arquivo legado <code>dados/admin-users.json</code> ainda pode existir como origem de bootstrap inicial, mas deixou de ser a fonte primaria apos a migracao para <code>admin_users</code>.</li>
+        <li class="warn">A validacao em ambiente local mostrou parsing OK, mas a execucao de <code>db:migrate</code> nao foi concluida neste workspace por bloqueio local de ambiente/Node.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Arquivos alterados</h2>
+      <ul class="files">
+        <li><code>.env.example</code></li>
+        <li><code>README.md</code></li>
+        <li><code>checksecurity.html</code></li>
+        <li><code>dados/admin-session-state.json</code></li>
+        <li><code>dados/admin-users.json</code></li>
+        <li><code>package.json</code></li>
+        <li><code>release.html</code></li>
+        <li><code>scripts/api-key-delete.js</code></li>
+        <li><code>scripts/backup-database.js</code></li>
+        <li><code>scripts/restore-database.js</code></li>
+        <li><code>scripts/seed-profile-bateria-smc.js</code></li>
+        <li><code>scripts/token-set-draft.js</code></li>
+        <li><code>scripts/token-set-sent.js</code></li>
+        <li><code>scripts/utils/postgres-cli.js</code></li>
+        <li><code>src/app.js</code></li>
+        <li><code>src/config/env.js</code></li>
+        <li><code>src/db/migrate.js</code></li>
+        <li><code>src/i18n/index.js</code></li>
+        <li><code>src/services/adminUsers.js</code></li>
+        <li><code>src/services/apiKeys.js</code></li>
+        <li><code>src/services/backups.js</code></li>
+        <li><code>src/services/documents.js</code></li>
+        <li><code>src/services/pdf.js</code></li>
+        <li><code>src/services/profiles.js</code></li>
+        <li><code>src/views/admin-maintenance.ejs</code></li>
+        <li><code>src/views/admin-tokens.ejs</code></li>
+        <li><code>src/views/review.ejs</code></li>
+        <li><code>security.html</code></li>
+        <li><code>src/views/section.ejs</code></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

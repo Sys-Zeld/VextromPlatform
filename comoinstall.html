@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Como Instalar - APP-FORM-UPS-IEC (Ubuntu)</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: #f4f6f8;
+      color: #1f2937;
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+    h1, h2, h3 {
+      margin: 0 0 10px;
+    }
+    pre {
+      margin: 0;
+      background: #111827;
+      color: #e5e7eb;
+      padding: 10px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.86rem;
+    }
+    code {
+      font-family: Consolas, "Courier New", monospace;
+    }
+    ul {
+      margin: 8px 0 0 18px;
+      padding: 0;
+    }
+    .ok {
+      color: #21613a;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Instalacao do APP-FORM-UPS-IEC em Ubuntu</h1>
+      <p>Guia completo para ambiente Linux Ubuntu com Node.js, PostgreSQL e proxy reverso (Apache ou Nginx).</p>
+    </div>
+
+    <div class="card">
+      <h2>1) Atualizar servidor</h2>
+      <pre>sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl git ca-certificates gnupg lsb-release</pre>
+    </div>
+
+    <div class="card">
+      <h2>2) Instalar Node.js e npm</h2>
+      <p>Exemplo com Node 22 LTS (npm ja vem junto).</p>
+      <pre>curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs build-essential</pre>
+      <h3>Teste</h3>
+      <pre>node -v
+npm -v</pre>
+    </div>
+
+    <div class="card">
+      <h2>3) Instalar PostgreSQL</h2>
+      <pre>sudo apt install -y postgresql postgresql-contrib
+sudo systemctl enable postgresql
+sudo systemctl start postgresql</pre>
+      <h3>Teste</h3>
+      <pre>sudo -u postgres psql -c "SELECT version();"</pre>
+    </div>
+
+    <div class="card">
+      <h2>4) Criar usuario e banco exclusivos da aplicacao</h2>
+      <p>Troque os valores de senha e nomes conforme seu ambiente.</p>
+      <pre>sudo -u postgres psql
+
+CREATE ROLE formapp_user WITH LOGIN PASSWORD 'SENHA_FORTE_AQUI';
+CREATE DATABASE formupsiec OWNER formapp_user;
+GRANT ALL PRIVILEGES ON DATABASE formupsiec TO formapp_user;
+\q</pre>
+      <h3>Teste de conexao</h3>
+      <pre>psql "postgres://formapp_user:SENHA_FORTE_AQUI@127.0.0.1:5432/formupsiec" -c "SELECT current_user, current_database();"</pre>
+    </div>
+
+    <div class="card">
+      <h2>5) Criar pasta da aplicacao com permissoes corretas (Node + Apache)</h2>
+      <p>Padrao recomendado: dono deploy, grupo www-data (Apache/Nginx).</p>
+      <pre>sudo mkdir -p /var/www/formulario
+sudo adduser --disabled-password --gecos "" deploy
+sudo usermod -aG www-data deploy
+sudo chown -R deploy:www-data /var/www/formulario
+sudo chmod -R 2750 /var/www/formulario</pre>
+      <p>Se o processo Node rodar com outro usuario, adicione esse usuario no grupo <code>www-data</code>.</p>
+    </div>
+
+    <div class="card">
+      <h2>6) Publicar codigo e configurar .env</h2>
+      <pre>cd /var/www/formulario
+sudo -u deploy git clone SEU_REPO_AQUI .
+cp .env.example .env
+nano .env</pre>
+      <p>Exemplo minimo de variaveis:</p>
+      <pre>NODE_ENV=production
+PORT=3000
+APP_BASE_URL=https://seu-dominio.com
+DATABASE_URL=postgres://formapp_user:SENHA_FORTE_AQUI@127.0.0.1:5432/formupsiec
+DATABASE_SSL=false
+ADMIN_USER=admin
+ADMIN_PASS=troque-essa-senha
+ADMIN_SESSION_SECRET=troque-para-um-segredo-longo
+API_KEY_PEPPER=troque-para-um-segredo-diferente</pre>
+    </div>
+
+    <div class="card">
+      <h2>7) Instalar dependencias e preparar banco</h2>
+      <pre>cd /var/www/formulario
+sudo -u deploy npm install
+sudo -u deploy npm run db:migrate
+sudo -u deploy npm run db:seed</pre>
+      <h3>Teste rapido da app</h3>
+      <pre>sudo -u deploy npm run start
+# em outro terminal:
+curl -I http://127.0.0.1:3000</pre>
+    </div>
+
+    <div class="card">
+      <h2>8) Rodar em modo desenvolvimento ou producao</h2>
+      <h3>Desenvolvimento</h3>
+      <pre>cd /var/www/formulario
+sudo -u deploy npm run dev</pre>
+      <h3>Producao (PM2 + ecosystem.config.js)</h3>
+      <pre>cd /var/www/formulario
+sudo npm install -g pm2
+sudo -u deploy pm2 start ecosystem.config.js --env production
+sudo -u deploy pm2 save
+sudo pm2 startup systemd -u deploy --hp /home/deploy</pre>
+    </div>
+
+    <div class="card">
+      <h2>9) Configurar proxy reverso - Apache</h2>
+      <pre>sudo a2enmod proxy proxy_http proxy_wstunnel headers rewrite ssl
+sudo nano /etc/apache2/sites-available/formulario.conf</pre>
+      <pre>&lt;VirtualHost *:80&gt;
+  ServerName seu-dominio.com
+  ProxyPreserveHost On
+  ProxyPass / http://127.0.0.1:3000/
+  ProxyPassReverse / http://127.0.0.1:3000/
+  RequestHeader set X-Forwarded-Proto "http"
+&lt;/VirtualHost&gt;</pre>
+      <pre>sudo a2ensite formulario.conf
+sudo apache2ctl configtest
+sudo systemctl reload apache2</pre>
+    </div>
+
+    <div class="card">
+      <h2>10) Configurar proxy reverso - Nginx (alternativa)</h2>
+      <pre>sudo apt install -y nginx
+sudo nano /etc/nginx/sites-available/formulario</pre>
+      <pre>server {
+  listen 80;
+  server_name seu-dominio.com;
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}</pre>
+      <pre>sudo ln -s /etc/nginx/sites-available/formulario /etc/nginx/sites-enabled/formulario
+sudo nginx -t
+sudo systemctl reload nginx</pre>
+    </div>
+
+    <div class="card">
+      <h2>11) Checklist final</h2>
+      <ul>
+        <li><code>node -v</code> e <code>npm -v</code> ok</li>
+        <li><code>psql ... -c "SELECT 1"</code> ok</li>
+        <li><code>npm run db:migrate</code> e <code>npm run db:seed</code> ok</li>
+        <li>App respondendo em <code>http://127.0.0.1:3000</code></li>
+        <li>Dominio respondendo via Apache ou Nginx</li>
+      </ul>
+      <p class="ok">Instalacao concluida.</p>
+    </div>
+  </div>
+</body>
+</html>

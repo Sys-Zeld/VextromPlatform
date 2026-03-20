@@ -1,0 +1,82 @@
+{
+  "name": "app-form-ups-iec",
+  "version": "1.1.2",
+  "description": "Dynamic UPS specification form based on IEC 62040-3 Annex D",
+  "moduleVersions": {
+    "specflow": "beta",
+    "module_spec": "0.0.1",
+    "report_service": "0.0.1"
+  },
+  "moduleStatuses": {
+    "specflow": "active",
+    "module_spec": "in_development",
+    "report_service": "in_development"
+  },
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "nodemon src/app.js",
+    "start": "node src/app.js",
+    "test:module-spec": "node --test module_spec/tests/*.test.js",
+    "module-spec:enable": "node scripts/module-spec-toggle.js enable",
+    "module-spec:disable": "node scripts/module-spec-toggle.js disable",
+    "specflow:enable": "node scripts/modules-toggle.js enable specflow",
+    "specflow:disable": "node scripts/modules-toggle.js disable specflow",
+    "report-service:enable": "node scripts/modules-toggle.js enable report-service",
+    "report-service:disable": "node scripts/modules-toggle.js disable report-service",
+    "modules:enable:all": "node scripts/modules-toggle.js enable all",
+    "modules:disable:all": "node scripts/modules-toggle.js disable all",
+    "db:migrate": "node scripts/migrate.js",
+    "db:migrate:specflow": "node -e \"require('./specflow/db/migrate').migrate().then(()=>{console.log('SpecFlow migration complete.')}).catch((err)=>{console.error('SpecFlow migration failed:', err.message); process.exit(1);})\"",
+    "db:migrate:module-spec": "node module_spec/migrate.js",
+    "db:migrate:report-service": "node report_service/migrate.js",
+    "db:backup-database": "node scripts/backup-database.js",
+    "db:restore-database": "node scripts/restore-database.js",
+    "db:reset": "node scripts/reset-db.js",
+    "db:reset-schema": "node scripts/reset-db-schema.js",
+    "db:restore-clean": "npm run db:reset-schema && npm run db:restore-database",
+    "db:seed": "node scripts/seed.js",
+    "db:seed:specflow": "node specflow/seed.js",
+    "db:seed:module-spec": "node module_spec/seed.js",
+    "db:seed:report-service": "node report_service/seed.js",
+    "db:reseed": "npm run db:reset && npm run db:seed",
+    "db:seed:default": "npm run db:seed && node scripts/seed-profile-purchase.js",
+    "api:key:create": "node scripts/api-key-create.js",
+    "api:key:list": "node scripts/api-key-list.js",
+    "api:key:revoke": "node scripts/api-key-revoke.js",
+    "api:key:delete": "node scripts/api-key-delete.js",
+    "admin:sessions:clear": "node scripts/clear-admin-sessions.js",
+    "admin:public-limit:reset": "node scripts/reset-public-token-limit.js",
+    "token:set-sent": "node scripts/token-set-sent.js",
+    "token:set-draft": "node scripts/token-set-draft.js",
+    "teste-cliente": "node dados/teste/stress-client-registrations.js",
+    "teste-perfil-form": "node dados/teste/stress-profile-form-registrations.js"
+  },
+  "keywords": [
+    "ups",
+    "iec62040-3",
+    "dynamic-form",
+    "bootstrap"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "csurf": "^1.11.0",
+    "dayjs": "^1.11.13",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "nodemailer": "^6.10.0",
+    "pdfkit": "^0.15.0",
+    "pg": "^8.19.0",
+    "qrcode": "^1.5.4",
+    "sanitize-html": "^2.14.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
+

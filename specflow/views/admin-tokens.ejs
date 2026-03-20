@@ -1,0 +1,248 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<section class="token-console">
+  <div class="card app-card token-hero-card mb-4">
+    <div class="card-body token-hero-body">
+      <div class="token-hero-copy">
+        <span class="token-hero-eyebrow">VEXTROM Plataform</span>
+        <h1 class="h4 app-card-title mb-1"><%= t("admin.pageTitle") %></h1>
+        <p class="text-muted mb-0"><%= t("admin.pageSubtitle") %></p>
+      </div>
+      <div class="token-hero-actions">
+        <a class="btn btn-primary btn-sm" href="/admin/clients/new"><%= t("admin.newClientButton") %></a>
+        <a class="btn btn-outline-primary btn-sm" href="/admin/hub">Service Hub</a>
+        <a class="btn btn-outline-primary btn-sm" href="/admin/profiles"><%= t("admin.manageProfilesButton") %></a>
+        <% if (isMaintenanceAdmin) { %>
+          <a class="btn btn-outline-danger btn-sm" href="/admin/maintenance">Manutencao</a>
+        <% } %>
+        <form method="post" action="/admin/logout">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <button class="btn btn-outline-secondary btn-sm" type="submit"><%= t("admin.logoutSessionButton") %></button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <% if (deleted) { %>
+    <div class="alert alert-success token-feedback"><%= t("admin.deletedSuccess") %></div>
+  <% } %>
+  <% if (saved) { %>
+    <div class="alert alert-success token-feedback"><%= t("admin.clientConfigSaved") %></div>
+  <% } %>
+  <% if (imported) { %>
+    <div class="alert alert-success token-feedback"><%= t("admin.tokenImportApplied") %></div>
+  <% } %>
+
+  <div class="card app-card token-search-card">
+    <div class="card-body">
+      <form id="tokenSearchForm" class="token-search-form" method="get" action="/admin/tokens">
+        <div class="token-search-copy">
+          <label class="form-label mb-1" for="tokenSearchInput"><%= t("admin.searchTextLabel") %></label>
+        </div>
+        <div class="token-search-controls">
+          <div class="token-search-input-wrap">
+            <span class="token-search-icon material-symbols-outlined" aria-hidden="true">search</span>
+            <input
+              id="tokenSearchInput"
+              class="form-control"
+              type="text"
+              name="search"
+              value="<%= filters ? filters.search : '' %>"
+              placeholder="<%= t('admin.searchTextPlaceholder') %>"
+            />
+          </div>
+          <a class="btn btn-outline-secondary token-search-clear" href="/admin/tokens"><%= t("admin.searchClearButton") %></a>
+        </div>
+      </form>
+
+      <div class="token-table-toolbar">
+        <div class="small text-muted token-table-meta">
+          <%= t("admin.paginationInfo", { page: pagination.page, totalPages: pagination.totalPages, total: pagination.total }) %>
+        </div>
+        <div class="d-flex gap-2 token-pagination">
+          <% if (pagination.hasPrev) { %>
+            <a
+              class="btn btn-outline-secondary btn-sm btn-no-icon pagination-arrow"
+              href="/admin/tokens?page=<%= pagination.page - 1 %><%= pagination.querySuffix || '' %>"
+              aria-label="<%= t('admin.paginationPrev') %>"
+              title="<%= t('admin.paginationPrev') %>"
+            >&#8592;</a>
+          <% } else { %>
+            <button
+              class="btn btn-outline-secondary btn-sm btn-no-icon pagination-arrow"
+              type="button"
+              disabled
+              aria-label="<%= t('admin.paginationPrev') %>"
+              title="<%= t('admin.paginationPrev') %>"
+            >&#8592;</button>
+          <% } %>
+          <% if (pagination.hasNext) { %>
+            <a
+              class="btn btn-outline-secondary btn-sm btn-no-icon pagination-arrow"
+              href="/admin/tokens?page=<%= pagination.page + 1 %><%= pagination.querySuffix || '' %>"
+              aria-label="<%= t('admin.paginationNext') %>"
+              title="<%= t('admin.paginationNext') %>"
+            >&#8594;</a>
+          <% } else { %>
+            <button
+              class="btn btn-outline-secondary btn-sm btn-no-icon pagination-arrow"
+              type="button"
+              disabled
+              aria-label="<%= t('admin.paginationNext') %>"
+              title="<%= t('admin.paginationNext') %>"
+            >&#8594;</button>
+          <% } %>
+        </div>
+      </div>
+      <div class="table-responsive token-table-wrap">
+        <table class="table table-sm align-middle mb-0 app-table token-table">
+          <thead>
+            <tr>
+              <th><%= t("admin.tableToken") %></th>
+              <th><%= t("admin.tableBuyer") %></th>
+              <th><%= t("admin.tableContact") %></th>
+              <th><%= t("admin.tableProfile") %></th>
+              <th><%= t("admin.tableStatus") %></th>
+              <th><%= t("admin.tableUpdatedAt") %></th>
+              <th><%= t("admin.tableActions") %></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!rows.length) { %>
+              <tr>
+                <td colspan="7" class="text-center text-muted py-4"><%= t("admin.noRecords") %></td>
+              </tr>
+            <% } %>
+            <% rows.forEach((row) => { %>
+              <tr class="token-row">
+                <td>
+                  <code class="token-code"><%= row.token %></code>
+                </td>
+                <td><span class="token-cell-strong"><%= row.purchaser || "-" %></span></td>
+                <td><%= row.purchaserContact || "-" %></td>
+                <td><%= row.profileName || "-" %></td>
+                <td><span class="badge text-bg-light border token-status-badge"><%= row.status %></span></td>
+                <td><%= row.updatedAt ? new Date(row.updatedAt).toLocaleString(lang === "pt" ? "pt-BR" : "en-US") : "-" %></td>
+                <td>
+                  <div class="d-flex gap-2 flex-wrap token-row-actions">
+                    <a class="btn btn-outline-primary btn-sm" href="/form/<%= row.token %>/review"><%= t("admin.viewButton") %></a>
+                    <a class="btn btn-outline-secondary btn-sm" href="/admin/tokens/<%= row.id %>/config"><%= t("admin.clientConfigButton") %></a>
+                    <form method="post" action="/admin/tokens/<%= row.id %>/delete" onsubmit="return confirm('<%= t("admin.confirmDelete") %>')">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <button class="btn btn-outline-danger btn-sm" type="submit"><%= t("admin.deleteButton") %></button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <div class="card app-card token-import-card mt-4" id="token-import-card" tabindex="-1">
+    <div class="card-body">
+      <div class="token-import-header">
+        <h2 class="h6 app-card-title mb-2"><%= t("admin.tokenImportTitle") %></h2>
+        <p class="text-muted mb-0"><%= t("admin.tokenImportSubtitle") %></p>
+      </div>
+      <% if (importJsonResult) { %>
+        <div class="alert <%= importJsonResult.status === 'found' ? 'alert-info' : 'alert-warning' %> token-import-feedback">
+          <div><%= importJsonResult.message %></div>
+          <% if (importJsonResult.status === 'found') { %>
+            <div class="mt-3 d-flex gap-2 flex-wrap">
+              <a class="btn btn-outline-secondary btn-sm" href="<%= importJsonResult.reviewUrl %>"><%= t("admin.tokenImportOpenExisting") %></a>
+              <a class="btn btn-outline-primary btn-sm" href="<%= importJsonResult.editUrl %>"><%= t("admin.tokenImportOpenEdit") %></a>
+              <form method="post" action="/admin/tokens/import-json" onsubmit="return confirm('<%= t("admin.tokenImportConfirmUpdate") %>')">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <input type="hidden" name="import_action" value="apply_existing" />
+                <textarea name="json_payload" hidden><%= importJsonPayload || '' %></textarea>
+                <button class="btn btn-primary btn-sm" type="submit"><%= t("admin.tokenImportApplyExisting") %></button>
+              </form>
+            </div>
+          <% } %>
+          <% if (importJsonResult.status === 'missing' && importJsonResult.canCreate) { %>
+            <div class="mt-3 d-flex gap-2 flex-wrap">
+              <form method="post" action="/admin/tokens/import-json" onsubmit="return confirm('<%= t("admin.tokenImportConfirmCreate") %>')">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <input type="hidden" name="import_action" value="create_new" />
+                <textarea name="json_payload" hidden><%= importJsonPayload || '' %></textarea>
+                <button class="btn btn-primary btn-sm" type="submit"><%= t("admin.tokenImportCreateNew") %></button>
+              </form>
+            </div>
+          <% } %>
+        </div>
+      <% } %>
+      <form method="post" action="/admin/tokens/import-json" class="token-import-form" id="admin-token-json-import-form">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="import_action" value="inspect" />
+        <input type="hidden" name="json_payload" id="admin-token-json-payload" />
+        <div class="token-import-input">
+          <label for="admin-token-json-file" class="form-label"><%= t("admin.tokenImportFile") %></label>
+          <input id="admin-token-json-file" class="form-control" type="file" accept=".json,application/json" required />
+        </div>
+        <div class="token-import-action">
+          <button class="btn btn-outline-primary" type="submit"><%= t("admin.tokenImportInspect") %></button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+</div>
+
+<script>
+  (function () {
+    var form = document.getElementById("tokenSearchForm");
+    var input = document.getElementById("tokenSearchInput");
+    if (!form || !input) return;
+
+    var lastValue = String(input.value || "");
+    function submitIfChanged() {
+      var current = String(input.value || "");
+      if (current === lastValue) return;
+      lastValue = current;
+      form.submit();
+    }
+
+    // Submit only when field value is committed (change/blur) to avoid
+    // reloading while user is still typing.
+    input.addEventListener("change", submitIfChanged);
+    input.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      submitIfChanged();
+    });
+
+    var importForm = document.getElementById("admin-token-json-import-form");
+    var importFileInput = document.getElementById("admin-token-json-file");
+    var importPayloadInput = document.getElementById("admin-token-json-payload");
+    var importCard = document.getElementById("token-import-card");
+
+    <% if (importJsonResult || imported) { %>
+      if (importCard) {
+        window.requestAnimationFrame(function () {
+          importCard.scrollIntoView({ behavior: "smooth", block: "start" });
+          importCard.focus({ preventScroll: true });
+        });
+      }
+    <% } %>
+
+    if (!importForm || !importFileInput || !importPayloadInput) return;
+
+    importForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var file = importFileInput.files && importFileInput.files[0];
+      if (!file) return;
+      try {
+        importPayloadInput.value = await file.text();
+        importForm.submit();
+      } catch (_err) {
+        window.alert("<%= t("admin.tokenImportInvalid") %>");
+      }
+    });
+  })();
+</script>
+
+<%- include("partials/footer") %>

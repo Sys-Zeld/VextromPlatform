@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Documentacao de API - APP-FORM-UPS-IEC</title>
+  <style>
+    :root {
+      --bg: #f5f7f8;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --accent: #2f6f3e;
+      --code-bg: #111827;
+      --code-text: #e5e7eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    h1, h2, h3 { margin: 0 0 10px; }
+    h1 { font-size: 1.6rem; }
+    h2 { font-size: 1.2rem; margin-top: 8px; }
+    .muted { color: var(--muted); }
+    .chip {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 0.8rem;
+      margin-right: 6px;
+      background: #fafafa;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f9fafb; }
+    code, pre {
+      font-family: Consolas, "Courier New", monospace;
+    }
+    pre {
+      margin: 0;
+      padding: 10px;
+      border-radius: 8px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      overflow-x: auto;
+      font-size: 0.84rem;
+    }
+    .ok { color: var(--accent); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>Documentacao de API</h1>
+      <p class="muted">Projeto: APP-FORM-UPS-IEC</p>
+      <p class="muted">Fonte: <code>src/app.js</code> | Atualizado em 2026-03-07</p>
+      <div>
+        <span class="chip">Auth por API Key (Bearer)</span>
+        <span class="chip">Escopos por endpoint</span>
+        <span class="chip">Fallback: sessao admin valida</span>
+        <span class="chip">CSRF em rotas web/form</span>
+        <span class="chip">JSON para endpoints REST</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>0) Autenticacao da API</h2>
+      <p>Para consumir os endpoints REST, envie uma chave via header:</p>
+      <pre>Authorization: Bearer &lt;API_KEY&gt;
+ou
+X-API-Key: &lt;API_KEY&gt;</pre>
+      <p>Comandos de gestao:</p>
+      <pre>npm run api:key:create -- --name "integracao-x" --scopes "fields:read,spec:read,spec:write"
+npm run api:key:list
+npm run api:key:revoke -- 1</pre>
+    </div>
+
+    <div class="card">
+      <h2>1) Endpoints REST (JSON)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Metodo</th>
+            <th>Rota</th>
+            <th>Auth</th>
+            <th>Descricao</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>GET</td><td><code>/fields</code></td><td>API Key (<code>fields:read</code>)</td><td>Lista campos. Filtro opcional: <code>?section=...</code>.</td></tr>
+          <tr><td>POST</td><td><code>/fields</code></td><td>API Key (<code>fields:write</code>)</td><td>Cria campo.</td></tr>
+          <tr><td>PUT</td><td><code>/fields/:id</code></td><td>API Key (<code>fields:write</code>)</td><td>Atualiza campo.</td></tr>
+          <tr><td>DELETE</td><td><code>/fields/:id</code></td><td>API Key (<code>fields:write</code>)</td><td>Exclui campo.</td></tr>
+          <tr><td>GET</td><td><code>/equipment/:id/specification</code></td><td>API Key (<code>spec:read</code>)</td><td>Busca especificacao de um equipamento.</td></tr>
+          <tr><td>PUT</td><td><code>/equipment/:id/specification</code></td><td>API Key (<code>spec:write</code>)</td><td>Salva especificacao via <code>values</code>.</td></tr>
+          <tr><td>POST</td><td><code>/form/:token/docs/upload</code></td><td>Com token + CSRF</td><td>Upload de PDF (raw body).</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>2) Rotas de formulario/export</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Metodo</th>
+            <th>Rota</th>
+            <th>Descricao</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>GET/POST</td><td><code>/form/:token/specification</code></td><td>Tela e salvamento da especificacao.</td></tr>
+          <tr><td>GET</td><td><code>/form/:token/review</code></td><td>Pagina de revisao.</td></tr>
+          <tr><td>POST</td><td><code>/form/:token/send-email</code></td><td>Envia submissao por email.</td></tr>
+          <tr><td>GET</td><td><code>/form/:token/pdf</code></td><td>Baixa PDF da submissao.</td></tr>
+          <tr><td>GET</td><td><code>/form/:token/export.json</code></td><td>Baixa JSON consolidado.</td></tr>
+          <tr><td>GET/POST</td><td><code>/form/public/:draftToken/specification</code></td><td>Fluxo publico para criar token/submissao.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>3) Exemplos de request/response</h2>
+      <h3>GET /fields</h3>
+      <pre>{
+  "data": [
+    {
+      "id": 1,
+      "key": "input_voltage",
+      "label": "Input Voltage",
+      "section": "Input data",
+      "fieldType": "text",
+      "unit": "V",
+      "enumOptions": null,
+      "hasDefault": false,
+      "defaultValue": null,
+      "displayOrder": 10
+    }
+  ]
+}</pre>
+
+      <h3 style="margin-top: 12px;">PUT /equipment/:id/specification</h3>
+      <pre>{
+  "values": {
+    "1": "380",
+    "2": true,
+    "3": "10:30"
+  }
+}</pre>
+      <pre style="margin-top: 8px;">{
+  "data": {
+    "saved": 3,
+    "removed": 0
+  }
+}</pre>
+
+      <h3 style="margin-top: 12px;">POST /form/:token/docs/upload</h3>
+      <pre>Headers:
+Content-Type: application/pdf
+X-File-Name: diagrama-unifilar.pdf
+X-CSRF-Token: &lt;token&gt;
+
+Body:
+&lt;bytes PDF raw&gt;</pre>
+      <pre style="margin-top: 8px;">{
+  "data": {
+    "id": 12,
+    "originalName": "diagrama-unifilar.pdf",
+    "externalUrl": "https://.../dados/docs/...",
+    "sizeBytes": 245331
+  }
+}</pre>
+    </div>
+
+    <div class="card">
+      <h2>4) Erros e status comuns</h2>
+      <table>
+        <thead>
+          <tr><th>Status</th><th>Caso</th><th>Formato</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>400</td><td>ID invalido / payload invalido</td><td>JSON com <code>error</code></td></tr>
+          <tr><td>401</td><td>Sem API key / API key invalida</td><td>JSON com <code>API_KEY_REQUIRED</code> ou <code>API_KEY_INVALID</code></td></tr>
+          <tr><td>403</td><td>Escopo insuficiente na API key</td><td>JSON com <code>API_KEY_SCOPE_FORBIDDEN</code></td></tr>
+          <tr><td>403</td><td>CSRF invalido/expirado</td><td>Mensagem de erro</td></tr>
+          <tr><td>404</td><td>Registro nao encontrado</td><td>JSON com <code>error</code></td></tr>
+          <tr><td>413</td><td>Upload acima do limite</td><td>JSON <code>DOC_FILE_TOO_LARGE</code></td></tr>
+          <tr><td>422</td><td>Validacao de formulario</td><td>Render da tela com erros</td></tr>
+          <tr><td>429</td><td>Rate limit de token publico/email</td><td>Mensagem de bloqueio</td></tr>
+        </tbody>
+      </table>
+      <p class="ok" style="margin-top: 10px;">Use este arquivo como referencia rapida para integracoes.</p>
+    </div>
+  </div>
+</body>
+</html>

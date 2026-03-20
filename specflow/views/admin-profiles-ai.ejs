@@ -1,0 +1,284 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card mb-4">
+  <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <div>
+      <h1 class="h4 app-card-title mb-1"><%= t("admin.profileAiPageTitle") %></h1>
+      <p class="text-muted mb-0"><%= t("admin.profileAiPageSubtitle") %></p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/profiles"><%= t("admin.manageProfilesButton") %></a>
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/tokens"><%= t("admin.backToTokensButton") %></a>
+    </div>
+  </div>
+</div>
+
+<div class="card app-card">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-2"><%= t("admin.profileAiTitle") %></h2>
+    <p class="small text-muted mb-2"><%= t("admin.profileAiSubtitle") %></p>
+
+    <form class="row g-2" id="profileAiGenerateForm">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div class="col-12 col-md-4">
+        <label class="form-label" for="profileAiFile"><%= t("admin.profileAiFileLabel") %></label>
+        <input class="form-control" type="file" id="profileAiFile" accept=".pdf,.txt,.xlsx,.xls,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" required />
+      </div>
+      <div class="col-12 col-md-8">
+        <label class="form-label" for="profileAiModelJson"><%= t("admin.profileAiModelLabel") %></label>
+        <textarea class="form-control" id="profileAiModelJson" rows="8" required><%= aiProfileTemplate %></textarea>
+      </div>
+      <div class="col-12">
+        <label class="form-label" for="profileAiInstructions"><%= t("admin.profileAiInstructionsLabel") %></label>
+        <textarea class="form-control" id="profileAiInstructions" rows="3" placeholder="<%= t('admin.profileAiInstructionsPlaceholder') %>"></textarea>
+      </div>
+      <div class="col-12 d-flex gap-2">
+        <button class="btn btn-outline-primary" type="submit" id="profileAiGenerateBtn"><%= t("admin.profileAiGenerateButton") %></button>
+        <div class="small align-self-center" id="profileAiFeedback"></div>
+        <div class="small text-muted align-self-center" id="profileAiStatus"><%= t("admin.profileAiStatusLabel") %>: <%= t("admin.profileAiStatusIdle") %> | <%= t("admin.profileAiTimeLabel") %>: 00:00</div>
+      </div>
+    </form>
+
+    <div class="mt-3">
+      <label class="form-label" for="profileAiGeneratedJson"><%= t("admin.profileAiResultLabel") %></label>
+      <textarea class="form-control" id="profileAiGeneratedJson" rows="14" placeholder="<%= t('admin.profileAiResultPlaceholder') %>"></textarea>
+      <div class="d-flex gap-2 mt-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" id="profileAiDownloadBtn"><%= t("admin.profileAiDownloadButton") %></button>
+        <form method="post" action="/admin/profiles/import" id="profileAiImportForm">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <input type="hidden" name="profile_json" id="profileAiImportJsonInput" />
+          <button class="btn btn-outline-success btn-sm" type="submit"><%= t("admin.profileAiImportButton") %></button>
+        </form>
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <label class="form-label" for="profileAiPromptPreview"><%= t("admin.profileAiPromptLabel") %></label>
+      <textarea class="form-control" id="profileAiPromptPreview" rows="10" readonly></textarea>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const aiForm = document.getElementById("profileAiGenerateForm");
+    const aiFileInput = document.getElementById("profileAiFile");
+    const aiModelInput = document.getElementById("profileAiModelJson");
+    const aiInstructionsInput = document.getElementById("profileAiInstructions");
+    const aiFeedback = document.getElementById("profileAiFeedback");
+    const aiGeneratedJson = document.getElementById("profileAiGeneratedJson");
+    const aiGenerateBtn = document.getElementById("profileAiGenerateBtn");
+    const aiDownloadBtn = document.getElementById("profileAiDownloadBtn");
+    const aiImportForm = document.getElementById("profileAiImportForm");
+    const aiImportJsonInput = document.getElementById("profileAiImportJsonInput");
+    const aiStatus = document.getElementById("profileAiStatus");
+    const aiPromptPreview = document.getElementById("profileAiPromptPreview");
+
+    if (!aiForm || !aiFileInput || !aiModelInput || !aiInstructionsInput || !aiFeedback || !aiGeneratedJson || !aiGenerateBtn || !aiDownloadBtn || !aiImportForm || !aiImportJsonInput || !aiStatus || !aiPromptPreview) return;
+
+    const aiMessages = {
+      generating: "<%= t('admin.profileAiGenerating') %>",
+      success: "<%= t('admin.profileAiGenerated') %>",
+      fileRequired: "<%= t('admin.profileAiFileRequired') %>",
+      fileMaxSize: "<%= t('admin.profileAiFileMaxSize', { sizeMb: 10 }) %>",
+      invalidModel: "<%= t('admin.profileAiInvalidModel') %>",
+      emptyResult: "<%= t('admin.profileAiEmptyResult') %>"
+    };
+    const aiStatusMessages = {
+      label: "<%= t('admin.profileAiStatusLabel') %>",
+      timeLabel: "<%= t('admin.profileAiTimeLabel') %>",
+      idle: "<%= t('admin.profileAiStatusIdle') %>",
+      thinking: "<%= t('admin.profileAiStatusThinking') %>",
+      success: "<%= t('admin.profileAiStatusSuccess') %>",
+      failed: "<%= t('admin.profileAiStatusFailed') %>"
+    };
+    const aiPromptMessages = {
+      base1: "<%= t('admin.profileAiPromptBaseLine1') %>",
+      base2: "<%= t('admin.profileAiPromptBaseLine2') %>",
+      base3: "<%= t('admin.profileAiPromptBaseLine3') %>",
+      base4: "<%= t('admin.profileAiPromptBaseLine4') %>",
+      base5: "<%= t('admin.profileAiPromptBaseLine5') %>",
+      base6: "<%= t('admin.profileAiPromptBaseLine6') %>",
+      base7: "<%= t('admin.profileAiPromptBaseLine7') %>",
+      base8: "<%= t('admin.profileAiPromptBaseLine8') %>",
+      userInstructions: "<%= t('admin.profileAiPromptUserInstructions') %>",
+      jsonModel: "<%= t('admin.profileAiPromptJsonModel') %>"
+    };
+    let aiStartedAtMs = null;
+    let aiTimerHandle = null;
+
+    function formatElapsedTime(ms) {
+      const safeSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+      const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, "0");
+      const seconds = String(safeSeconds % 60).padStart(2, "0");
+      return `${minutes}:${seconds}`;
+    }
+
+    function setAiStatus(statusText, elapsedMs, className) {
+      aiStatus.className = `small align-self-center ${className || "text-muted"}`;
+      aiStatus.textContent = `${aiStatusMessages.label}: ${statusText} | ${aiStatusMessages.timeLabel}: ${formatElapsedTime(elapsedMs)}`;
+    }
+
+    function startAiTimer() {
+      aiStartedAtMs = Date.now();
+      if (aiTimerHandle) clearInterval(aiTimerHandle);
+      setAiStatus(aiStatusMessages.thinking, 0, "text-warning");
+      aiTimerHandle = setInterval(function () {
+        setAiStatus(aiStatusMessages.thinking, Date.now() - aiStartedAtMs, "text-warning");
+      }, 1000);
+    }
+
+    function stopAiTimer(nextStatus, className) {
+      if (aiTimerHandle) {
+        clearInterval(aiTimerHandle);
+        aiTimerHandle = null;
+      }
+      const elapsed = aiStartedAtMs ? (Date.now() - aiStartedAtMs) : 0;
+      setAiStatus(nextStatus || aiStatusMessages.idle, elapsed, className || "text-muted");
+      aiStartedAtMs = null;
+    }
+
+    function buildPromptPreview() {
+      const modelText = String(aiModelInput.value || "").trim();
+      const instructionsText = String(aiInstructionsInput.value || "").trim();
+      const parts = [
+        aiPromptMessages.base1,
+        aiPromptMessages.base2,
+        aiPromptMessages.base3,
+        aiPromptMessages.base4,
+        aiPromptMessages.base5,
+        aiPromptMessages.base6,
+        aiPromptMessages.base7,
+        aiPromptMessages.base8
+      ];
+      if (instructionsText) {
+        parts.push("", aiPromptMessages.userInstructions, instructionsText);
+      }
+      parts.push("", aiPromptMessages.jsonModel, modelText);
+      return parts.join("\n");
+    }
+
+    function refreshPromptPreview() {
+      aiPromptPreview.value = buildPromptPreview();
+    }
+
+    setAiStatus(aiStatusMessages.idle, 0, "text-muted");
+    refreshPromptPreview();
+    aiModelInput.addEventListener("input", refreshPromptPreview);
+    aiInstructionsInput.addEventListener("input", refreshPromptPreview);
+
+    aiForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      const file = aiFileInput.files && aiFileInput.files[0];
+      if (!file) {
+        aiFeedback.className = "small text-danger align-self-center";
+        aiFeedback.textContent = aiMessages.fileRequired;
+        stopAiTimer(aiStatusMessages.failed, "text-danger");
+        return;
+      }
+      if (Number(file.size || 0) > 10 * 1024 * 1024) {
+        aiFeedback.className = "small text-danger align-self-center";
+        aiFeedback.textContent = aiMessages.fileMaxSize;
+        stopAiTimer(aiStatusMessages.failed, "text-danger");
+        return;
+      }
+      const modelText = String(aiModelInput.value || "").trim();
+      const instructionsText = String(aiInstructionsInput.value || "").trim();
+      try {
+        JSON.parse(modelText);
+      } catch (_err) {
+        aiFeedback.className = "small text-danger align-self-center";
+        aiFeedback.textContent = aiMessages.invalidModel;
+        stopAiTimer(aiStatusMessages.failed, "text-danger");
+        return;
+      }
+
+      aiGenerateBtn.disabled = true;
+      aiFeedback.className = "small text-muted align-self-center";
+      aiFeedback.textContent = aiMessages.generating;
+      startAiTimer();
+
+      try {
+        const fileBase64 = await new Promise(function (resolve, reject) {
+          const reader = new FileReader();
+          reader.onload = function () {
+            const result = String(reader.result || "");
+            const commaIndex = result.indexOf(",");
+            resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : "");
+          };
+          reader.onerror = function () {
+            reject(new Error("<%= t('admin.profileAiFileReadFailed') %>"));
+          };
+          reader.readAsDataURL(file);
+        });
+        const csrfInput = aiForm.querySelector('input[name="_csrf"]');
+        const csrfToken = csrfInput ? csrfInput.value : "";
+        const response = await fetch("/admin/profiles/ai/generate", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "csrf-token": csrfToken
+          },
+          body: JSON.stringify({
+            fileName: file.name || "documento",
+            mimeType: file.type || "application/octet-stream",
+            fileBase64: fileBase64,
+            jsonModelTemplate: modelText,
+            userInstructions: instructionsText
+          })
+        });
+        const payload = await response.json().catch(function () { return {}; });
+        if (!response.ok || !payload.ok) {
+          if (payload && payload.debug) {
+            aiGeneratedJson.value = JSON.stringify({
+              error: payload.message || "<%= t('admin.profileAiGenerationFailed') %>",
+              debug: payload.debug
+            }, null, 2);
+          }
+          throw new Error(payload.message || "<%= t('admin.profileAiGenerationFailed') %>");
+        }
+        aiGeneratedJson.value = JSON.stringify(payload.profileJson, null, 2);
+        aiFeedback.className = "small text-success align-self-center";
+        aiFeedback.textContent = aiMessages.success;
+        stopAiTimer(aiStatusMessages.success, "text-success");
+      } catch (err) {
+        aiFeedback.className = "small text-danger align-self-center";
+        aiFeedback.textContent = err.message || "<%= t('admin.profileAiGenerationFailed') %>";
+        stopAiTimer(aiStatusMessages.failed, "text-danger");
+      } finally {
+        aiGenerateBtn.disabled = false;
+      }
+    });
+
+    aiDownloadBtn.addEventListener("click", function () {
+      const text = String(aiGeneratedJson.value || "").trim();
+      if (!text) {
+        aiFeedback.className = "small text-danger align-self-center";
+        aiFeedback.textContent = aiMessages.emptyResult;
+        return;
+      }
+      const blob = new Blob([text], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "perfil_gerado_ia.json";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    });
+
+    aiImportForm.addEventListener("submit", function (event) {
+      const text = String(aiGeneratedJson.value || "").trim();
+      if (!text) {
+        event.preventDefault();
+        aiFeedback.className = "small text-danger align-self-center";
+        aiFeedback.textContent = aiMessages.emptyResult;
+        return;
+      }
+      aiImportJsonInput.value = text;
+    });
+  })();
+</script>
+
+<%- include("partials/footer") %>

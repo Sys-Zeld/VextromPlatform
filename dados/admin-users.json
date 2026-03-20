@@ -1,0 +1,22 @@
+{
+  "users": [
+    {
+      "id": "834d81f3-69cc-4aa1-8d58-3f26c020e143",
+      "username": "vitor",
+      "role": "admin",
+      "salt": "ea191b35f452793fe4273e615d7f8bc2",
+      "passwordHash": "d1f8b4b810f0d3c74bdec2b8b2e2ab67bf6deea69cd21d379a19de6c6d8a05f5a46330748f3a9b41a7dbd6386291d408e9f20518952b01ff93eedf918ebe23e9",
+      "createdAt": "2026-03-10T00:54:05.138Z",
+      "updatedAt": "2026-03-10T01:21:18.169Z"
+    },
+    {
+      "id": "b4546cab-6e04-49d0-bf58-96f464818324",
+      "username": "aluizo",
+      "role": "user",
+      "salt": "bfecac79103837407ac1eb65938c4765",
+      "passwordHash": "f78b77d26ea0b4dafc74114ff061e3667d58b582fa8c2d47e7b16563620491117cb6d73f019bd35f04e04288ffa7d49ddb9e77d48e50151a169152640ecd104f",
+      "createdAt": "2026-03-10T01:08:07.267Z",
+      "updatedAt": "2026-03-10T01:11:01.415Z"
+    }
+  ]
+}

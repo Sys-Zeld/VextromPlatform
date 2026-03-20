@@ -1,0 +1,310 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card mb-4">
+  <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <div>
+      <h1 class="h4 app-card-title mb-1">Filtro de Selecao de Equipamentos</h1>
+      <p class="text-muted mb-0">Cadastro simples de familia/modelo/variacao e filtro por perfil.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
+    </div>
+  </div>
+</div>
+
+<% if (flags.saved) { %><div class="alert alert-success">Salvo com sucesso.</div><% } %>
+<% if (flags.deleted) { %><div class="alert alert-success">Removido com sucesso.</div><% } %>
+<% if (flags.filtered) { %><div class="alert alert-info">Filtro executado.</div><% } %>
+<% if (flashError) { %><div class="alert alert-danger"><%= flashError %></div><% } %>
+
+<div class="row g-3">
+  <div class="col-12 col-xl-6">
+    <div class="card app-card">
+      <div class="card-body">
+        <h2 class="h6 app-card-title">Familias</h2>
+        <form class="row g-2 mb-3" method="post" action="<%= selectedFamily ? `/admin/module-spec/families/${selectedFamily.id}/update` : '/admin/module-spec/families/create' %>">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="col-md-4"><input class="form-control" name="key" placeholder="key" value="<%= selectedFamily ? selectedFamily.key : '' %>" required /></div>
+          <div class="col-md-4"><input class="form-control" name="name" placeholder="name" value="<%= selectedFamily ? selectedFamily.name : '' %>" required /></div>
+          <div class="col-md-4"><input class="form-control" name="status" placeholder="status" value="<%= selectedFamily ? selectedFamily.status : 'active' %>" /></div>
+          <div class="col-12"><input class="form-control" name="description" placeholder="description" value="<%= selectedFamily ? selectedFamily.description : '' %>" /></div>
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary btn-sm" type="submit"><%= selectedFamily ? 'Atualizar' : 'Criar' %></button>
+            <% if (selectedFamily) { %><a class="btn btn-outline-secondary btn-sm" href="/admin/module-spec">Cancelar</a><% } %>
+          </div>
+        </form>
+        <div class="table-responsive">
+          <table class="table table-sm app-table mb-0">
+            <thead><tr><th>ID</th><th>Key</th><th>Nome</th><th>Acoes</th></tr></thead>
+            <tbody>
+              <% families.forEach((item) => { %>
+                <tr>
+                  <td><%= item.id %></td>
+                  <td><code><%= item.key %></code></td>
+                  <td><%= item.name %></td>
+                  <td class="d-flex gap-2">
+                    <a class="btn btn-outline-primary btn-sm" href="/admin/module-spec?edit_family=<%= item.id %>">Editar</a>
+                    <form method="post" action="/admin/module-spec/families/<%= item.id %>/delete" onsubmit="return confirm('Excluir familia?')">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+              <% if (!families.length) { %><tr><td colspan="4" class="text-muted">Sem familias.</td></tr><% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-6">
+    <div class="card app-card">
+      <div class="card-body">
+        <h2 class="h6 app-card-title">Atributos (definicao)</h2>
+        <form class="row g-2 mb-3" method="post" action="<%= selectedAttribute ? `/admin/module-spec/attributes/${selectedAttribute.id}/update` : '/admin/module-spec/attributes/create' %>">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="col-md-4"><input class="form-control" name="key" placeholder="key" value="<%= selectedAttribute ? selectedAttribute.key : '' %>" required /></div>
+          <div class="col-md-4"><input class="form-control" name="label" placeholder="label" value="<%= selectedAttribute ? selectedAttribute.label : '' %>" required /></div>
+          <div class="col-md-4"><input class="form-control" name="data_type" placeholder="data_type" value="<%= selectedAttribute ? selectedAttribute.dataType : 'text' %>" required /></div>
+          <div class="col-md-4"><input class="form-control" name="unit" placeholder="unit" value="<%= selectedAttribute ? selectedAttribute.unit : '' %>" /></div>
+          <div class="col-md-8"><input class="form-control" name="status" placeholder="status" value="<%= selectedAttribute ? selectedAttribute.status : 'active' %>" /></div>
+          <div class="col-12"><textarea class="form-control font-monospace" rows="2" name="allowed_values_json"><%= selectedAttribute ? JSON.stringify(selectedAttribute.allowedValuesJson || []) : '[]' %></textarea></div>
+          <div class="col-12"><input class="form-control" name="description" placeholder="description" value="<%= selectedAttribute ? selectedAttribute.description : '' %>" /></div>
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary btn-sm" type="submit"><%= selectedAttribute ? 'Atualizar' : 'Criar' %></button>
+            <% if (selectedAttribute) { %><a class="btn btn-outline-secondary btn-sm" href="/admin/module-spec">Cancelar</a><% } %>
+          </div>
+        </form>
+        <div class="table-responsive">
+          <table class="table table-sm app-table mb-0">
+            <thead><tr><th>ID</th><th>Key</th><th>Tipo</th><th>Acoes</th></tr></thead>
+            <tbody>
+              <% attributeDefinitions.forEach((item) => { %>
+                <tr>
+                  <td><%= item.id %></td>
+                  <td><code><%= item.key %></code></td>
+                  <td><%= item.dataType %></td>
+                  <td class="d-flex gap-2">
+                    <a class="btn btn-outline-primary btn-sm" href="/admin/module-spec?edit_attribute=<%= item.id %>">Editar</a>
+                    <form method="post" action="/admin/module-spec/attributes/<%= item.id %>/delete" onsubmit="return confirm('Excluir atributo?')">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+              <% if (!attributeDefinitions.length) { %><tr><td colspan="4" class="text-muted">Sem atributos.</td></tr><% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card app-card">
+      <div class="card-body">
+        <h2 class="h6 app-card-title">Modelos e Variacoes</h2>
+        <form class="row g-2 mb-3" method="post" action="<%= selectedModel ? `/admin/module-spec/models/${selectedModel.id}/update` : '/admin/module-spec/models/create' %>">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="col-md-2">
+            <select class="form-select" name="family_id" required>
+              <option value="">family_id</option>
+              <% families.forEach((f) => { %>
+                <option value="<%= f.id %>" <%= selectedModel && selectedModel.familyId === f.id ? 'selected' : '' %>><%= f.name %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="col-md-2"><input class="form-control" name="manufacturer" placeholder="manufacturer" value="<%= selectedModel ? selectedModel.manufacturer : '' %>" /></div>
+          <div class="col-md-2"><input class="form-control" name="brand" placeholder="brand" value="<%= selectedModel ? selectedModel.brand : '' %>" /></div>
+          <div class="col-md-2"><input class="form-control" name="model" placeholder="model" value="<%= selectedModel ? selectedModel.model : '' %>" required /></div>
+          <div class="col-md-2"><input class="form-control" name="sku" placeholder="sku" value="<%= selectedModel ? selectedModel.sku : '' %>" /></div>
+          <div class="col-md-2"><input class="form-control" name="status" placeholder="status" value="<%= selectedModel ? selectedModel.status : 'active' %>" /></div>
+          <div class="col-12"><input class="form-control" name="description" placeholder="description" value="<%= selectedModel ? selectedModel.description : '' %>" /></div>
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary btn-sm" type="submit"><%= selectedModel ? 'Atualizar' : 'Criar' %></button>
+            <% if (selectedModel) { %><a class="btn btn-outline-secondary btn-sm" href="/admin/module-spec">Cancelar</a><% } %>
+          </div>
+        </form>
+        <div class="table-responsive mb-3">
+          <table class="table table-sm app-table mb-0">
+            <thead><tr><th>ID</th><th>Familia</th><th>Modelo</th><th>Acoes</th></tr></thead>
+            <tbody>
+              <% models.forEach((item) => { %>
+                <tr>
+                  <td><%= item.id %></td>
+                  <td><%= item.familyName || item.familyId || '-' %></td>
+                  <td><%= item.brand || '-' %> <%= item.model %></td>
+                  <td class="d-flex gap-2">
+                    <a class="btn btn-outline-primary btn-sm" href="/admin/module-spec?edit_model=<%= item.id %>">Editar</a>
+                    <form method="post" action="/admin/module-spec/models/<%= item.id %>/delete" onsubmit="return confirm('Excluir modelo?')">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                      <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                    </form>
+                  </td>
+                </tr>
+              <% }) %>
+              <% if (!models.length) { %><tr><td colspan="4" class="text-muted">Sem modelos.</td></tr><% } %>
+            </tbody>
+          </table>
+        </div>
+
+        <% if (selectedModel) { %>
+          <div class="border rounded p-3 mb-3">
+            <div class="fw-semibold mb-2">Variacoes do modelo <%= selectedModel.model %></div>
+            <form class="row g-2 mb-3" method="post" action="/admin/module-spec/models/<%= selectedModel.id %>/variants/create">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <div class="col-md-5"><input class="form-control" name="variant_name" placeholder="variant_name" required /></div>
+              <div class="col-md-3"><input class="form-control" name="variant_code" placeholder="variant_code" /></div>
+              <div class="col-md-2"><input class="form-control" name="status" value="active" /></div>
+              <div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Adicionar</button></div>
+            </form>
+            <div class="table-responsive">
+              <table class="table table-sm app-table mb-0">
+                <thead><tr><th>ID</th><th>Nome</th><th>Codigo</th><th>Acoes</th></tr></thead>
+                <tbody>
+                  <% variants.forEach((variant) => { %>
+                    <tr>
+                      <td><%= variant.id %></td>
+                      <td><%= variant.variantName %></td>
+                      <td><%= variant.variantCode || '-' %></td>
+                      <td class="d-flex gap-2 flex-wrap">
+                        <a class="btn btn-outline-primary btn-sm" href="/admin/module-spec?edit_model=<%= selectedModel.id %>&edit_variant=<%= variant.id %>">Editar</a>
+                        <form method="post" action="/admin/module-spec/variants/<%= variant.id %>/delete" onsubmit="return confirm('Excluir variacao?')">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                  <% if (!variants.length) { %><tr><td colspan="4" class="text-muted">Sem variacoes.</td></tr><% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% } %>
+
+        <% if (selectedVariant) { %>
+          <div class="border rounded p-3">
+            <div class="fw-semibold mb-2">Editar variacao #<%= selectedVariant.id %></div>
+            <form class="row g-2 mb-3" method="post" action="/admin/module-spec/variants/<%= selectedVariant.id %>/update">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <div class="col-md-5"><input class="form-control" name="variant_name" value="<%= selectedVariant.variantName %>" required /></div>
+              <div class="col-md-3"><input class="form-control" name="variant_code" value="<%= selectedVariant.variantCode || '' %>" /></div>
+              <div class="col-md-2"><input class="form-control" name="status" value="<%= selectedVariant.status %>" /></div>
+              <div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Atualizar</button></div>
+            </form>
+            <div class="fw-semibold mb-2">Atributos da variacao #<%= selectedVariant.id %> (JSON array)</div>
+            <form method="post" action="/admin/module-spec/variants/<%= selectedVariant.id %>/attributes">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <textarea class="form-control font-monospace" rows="7" name="attributes_json"><%= JSON.stringify(variantAttributes || [], null, 2) %></textarea>
+              <button class="btn btn-outline-primary btn-sm mt-2" type="submit">Atualizar atributos da variacao</button>
+            </form>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card app-card">
+      <div class="card-body">
+        <h2 class="h6 app-card-title">Mapping de Filtro por Perfil</h2>
+        <form class="row g-2 mb-3" method="get" action="/admin/module-spec">
+          <div class="col-md-6">
+            <select class="form-select" name="profile_id" id="mappingProfileId" required>
+              <option value="">Selecione o perfil</option>
+              <% profiles.forEach((profile) => { %>
+                <option value="<%= profile.id %>" <%= profileId === profile.id ? 'selected' : '' %>><%= profile.id %> - <%= profile.name %></option>
+              <% }) %>
+            </select>
+          </div>
+          <div class="col-md-3"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Carregar mapping</button></div>
+          <div class="col-md-3"><button class="btn btn-outline-secondary btn-sm w-100" type="button" id="importProfileFieldsBtn">Importar campos do perfil</button></div>
+        </form>
+
+        <% if (profileId) { %>
+          <form method="post" action="/admin/module-spec/profiles/<%= profileId %>/mappings" class="mb-3">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <label class="form-label">Mappings (JSON array)</label>
+            <textarea id="mappingsJson" class="form-control font-monospace" rows="10" name="mappings_json"><%= JSON.stringify(mappings || [], null, 2) %></textarea>
+            <button class="btn btn-primary btn-sm mt-2" type="submit">Salvar mappings</button>
+          </form>
+
+          <form method="post" action="/admin/module-spec/profiles/<%= profileId %>/filter-test">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <label class="form-label">Teste de filtro (required JSON)</label>
+            <textarea class="form-control font-monospace" rows="5" name="required_json">{}</textarea>
+            <button class="btn btn-outline-primary btn-sm mt-2" type="submit">Testar filtro</button>
+          </form>
+        <% } %>
+
+        <% if (filterResult) { %>
+          <div class="alert alert-info mt-3">
+            <strong>Total de matches:</strong> <%= filterResult.totalMatches %>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-sm app-table mb-0">
+              <thead><tr><th>Fabricante</th><th>Modelo</th><th>Variacao</th><th>Codigo</th><th>Motivos</th></tr></thead>
+              <tbody>
+                <% filterResult.matches.forEach((item) => { %>
+                  <tr>
+                    <td><%= item.manufacturer || '-' %></td>
+                    <td><%= item.brand || '-' %> <%= item.model %></td>
+                    <td><%= item.variantName %></td>
+                    <td><%= item.variantCode || '-' %></td>
+                    <td><%= (item.reasons || []).join(' | ') %></td>
+                  </tr>
+                <% }) %>
+                <% if (!filterResult.matches.length) { %><tr><td colspan="5" class="text-muted">Nenhuma variacao compativel.</td></tr><% } %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var importBtn = document.getElementById("importProfileFieldsBtn");
+    var profileSelect = document.getElementById("mappingProfileId");
+    var mappingsJson = document.getElementById("mappingsJson");
+    if (!importBtn || !profileSelect || !mappingsJson) return;
+
+    importBtn.addEventListener("click", function () {
+      var profileId = Number(profileSelect.value || 0);
+      if (!Number.isInteger(profileId) || profileId <= 0) {
+        window.alert("Selecione um perfil primeiro.");
+        return;
+      }
+      fetch("/admin/module-spec/profiles/" + profileId + "/fields", { credentials: "same-origin" })
+        .then(function (response) {
+          if (!response.ok) throw new Error("Nao foi possivel carregar os campos do perfil.");
+          return response.json();
+        })
+        .then(function (payload) {
+          var fields = (payload && payload.data && Array.isArray(payload.data.fields)) ? payload.data.fields : [];
+          var mappings = fields.map(function (field, index) {
+            return {
+              fieldId: field.id,
+              equipmentAttributeKey: field.key,
+              operator: "equals",
+              filterActive: true,
+              requiredMatch: true,
+              sortOrder: index + 1
+            };
+          });
+          mappingsJson.value = JSON.stringify(mappings, null, 2);
+        })
+        .catch(function (err) {
+          window.alert(err.message || "Erro ao importar campos do perfil.");
+        });
+    });
+  })();
+</script>
+
+<%- include("partials/footer") %>

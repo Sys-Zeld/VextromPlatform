@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security Review</title>
+  <style>
+    :root {
+      --bg: #f4efe7;
+      --panel: #fffaf2;
+      --ink: #1e1a16;
+      --muted: #6b6258;
+      --ok: #1f7a45;
+      --warn: #9a6a00;
+      --fail: #a12622;
+      --line: #d9ccb7;
+    }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background: radial-gradient(circle at top left, #fffdf8 0, #f4efe7 42%, #efe3d1 100%);
+      color: var(--ink);
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+    h1, h2, h3 {
+      line-height: 1.15;
+      margin: 0 0 12px;
+    }
+    h1 { font-size: 2rem; }
+    h2 { font-size: 1.2rem; margin-top: 28px; }
+    h3 { font-size: 1rem; margin-top: 16px; }
+    p, li { line-height: 1.5; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-top: 18px;
+      box-shadow: 0 10px 30px rgba(60, 40, 10, 0.06);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .ok { color: var(--ok); background: rgba(31, 122, 69, 0.12); }
+    .warn { color: var(--warn); background: rgba(154, 106, 0, 0.14); }
+    .fail { color: var(--fail); background: rgba(161, 38, 34, 0.12); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    th, td {
+      border-top: 1px solid var(--line);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    code, pre {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      background: #f7f1e6;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Revisão de Segurança</h1>
+    <p class="muted">Atualizado em 2026-03-13 apos nova analise do codigo atual e reaplicacao das correcoes que haviam regredido.</p>
+
+    <section class="card">
+      <h2>Resumo</h2>
+      <ul>
+        <li><span class="badge ok">[ok]</span> O fluxo de documentos continua sem rota estatica publica; o front passou a usar apenas <code>downloadPath/downloadUrl</code> controlado.</li>
+        <li><span class="badge ok">[ok]</span> O cookie do <code>csurf</code> voltou a ser endurecido com <code>HttpOnly</code>, <code>SameSite=strict</code> e <code>Secure</code> em HTTPS.</li>
+        <li><span class="badge ok">[ok]</span> A emissao publica de token voltou a usar <code>req.ip</code>, removendo o bypass por spoof manual de <code>X-Forwarded-For</code>.</li>
+        <li><span class="badge ok">[ok]</span> Os endpoints <code>/equipment/:id/specification</code> foram novamente restringidos a sessao admin valida.</li>
+        <li><span class="badge ok">[ok]</span> Erros 5xx voltaram a ser sanitizados; o usuario nao recebe mais <code>err.message</code> bruto no envio de e-mail.</li>
+        <li><span class="badge warn">[atenção]</span> As rotas admin continuam com <code>csrfProtection</code> antes de <code>requireAdminAuth</code>; nao identifiquei bypass, mas a ordem ainda e subotima.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Checklist</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Status</th>
+            <th>Observacao</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1. Rotas publicas e privadas mapeadas</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>Rotas admin e manutencao exigem sessao; APIs de campos usam API key/admin; fluxos <code>/form/:token/*</code> seguem bearer token.</td>
+          </tr>
+          <tr>
+            <td>2. Rotas privadas exigem autenticacao</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>As rotas privadas revisadas permanecem protegidas por sessao admin ou checagem explicita de manutencao.</td>
+          </tr>
+          <tr>
+            <td>3. Autorizacao alem da presenca de token</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td><code>/equipment/:id/specification</code> nao aceita mais API key isolada; exige sessao admin.</td>
+          </tr>
+          <tr>
+            <td>4. Acesso por ID com validacao de ownership</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>Downloads publicos de anexos continuam validados por <code>token + documentId</code>.</td>
+          </tr>
+          <tr>
+            <td>5. Validacao de <code>req.body</code>, <code>req.params</code> e <code>req.query</code></td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>As validacoes existentes foram mantidas; ids e downloads continuam checados.</td>
+          </tr>
+          <tr>
+            <td>6. JWT, sessao e cookies</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>O projeto segue sem JWT; cookie admin e cookie CSRF agora estao endurecidos.</td>
+          </tr>
+          <tr>
+            <td>7. Rate limit em login e endpoints sensiveis</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>Login e envio de e-mail seguem com limite; emissao publica nao depende mais do header injetado pelo cliente.</td>
+          </tr>
+          <tr>
+            <td>8. Helmet, CORS e headers</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td><code>helmet</code> continua ativo e nao ha exposicao estatica de documentos no app.</td>
+          </tr>
+          <tr>
+            <td>9. Mensagens de erro expoem detalhes internos</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>Erros 5xx foram sanitizados novamente; 4xx continuam retornando detalhe util quando a falha e de validacao.</td>
+          </tr>
+          <tr>
+            <td>10. SQL injection, NoSQL injection, mass assignment</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>Sem evidencia nova de injecao real nas consultas revisadas.</td>
+          </tr>
+          <tr>
+            <td>11. Middlewares de auth duplicados, ausentes ou fora de ordem</td>
+            <td><span class="badge warn">[atenção]</span></td>
+            <td>Sem bypass encontrado, mas a ordem de algumas rotas admin ainda pode ser refinada.</td>
+          </tr>
+          <tr>
+            <td>12. Uploads, redirecionamentos e rotas administrativas</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>Uploads seguem limitados a PDF e os anexos sao servidos por download controlado.</td>
+          </tr>
+          <tr>
+            <td>13. Arquivos e trechos criticos apontados</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>As correcoes desta rodada foram aplicadas em <code>src/app.js</code>, <code>src/services/publicTokenAccess.js</code>, <code>src/views/*</code> e <code>src/i18n/index.js</code>.</td>
+          </tr>
+          <tr>
+            <td>14. Correcoes objetivas sugeridas</td>
+            <td><span class="badge ok">[ok]</span></td>
+            <td>Implementadas nesta revisao.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Trechos de Modificacoes Aplicadas</h2>
+
+      <h3>1. Endurecimento do cookie do CSRF</h3>
+      <pre><code>// src/app.js
+const csrfProtection = csrf({
+  cookie: {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: appUsesHttps,
+    path: "/"
+  }
+});</code></pre>
+
+      <h3>2. Restricao da API de equipamento a sessao admin</h3>
+      <pre><code>// src/app.js
+function requireAdminApiAuth(req, res, next) {
+  if (isValidAdminSessionToken(req.cookies[ADMIN_SESSION_COOKIE_NAME])) return next();
+  return res.status(403).json({
+    error: "Admin session required.",
+    errorCode: "ADMIN_SESSION_REQUIRED"
+  });
+}
+
+app.get("/equipment/:id/specification", requireApiScope("spec:read"), requireAdminApiAuth, ...);
+app.put("/equipment/:id/specification", requireApiScope("spec:write"), requireAdminApiAuth, ...);</code></pre>
+
+      <h3>3. Correcao do IP confiavel na emissao publica de token</h3>
+      <pre><code>// src/services/publicTokenAccess.js
+function getClientIp(req) {
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}</code></pre>
+
+      <h3>4. Remocao do fallback para URL externa de documento</h3>
+      <pre><code>// src/views/section.ejs e src/views/review.ejs
+&lt;a href="&lt;%= doc.downloadPath || doc.downloadUrl %&gt;" target="_blank" rel="noreferrer"&gt;
+  &lt;%= t("section.documentsOpen") %&gt;
+&lt;/a&gt;</code></pre>
+
+      <h3>5. Sanitizacao do erro no envio de e-mail</h3>
+      <pre><code>// src/app.js
+} catch (err) {
+  return res.status(500).send(req.t("app.emailSendError", {
+    message: req.t("app.internalError")
+  }));
+}</code></pre>
+
+      <h3>6. Handler final de erro sem vazamento de detalhes 5xx</h3>
+      <pre><code>// src/app.js
+const canExpose = err.statusCode &lt; 500 || err.expose === true;
+return res.status(err.statusCode).json({
+  error: canExpose ? err.message : "Internal server error.",
+  errorCode: err.errorCode || null,
+  details: canExpose ? (err.details || null) : null
+});
+
+console.error("Unhandled error:", err);
+return res.status(err.statusCode || 500).send(req.t("app.internalError"));</code></pre>
+    </section>
+  </main>
+</body>
+</html>

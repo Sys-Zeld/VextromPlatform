@@ -1,0 +1,93 @@
+<%- include("../partials/head", { pageTitle }) %>
+
+<section class="token-console">
+  <div class="card app-card token-hero-card">
+    <div class="card-body token-hero-body">
+      <div class="token-hero-copy">
+        <span class="token-hero-eyebrow">SERVICE REPORT</span>
+        <h1 class="h4 app-card-title mb-1">Equipamentos</h1>
+        <p class="text-muted mb-0">Base de equipamentos vinculada a cliente/site e pronta para associacao em OS.</p>
+      </div>
+      <div class="token-hero-actions">
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+      </div>
+    </div>
+  </div>
+
+  <% if (created) { %><div class="alert alert-success mb-0">Equipamento salvo com sucesso.</div><% } %>
+
+  <div class="card app-card">
+    <div class="card-body">
+      <h2 class="h6 app-card-title mb-3">Novo equipamento</h2>
+      <form method="post" action="/admin/report-service/equipments" class="row g-2">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="col-12 col-md-4">
+          <label class="form-label">Cliente</label>
+          <select class="form-select" name="customer_id">
+            <option value="">Nao vinculado</option>
+            <% customers.forEach((customer) => { %><option value="<%= customer.id %>"><%= customer.name %></option><% }) %>
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Site</label>
+          <select class="form-select" name="site_id">
+            <option value="">Nao vinculado</option>
+            <% sites.forEach((site) => { %><option value="<%= site.id %>"><%= site.site_name %></option><% }) %>
+          </select>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">TYPE</label>
+          <input class="form-control" name="type" required />
+        </div>
+        <div class="col-12 col-md-3"><input class="form-control" name="year_of_manufacture" placeholder="YEAR OF MANUFACTURE" /></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="serial_number" placeholder="SERIAL No." /></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="rated_ac_input_voltage" placeholder="RATED AC INPUT VOLTAGE" /></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="input_frequency" placeholder="INPUT FREQUENCY" /></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="rated_dc_voltage" placeholder="RATED DC VOLTAGE" /></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="rated_ac_output_voltage" placeholder="RATED AC OUTPUT VOLTAGE" /></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="output_frequency" placeholder="OUTPUT FREQUENCY" /></div>
+        <div class="col-12 col-md-3"><input class="form-control" name="degree_of_protection" placeholder="DEGREE OF PROTECTION" /></div>
+        <div class="col-12 col-md-4"><input class="form-control" name="main_label" placeholder="MAIN LABEL" /></div>
+        <div class="col-12 col-md-4"><input class="form-control" name="dt_number" placeholder="DT NUMBER" /></div>
+        <div class="col-12 col-md-4"><input class="form-control" name="tag_number" placeholder="TAG NUMBER" /></div>
+        <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit">Salvar equipamento</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card app-card">
+    <div class="card-body">
+      <h2 class="h6 app-card-title mb-3">Base de equipamentos</h2>
+      <div class="table-responsive">
+        <table class="table table-sm app-table mb-0">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Type</th>
+              <th>Serial</th>
+              <th>Tag</th>
+              <th>Cliente</th>
+              <th>Site</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (!equipments.length) { %><tr><td colspan="6" class="text-center text-muted py-4">Sem equipamentos.</td></tr><% } %>
+            <% equipments.forEach((equipment) => { %>
+              <tr>
+                <td><%= equipment.id %></td>
+                <td><%= equipment.type %></td>
+                <td><%= equipment.serial_number || "-" %></td>
+                <td><%= equipment.tag_number || "-" %></td>
+                <td><%= equipment.customer_name || "-" %></td>
+                <td><%= equipment.site_name || "-" %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<%- include("../partials/footer") %>

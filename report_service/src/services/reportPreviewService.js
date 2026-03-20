@@ -1,0 +1,480 @@
+const path = require("path");
+const { SECTION_DEFINITIONS } = require("../constants");
+const sanitizeHtml = require("sanitize-html");
+const { withServiceOrderDisplay } = require("../utils/serviceOrderDisplay");
+
+function getSectionContent(sections, key) {
+  const section = (sections || []).find((item) => item.section_key === key);
+  const isVisible = section?.is_visible !== false;
+  return {
+    title: section?.section_title || SECTION_DEFINITIONS.find((item) => item.key === key)?.title || key,
+    html: isVisible ? section?.content_html || "" : "",
+    text: isVisible ? section?.content_text || "" : "",
+    isVisible
+  };
+}
+
+function groupComponents(items) {
+  const groups = {
+    replaced: [],
+    required: [],
+    spare_recommended: []
+  };
+  (items || []).forEach((item) => {
+    if (!groups[item.category]) groups[item.category] = [];
+    groups[item.category].push(item);
+  });
+  return groups;
+}
+
+function normalizeTocTitle(section) {
+  const fallback = SECTION_DEFINITIONS.find((d) => d.key === section?.section_key)?.title || section?.section_key || "-";
+  const titleHtml = String(section?.section_title_html || "").trim();
+  if (titleHtml) {
+    const withLineBreaks = titleHtml
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>\s*<p[^>]*>/gi, "\n")
+      .replace(/<\/div>\s*<div[^>]*>/gi, "\n");
+    const plain = sanitizeHtml(withLineBreaks, { allowedTags: [], allowedAttributes: {} });
+    const firstLine = plain
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean);
+    if (firstLine) return firstLine;
+  }
+
+  const raw = section?.section_title_text || section?.section_title || fallback;
+  const normalized = String(raw || fallback).replace(/\s+/g, " ").trim();
+  return normalized || fallback;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function toImagePublicSrc(filePath) {
+  const raw = String(filePath || "").trim();
+  if (!raw) return "";
+  if (/^data:image\//i.test(raw)) return raw;
+  const normalized = raw.replace(/\\/g, "/");
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  const fileName = path.posix.basename(normalized);
+  if (!fileName || fileName === "." || fileName === "/") return "";
+  return `/docs/report/img/${encodeURIComponent(fileName)}`;
+}
+
+function renderInlineImageCard(image, requestedId = null) {
+  const fallbackCaption = requestedId ? `Imagem ${requestedId}` : "Imagem";
+  const caption = escapeHtml((image && image.caption) || fallbackCaption);
+  const publicSrc = toImagePublicSrc(image && image.filePath);
+  if (!publicSrc) {
+    return `<figure class="report-inline-image-card"><div class="report-inline-image-missing">${escapeHtml(`ID ${requestedId || "-"}`)}</div><figcaption class="report-inline-image-caption">${caption}</figcaption></figure>`;
+  }
+  const safePath = escapeHtml(publicSrc);
+  return `<figure class="report-inline-image-card"><img class="report-inline-image" src="${safePath}" alt="${caption}" /><figcaption class="report-inline-image-caption">${caption}</figcaption></figure>`;
+}
+
+function formatComponentQuantity(value) {
+  const number = Number(value);
+  if (Number.isFinite(number) && number >= 0) return String(Math.trunc(number)).padStart(2, "0");
+  const raw = String(value || "").trim();
+  return raw || "-";
+}
+
+function formatComponentDescription(value) {
+  const source = String(value || "").trim();
+  if (!source) return "-";
+  const pattern = /\(\s*SPARE\s+A\s+BORDO\s*\)/gi;
+  let lastIndex = 0;
+  let output = "";
+  let match;
+  while ((match = pattern.exec(source)) !== null) {
+    output += escapeHtml(source.slice(lastIndex, match.index));
+    output += `<span class="report-inline-components-spare">${escapeHtml(match[0])}</span>`;
+    lastIndex = match.index + match[0].length;
+  }
+  output += escapeHtml(source.slice(lastIndex));
+  return output;
+}
+
+function getComponentRowsByCategory(componentItems, categoryKey) {
+  const rows = Array.isArray(componentItems) ? componentItems : [];
+  const normalized = String(categoryKey || "").trim().toLowerCase();
+  if (!normalized) return rows;
+  return rows.filter((item) => {
+    const category = String(item?.category || "").trim().toLowerCase();
+    if (normalized === "replaced") return category === "replaced";
+    if (normalized === "required") return category === "required";
+    if (normalized === "spare") return category === "spare_recommended" || category === "spare";
+    return false;
+  });
+}
+
+function renderComponentsInlineTable(componentItems) {
+  const rows = Array.isArray(componentItems) ? componentItems : [];
+  const first = rows[0] || {};
+  const equipmentName = escapeHtml(first.equipment_type || first.equipment_model_family || "COMPONENTES");
+  const powerLabel = escapeHtml(first.equipment_power || "-");
+  const serialLabel = escapeHtml(first.equipment_serial || "-");
+  const tagLabel = escapeHtml(first.equipment_tag || "-");
+  const rbLabel = escapeHtml(first.equipment_dt || "-");
+
+  const bodyRows = rows.length
+    ? rows.map((item) => `
+      <tr>
+        <td class="report-inline-components-qty">${escapeHtml(formatComponentQuantity(item.quantity))}</td>
+        <td class="report-inline-components-desc">${formatComponentDescription(item.description)}</td>
+        <td class="report-inline-components-part">${escapeHtml(item.part_number || "-")}</td>
+      </tr>
+    `).join("")
+    : `
+      <tr>
+        <td class="report-inline-components-empty" colspan="3">Sem componentes cadastrados.</td>
+      </tr>
+    `;
+
+  return `
+    <div class="report-inline-components-wrap">
+      <table class="report-inline-components-table">
+        <thead>
+          <tr class="report-inline-components-meta">
+            <th>${equipmentName}</th>
+            <th>Power: ${powerLabel}</th>
+            <th>Serie: ${serialLabel}</th>
+          </tr>
+          <tr class="report-inline-components-meta">
+            <th>TAG: ${tagLabel}</th>
+            <th colspan="2">RB: ${rbLabel}</th>
+          </tr>
+          <tr>
+            <th>Quantity</th>
+            <th>Description</th>
+            <th>Part Number</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function formatTimesheetDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "NA";
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[tT ]/);
+  if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  const date = new Date(raw);
+  if (!Number.isNaN(date.getTime())) {
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return `${day}/${month}/${year}`;
+  }
+  return raw;
+}
+
+function normalizeTimesheetValue(value) {
+  const raw = String(value || "").trim();
+  return raw ? raw.toUpperCase() : "NA";
+}
+
+function renderTimesheetInlineTable(timesheetItems) {
+  const rows = Array.isArray(timesheetItems) ? timesheetItems : [];
+  const bodyRows = rows.length
+    ? rows.map((item) => `
+      <tr>
+        <td>${escapeHtml(formatTimesheetDate(item.activity_date || item.activityDate))}</td>
+        <td>${escapeHtml(normalizeTimesheetValue(item.check_in_base || item.checkInBase))}</td>
+        <td>${escapeHtml(normalizeTimesheetValue(item.check_in_client || item.checkInClient))}</td>
+        <td>${escapeHtml(normalizeTimesheetValue(item.check_out_client || item.checkOutClient))}</td>
+        <td>${escapeHtml(normalizeTimesheetValue(item.check_out_base || item.checkOutBase))}</td>
+      </tr>
+    `).join("")
+    : `
+      <tr>
+        <td colspan="5" class="report-inline-timesheet-empty">Sem registros de timesheet.</td>
+      </tr>
+    `;
+
+  return `
+    <div class="report-inline-timesheet-wrap">
+      <table class="report-inline-timesheet-table">
+        <thead>
+          <tr class="report-inline-timesheet-title-row">
+            <th colspan="5">TIME SHEET</th>
+          </tr>
+          <tr>
+            <th>Data</th>
+            <th>Check in base</th>
+            <th>Check in client</th>
+            <th>Check out client</th>
+            <th>Check out base</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function wrapImageCardsIntoRows(html) {
+  const figureRegex = /<figure class="report-inline-image-card">[\s\S]*?<\/figure>/gi;
+  const tokenRegex = /<figure class="report-inline-image-card">[\s\S]*?<\/figure>|<br\s*\/?>/gi;
+
+  function isSpacer(content) {
+    const residue = String(content || "")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;|&#160;/gi, " ")
+      .replace(/\s+/g, "")
+      .trim();
+    return residue.length === 0;
+  }
+
+  function buildRowsFromTokens(tokens) {
+    const lines = [[]];
+    tokens.forEach((token) => {
+      if (/^<br/i.test(String(token || ""))) {
+        if (lines[lines.length - 1].length > 0) lines.push([]);
+      } else {
+        lines[lines.length - 1].push(token);
+      }
+    });
+    const normalizedLines = lines.filter((line) => line.length > 0);
+    if (!normalizedLines.length) return "";
+
+    const rows = [];
+    normalizedLines.forEach((lineFigures) => {
+      for (let index = 0; index < lineFigures.length; index += 2) {
+        rows.push(`<div class="report-inline-image-row">${lineFigures.slice(index, index + 2).join("")}</div>`);
+      }
+    });
+    return rows.join("");
+  }
+
+  const source = String(html || "");
+  if (!figureRegex.test(source)) return source;
+  figureRegex.lastIndex = 0;
+
+  const matches = [];
+  let match;
+  while ((match = tokenRegex.exec(source)) !== null) {
+    matches.push({
+      token: String(match[0] || ""),
+      index: match.index,
+      end: match.index + String(match[0] || "").length
+    });
+  }
+  if (!matches.length) return source;
+
+  let result = "";
+  let cursor = 0;
+  let i = 0;
+  while (i < matches.length) {
+    const current = matches[i];
+    const leading = source.slice(cursor, current.index);
+    result += leading;
+
+    if (!/^<figure/i.test(current.token)) {
+      result += current.token;
+      cursor = current.end;
+      i += 1;
+      continue;
+    }
+
+    const runTokens = [current.token];
+    let runEnd = current.end;
+    let j = i + 1;
+    while (j < matches.length) {
+      const between = source.slice(runEnd, matches[j].index);
+      if (!isSpacer(between)) break;
+      runTokens.push(matches[j].token);
+      runEnd = matches[j].end;
+      j += 1;
+    }
+
+    result += buildRowsFromTokens(runTokens);
+    cursor = runEnd;
+    i = j;
+  }
+
+  if (cursor < source.length) result += source.slice(cursor);
+  return result;
+}
+
+function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems) {
+  const source = String(contentHtml || "");
+  if (!source) return "<p><br></p>";
+  const equipmentTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*equip(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi;
+  const withEquipments = source.replace(equipmentTagPattern, (_match, rawId) => {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0) return _match;
+    const equipment = equipmentById.get(id);
+    const label = String(equipment?.tag || equipment?.type || "").trim();
+    return label ? escapeHtml(label) : _match;
+  });
+  const imageTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*img(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)(?:\s|&nbsp;|<[^>]+>)*(?:imagem)?/gi;
+  const withImages = withEquipments.replace(imageTagPattern, (_match, rawId) => {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0) return _match;
+    const image = imageById.get(id);
+    return renderInlineImageCard(image, id);
+  });
+  const tableReplacedPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmpr/gi;
+  const tableRequiredPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmpq/gi;
+  const tableSparePattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmps/gi;
+  const withReplacedTable = withImages.replace(tableReplacedPattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "replaced")));
+  const withRequiredTable = withReplacedTable.replace(tableRequiredPattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "required")));
+  const withTables = withRequiredTable.replace(tableSparePattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "spare")));
+  const timesheetTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*timesheet/gi;
+  const withTimesheet = withTables.replace(timesheetTagPattern, () => renderTimesheetInlineTable(timesheetItems));
+  return wrapImageCardsIntoRows(withTimesheet);
+}
+
+function buildPreviewModel(payload) {
+  const order = withServiceOrderDisplay(payload.order || {});
+  const images = Array.isArray(payload.images) ? payload.images : [];
+  const imageById = new Map(
+    images
+      .filter((item) => Number.isInteger(Number(item?.ref_id || item?.id)) && String(item?.file_path || "").trim())
+      .map((item) => [
+        Number(item.ref_id || item.id),
+        {
+          id: Number(item.ref_id || item.id),
+          filePath: String(item.file_path || "").trim(),
+          caption: String(item.caption || "").trim()
+        }
+      ])
+  );
+  const imagesBySection = images.reduce((acc, item) => {
+    const key = String(item?.section_key || "").trim().toLowerCase();
+    const filePath = String(item?.file_path || "").trim();
+    if (!key || !filePath) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  Object.keys(imagesBySection).forEach((key) => {
+    imagesBySection[key].sort(
+      (a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id || 0) - Number(b.id || 0)
+    );
+  });
+
+  const sections = payload.sections || [];
+  const orderEquipments = Array.isArray(payload.orderEquipments) ? payload.orderEquipments : [];
+  const equipmentById = new Map(
+    orderEquipments
+      .filter((item) => Number.isInteger(Number(item?.ref_id || item?.equipment_id)))
+      .map((item) => [
+        Number(item.ref_id || item.equipment_id),
+        {
+          id: Number(item.ref_id || item.equipment_id),
+          tag: String(item.tag_number || "").trim(),
+          type: String(item.type || "").trim(),
+          serial: String(item.serial_number || "").trim()
+        }
+      ])
+  );
+  const componentItems = Array.isArray(payload.components) ? payload.components : [];
+  const timesheetItems = Array.isArray(payload.timesheet) ? payload.timesheet : [];
+  const visibleSections = sections
+    .filter((item) => item?.is_visible !== false)
+    .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id || 0) - Number(b.id || 0));
+  const orderedVisibleSections = (visibleSections.length ? visibleSections : sections)
+    .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id || 0) - Number(b.id || 0))
+    .map((section, index) => {
+      const sectionKey = String(section.section_key || "").trim().toLowerCase();
+      const anchorKey = sectionKey.replace(/[^a-z0-9_]+/g, "-") || "secao";
+      const anchorId = `section-${index + 1}-${anchorKey}`;
+      const fromRegistry = imagesBySection[sectionKey] || [];
+      let sectionImages = [];
+      if (fromRegistry.length) {
+        sectionImages = fromRegistry.map((item) => ({
+          id: item.ref_id || item.id,
+          filePath: toImagePublicSrc(item.file_path),
+          caption: item.caption || "",
+          sortOrder: item.sort_order
+        }));
+      } else {
+        if (section.image_left_path) {
+          sectionImages.push({
+            id: null,
+            filePath: toImagePublicSrc(section.image_left_path),
+            caption: "Imagem 1",
+            sortOrder: 1
+          });
+        }
+        if (section.image_right_path) {
+          sectionImages.push({
+            id: null,
+            filePath: toImagePublicSrc(section.image_right_path),
+            caption: "Imagem 2",
+            sortOrder: 2
+          });
+        }
+      }
+
+      return {
+        ...section,
+        anchor_id: anchorId,
+        sectionImages,
+        section_title_html_preview: injectTaggedImagesInHtml(
+          section.section_title_html || `<p>${section.section_title || "-"}</p>`,
+          imageById,
+          componentItems,
+          equipmentById,
+          timesheetItems
+        ),
+        content_html_preview: injectTaggedImagesInHtml(
+          section.content_html || "<p><br></p>",
+          imageById,
+          componentItems,
+          equipmentById,
+          timesheetItems
+        ),
+        section_title_html: section.section_title_html || `<p>${section.section_title || "-"}</p>`,
+        section_title_text: section.section_title_text || section.section_title || "-",
+        image_left_path: section.image_left_path || "",
+        image_right_path: section.image_right_path || ""
+      };
+    });
+  const sectionMap = {
+    scope: getSectionContent(sections, "scope"),
+    technicalDescription: getSectionContent(sections, "technical_description"),
+    replacedComponents: getSectionContent(sections, "replaced_components"),
+    requiredComponents: getSectionContent(sections, "required_components"),
+    recommendedSpare: getSectionContent(sections, "recommended_spare"),
+    recommendations: getSectionContent(sections, "recommendations"),
+    conclusion: getSectionContent(sections, "conclusion")
+  };
+  const components = groupComponents(payload.components || []);
+
+  return {
+    ...payload,
+    order,
+    orderedVisibleSections,
+    brandAssets: {
+      logoVextrom: String(process.env.SERVICE_REPORT_LOGO_VEXTROM || "/public/img/logo-vextrom.svg"),
+      logoChloride: String(process.env.SERVICE_REPORT_LOGO_CHLORIDE || "").trim(),
+      chartMtbf: String(process.env.SERVICE_REPORT_CHART_MTBF || "").trim()
+    },
+    sectionMap,
+    components,
+    toc: orderedVisibleSections.map((item, index) => ({
+      title: normalizeTocTitle(item),
+      startPage: index + 3,
+      anchorId: item.anchor_id || ""
+    })),
+    generatedAt: new Date().toISOString()
+  };
+}
+
+module.exports = {
+  buildPreviewModel
+};

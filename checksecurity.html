@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check Security - Passo a Passo</title>
+  <style>
+    :root {
+      --bg: #f3efe8;
+      --card: #fffaf3;
+      --ink: #1d1915;
+      --muted: #685f55;
+      --line: #d7ccb9;
+      --ok: #1f7a45;
+      --warn: #9a6a00;
+      --fail: #a12622;
+    }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background: linear-gradient(180deg, #fbf7f0 0%, #f3efe8 100%);
+      color: var(--ink);
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+    h1, h2, h3 {
+      line-height: 1.15;
+      margin: 0 0 12px;
+    }
+    h1 { font-size: 2rem; }
+    h2 { font-size: 1.2rem; margin-top: 26px; }
+    h3 { font-size: 1rem; margin-top: 18px; }
+    p, li { line-height: 1.5; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-top: 18px;
+      box-shadow: 0 8px 24px rgba(60, 40, 10, 0.06);
+    }
+    code, pre {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      background: #f7f1e6;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border-top: 1px solid var(--line);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .muted { color: var(--muted); }
+    .ok { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--warn); font-weight: 700; }
+    .fail { color: var(--fail); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Check Security</h1>
+    <p class="muted">Passo a passo para validar as falhas revisadas e confirmar as correcoes no projeto atual.</p>
+
+    <section class="card">
+      <h2>Ferramentas Externas</h2>
+      <ul>
+        <li><code>Google Chrome</code> ou <code>Firefox</code> com DevTools.</li>
+        <li><code>Postman</code> ou <code>Insomnia</code> para repetir requests autenticados.</li>
+        <li><code>curl</code> para provas simples via terminal.</li>
+        <li><code>Burp Suite Community</code> ou <code>OWASP ZAP</code> para interceptar cookies, headers e CSRF.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Preparacao</h2>
+      <ol>
+        <li>Suba a aplicacao com <code>npm start</code> ou <code>npm run dev</code>.</li>
+        <li>Confirme a URL base em <code>.env</code>, usando <code>APP_BASE_URL</code>. Nos exemplos abaixo vou chamar de <code>{{BASE_URL}}</code>.</li>
+        <li>Tenha um usuario admin valido para login em <code>/admin/login</code>.</li>
+        <li>Tenha ao menos um token de formulario existente e, se possivel, um anexo PDF ja enviado.</li>
+        <li>Se quiser testar o fluxo completo, crie uma API key na tela <code>/admin/api-keys</code>.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Matriz de Teste</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Caso</th>
+            <th>Ferramenta</th>
+            <th>Resultado esperado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Cookie CSRF endurecido</td>
+            <td>Navegador / Burp</td>
+            <td><span class="ok">HttpOnly</span>, <span class="ok">SameSite=Strict</span> e <span class="ok">Secure</span> quando HTTPS</td>
+          </tr>
+          <tr>
+            <td>API de equipamento bloqueada para API key comum</td>
+            <td>Postman / curl</td>
+            <td><span class="ok">403 ADMIN_SESSION_REQUIRED</span></td>
+          </tr>
+          <tr>
+            <td>Download de documento sem token correto</td>
+            <td>Navegador / curl</td>
+            <td><span class="ok">404</span> ou <span class="ok">403</span></td>
+          </tr>
+          <tr>
+            <td>Bypass de rate limit via X-Forwarded-For</td>
+            <td>Burp / curl</td>
+            <td><span class="ok">Header manual nao deve liberar criacao ilimitada</span></td>
+          </tr>
+          <tr>
+            <td>Erro 500 sem vazamento interno</td>
+            <td>Navegador / Postman</td>
+            <td><span class="ok">Mensagem generica</span>, sem stack, path interno ou segredo</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Passos Detalhados</h2>
+
+      <h3>1. Validar cookie do CSRF</h3>
+      <ol>
+        <li>Acesse <code>{{BASE_URL}}/admin/login</code>.</li>
+        <li>Abra DevTools em <code>Application &gt; Cookies</code> ou intercepte no Burp.</li>
+        <li>Localize o cookie de CSRF gerado pelo <code>csurf</code>.</li>
+        <li>Confirme os atributos:
+          <br><code>HttpOnly=true</code>
+          <br><code>SameSite=Strict</code>
+          <br><code>Path=/</code>
+          <br><code>Secure=true</code> se <code>{{BASE_URL}}</code> for HTTPS
+        </li>
+      </ol>
+      <p><strong>Falha antiga:</strong> cookie padrão sem endurecimento explícito.</p>
+      <p><strong>Correção esperada:</strong> atributos visíveis no navegador/interceptador.</p>
+
+      <h3>2. Validar que API key não acessa <code>/equipment/:id/specification</code></h3>
+      <ol>
+        <li>Crie ou use uma API key com escopo <code>spec:read</code> ou <code>spec:write</code>.</li>
+        <li>No Postman ou curl, chame:</li>
+      </ol>
+      <pre><code>curl -i "{{BASE_URL}}/equipment/1/specification" ^
+  -H "Authorization: Bearer SUA_API_KEY"</code></pre>
+      <ol start="3">
+        <li>Repita para <code>PUT</code>:</li>
+      </ol>
+      <pre><code>curl -i -X PUT "{{BASE_URL}}/equipment/1/specification" ^
+  -H "Authorization: Bearer SUA_API_KEY" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"values\":{}}"</code></pre>
+      <ol start="4">
+        <li>O retorno esperado e <code>403</code> com <code>ADMIN_SESSION_REQUIRED</code>.</li>
+      </ol>
+      <p><strong>Falha antiga:</strong> qualquer API key com escopo acessava qualquer equipamento por ID.</p>
+      <p><strong>Correção esperada:</strong> somente sessão admin autenticada consegue usar esses endpoints.</p>
+
+      <h3>3. Validar que download de documento exige o token correto</h3>
+      <ol>
+        <li>Entre em um formulário e pegue um link de anexo no HTML de revisão:
+          <br><code>/form/TOKEN_REAL/documents/ID/download</code>
+        </li>
+        <li>Teste no navegador com o token correto. O PDF deve baixar.</li>
+        <li>Agora altere apenas o token na URL para um token inexistente ou de outro registro.</li>
+        <li>Teste também trocar apenas o <code>ID</code> do documento.</li>
+      </ol>
+      <pre><code>curl -i "{{BASE_URL}}/form/TOKEN_ERRADO/documents/123/download"</code></pre>
+      <p><strong>Resultado esperado:</strong> <code>404</code> ou <code>403</code>, nunca download do arquivo errado.</p>
+      <p><strong>Falha antiga a evitar:</strong> front consumir URL pública/externa sem depender do token do formulário.</p>
+
+      <h3>4. Validar que o front não usa mais <code>externalUrl</code></h3>
+      <ol>
+        <li>Abra <code>/form/&lt;token&gt;/specification</code> e <code>/form/&lt;token&gt;/review</code>.</li>
+        <li>Inspecione os links dos anexos.</li>
+        <li>Confirme que os anchors apontam para:
+          <br><code>/form/&lt;token&gt;/documents/&lt;id&gt;/download</code>
+        </li>
+        <li>Confirme que não existe link clicável apontando para <code>/dados/docs/...</code>.</li>
+      </ol>
+      <p><strong>Ferramenta:</strong> navegador, DevTools ou <code>View Source</code>.</p>
+
+      <h3>5. Validar resistência a spoof de <code>X-Forwarded-For</code></h3>
+      <ol>
+        <li>Use Burp ou curl para chamar várias vezes <code>{{BASE_URL}}/form/public-start</code>.</li>
+        <li>Altere manualmente o header <code>X-Forwarded-For</code> a cada request.</li>
+        <li>Observe se o limite continua contando pelo IP resolvido da aplicação e pela sessão de navegador.</li>
+      </ol>
+      <pre><code>curl -i "{{BASE_URL}}/form/public-start" -H "X-Forwarded-For: 1.1.1.1"
+curl -i "{{BASE_URL}}/form/public-start" -H "X-Forwarded-For: 2.2.2.2"
+curl -i "{{BASE_URL}}/form/public-start" -H "X-Forwarded-For: 3.3.3.3"</code></pre>
+      <p><strong>Falha antiga:</strong> o sistema aceitava esse header bruto do cliente.</p>
+      <p><strong>Correção esperada:</strong> mudar o header manualmente não deve ser suficiente para burlar o controle.</p>
+      <p class="muted">Observação: como também existe hash de sessão de navegador, valide em janela anônima e janela normal para comparar.</p>
+
+      <h3>6. Validar sanitização de erro 500 no envio de e-mail</h3>
+      <ol>
+        <li>Configure o SMTP de forma inválida de propósito em ambiente de teste, ou interrompa o serviço SMTP.</li>
+        <li>Acesse <code>/form/&lt;token&gt;/review</code>.</li>
+        <li>Envie o formulário de e-mail em <code>/form/&lt;token&gt;/send-email</code>.</li>
+        <li>Observe a resposta HTML.</li>
+      </ol>
+      <p><strong>Resultado esperado:</strong> mensagem genérica de falha, sem stack trace, sem hostname SMTP, sem path interno e sem segredo.</p>
+      <p><strong>Falha antiga:</strong> retorno direto de <code>err.message</code>.</p>
+
+      <h3>7. Validar handler final de erro sem vazamento</h3>
+      <ol>
+        <li>Provoque um erro 500 em ambiente de teste. O jeito mais seguro é usar dependência externa inválida, como SMTP quebrado, ou desconectar banco em uma rota não crítica de teste.</li>
+        <li>Faça a chamada pelo navegador e pelo Postman.</li>
+        <li>Confirme que a resposta ao cliente contém apenas mensagem genérica.</li>
+        <li>Confirme que detalhes técnicos aparecem apenas no log do servidor.</li>
+      </ol>
+      <p><strong>Coletar evidência:</strong> screenshot da resposta HTTP + trecho do log do servidor.</p>
+
+      <h3>8. Validar fluxo admin de manutenção e backups</h3>
+      <ol>
+        <li>Acesse <code>{{BASE_URL}}/admin/maintenance</code> sem login.</li>
+        <li>O esperado é redirecionamento para <code>/admin/login</code>.</li>
+        <li>Entre com usuário comum sem role admin.</li>
+        <li>O esperado é <code>403</code> ao tentar manutenção.</li>
+        <li>Entre com usuário admin e confirme acesso liberado.</li>
+      </ol>
+      <p><strong>Objetivo:</strong> validar separação entre autenticação e autorização por papel.</p>
+
+      <h3>9. Validar upload de PDF com sessão expirada ou token bloqueado</h3>
+      <ol>
+        <li>Use um token cujo status esteja <code>sent</code>.</li>
+        <li>Tente abrir a especificação sem sessão admin.</li>
+        <li>O esperado é redirecionamento para revisão com aviso de bloqueio.</li>
+        <li>Tente subir um PDF para esse mesmo token.</li>
+      </ol>
+      <p><strong>Resultado esperado:</strong> <code>403 SPECIFICATION_LOCKED</code> no upload.</p>
+    </section>
+
+    <section class="card">
+      <h2>Checklist de Evidências</h2>
+      <ul>
+        <li>Screenshot dos cookies de sessão/CSRF.</li>
+        <li>Resposta do Postman/curl para <code>/equipment/:id/specification</code> com API key.</li>
+        <li>Teste de download com token correto e token incorreto.</li>
+        <li>Teste repetido de <code>/form/public-start</code> alterando <code>X-Forwarded-For</code>.</li>
+        <li>Resposta de erro 500 sanitizada no envio de e-mail.</li>
+        <li>Logs do servidor mostrando detalhe interno apenas no backend.</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Critério de Aprovação</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Teste</th>
+            <th>Aprovado quando</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CSRF cookie</td>
+            <td>Tem <code>HttpOnly</code>, <code>SameSite=Strict</code> e <code>Secure</code> em HTTPS.</td>
+          </tr>
+          <tr>
+            <td>API por ID</td>
+            <td>API key sozinha recebe <code>403 ADMIN_SESSION_REQUIRED</code>.</td>
+          </tr>
+          <tr>
+            <td>Documentos</td>
+            <td>Somente link controlado por token funciona; token/ID errados não baixam arquivo.</td>
+          </tr>
+          <tr>
+            <td>Rate limit público</td>
+            <td>Mudar <code>X-Forwarded-For</code> manualmente não destrava criação ilimitada.</td>
+          </tr>
+          <tr>
+            <td>Erros 500</td>
+            <td>Sem stack trace, sem SQL, sem caminhos internos, sem segredos na resposta.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

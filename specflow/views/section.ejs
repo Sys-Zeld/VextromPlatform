@@ -1,0 +1,337 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card app-form-header mb-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <h1 class="h4 app-card-title mb-1"><%= t("section.headerTitle") %></h1>
+        <p class="text-muted mb-0">Token: <code class="token-code"><%= displayToken || equipment.token %></code></p>
+      </div>
+      <div class="d-flex flex-column align-items-end gap-2">
+        <% if (qrDataUrl) { %>
+          <img
+            class="header-qr"
+            src="<%= qrDataUrl %>"
+            data-qr-soft="<%= qrDataUrlSoft %>"
+            data-qr-vextrom="<%= qrDataUrlVextrom %>"
+            alt="QR do link da submissao"
+          />
+        <% } %>
+        <div class="d-flex gap-2 flex-wrap justify-content-end">
+          <% if (isAdminAuthenticated) { %>
+            <a class="btn btn-outline-secondary btn-sm" href="/admin/tokens"><%= t("admin.backToTokensButton") %></a>
+          <% } %>
+          <button class="btn btn-outline-primary btn-sm" type="submit" form="specificationForm" name="action" value="draft">
+            <%= t("section.saveSpecifications") %>
+          </button>
+          <% if (reviewUrl) { %>
+            <a class="btn btn-outline-secondary btn-sm" href="<%= reviewUrl %>"><%= t("section.goToReview") %></a>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card app-card app-form-shell">
+  <div class="card-body">
+    <% if (saved) { %>
+      <div class="alert alert-success"><%= t("section.savedDraft") %></div>
+    <% } %>
+
+    <form id="specificationForm" class="needs-validation" method="post" novalidate>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+      <div class="card app-card mb-3">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3"><%= t("section.clientDataTitle") %></h2>
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <label for="purchaser" class="form-label"><%= t("admin.clientNameLabel") %></label>
+              <input
+                id="purchaser"
+                name="purchaser"
+                type="text"
+                class="form-control <%= clientErrors && clientErrors.purchaser ? 'is-invalid' : '' %>"
+                value="<%= clientValues ? clientValues.purchaser : '' %>"
+                required
+              />
+              <% if (clientErrors && clientErrors.purchaser) { %><div class="invalid-feedback d-block"><%= clientErrors.purchaser %></div><% } %>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label for="purchaser_contact" class="form-label"><%= t("admin.clientContactLabel") %></label>
+              <input
+                id="purchaser_contact"
+                name="purchaser_contact"
+                type="text"
+                class="form-control <%= clientErrors && clientErrors.purchaser_contact ? 'is-invalid' : '' %>"
+                value="<%= clientValues ? clientValues.purchaser_contact : '' %>"
+                required
+              />
+              <% if (clientErrors && clientErrors.purchaser_contact) { %><div class="invalid-feedback d-block"><%= clientErrors.purchaser_contact %></div><% } %>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label for="contact_email" class="form-label"><%= t("admin.clientContactEmailLabel") %></label>
+              <input
+                id="contact_email"
+                name="contact_email"
+                type="email"
+                class="form-control <%= clientErrors && clientErrors.contact_email ? 'is-invalid' : '' %>"
+                value="<%= clientValues ? clientValues.contact_email : '' %>"
+                required
+              />
+              <% if (clientErrors && clientErrors.contact_email) { %><div class="invalid-feedback d-block"><%= clientErrors.contact_email %></div><% } %>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label for="contact_phone" class="form-label"><%= t("admin.clientContactPhoneLabel") %></label>
+              <input
+                id="contact_phone"
+                name="contact_phone"
+                type="text"
+                class="form-control <%= clientErrors && clientErrors.contact_phone ? 'is-invalid' : '' %>"
+                value="<%= clientValues ? clientValues.contact_phone : '' %>"
+                required
+              />
+              <% if (clientErrors && clientErrors.contact_phone) { %><div class="invalid-feedback d-block"><%= clientErrors.contact_phone %></div><% } %>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label for="project_name" class="form-label"><%= t("admin.projectNameLabel") %></label>
+              <input
+                id="project_name"
+                name="project_name"
+                type="text"
+                class="form-control <%= clientErrors && clientErrors.project_name ? 'is-invalid' : '' %>"
+                value="<%= clientValues ? clientValues.project_name : '' %>"
+                required
+              />
+              <% if (clientErrors && clientErrors.project_name) { %><div class="invalid-feedback d-block"><%= clientErrors.project_name %></div><% } %>
+            </div>
+            <div class="col-12 col-lg-6">
+              <label for="site_name" class="form-label"><%= t("admin.siteNameLabel") %></label>
+              <input
+                id="site_name"
+                name="site_name"
+                type="text"
+                class="form-control <%= clientErrors && clientErrors.site_name ? 'is-invalid' : '' %>"
+                value="<%= clientValues ? clientValues.site_name : '' %>"
+                required
+              />
+              <% if (clientErrors && clientErrors.site_name) { %><div class="invalid-feedback d-block"><%= clientErrors.site_name %></div><% } %>
+            </div>
+            <div class="col-12">
+              <label for="address" class="form-label"><%= t("admin.addressLabel") %></label>
+              <input
+                id="address"
+                name="address"
+                type="text"
+                class="form-control <%= clientErrors && clientErrors.address ? 'is-invalid' : '' %>"
+                value="<%= clientValues ? clientValues.address : '' %>"
+                required
+              />
+              <% if (clientErrors && clientErrors.address) { %><div class="invalid-feedback d-block"><%= clientErrors.address %></div><% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion app-accordion" id="specAccordion">
+        <% sections.forEach((section, index) => { %>
+          <div class="accordion-item app-accordion-item mb-3 border rounded-3">
+            <h2 class="accordion-header" id="heading_<%= index %>">
+              <button
+                class="accordion-button <%= index > 0 ? 'collapsed' : '' %>"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapse_<%= index %>"
+              >
+                <%= section.section %>
+              </button>
+            </h2>
+            <div id="collapse_<%= index %>" class="accordion-collapse collapse <%= index === 0 ? 'show' : '' %>" data-bs-parent="#specAccordion">
+              <div class="accordion-body">
+                <div class="row g-3">
+                  <% section.fields.forEach((field) => { %>
+                    <%- include("partials/field", { field, errors }) %>
+                  <% }) %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+
+      <% if (documentsEnabled !== false) { %>
+        <div class="card app-card mt-3">
+          <div class="card-body">
+            <h2 class="h6 app-card-title mb-2"><%= t("section.documentsTitle") %></h2>
+            <p class="text-muted mb-3"><%= t("section.documentsHint", { count: docsMaxCount, sizeMb: Math.floor(docsMaxSizeBytes / (1024 * 1024)) }) %></p>
+            <div id="docsFeedback" class="small mb-2"></div>
+            <div class="d-flex gap-2 flex-wrap mb-3">
+              <input id="docsInput" type="file" class="form-control" accept="application/pdf,.pdf" multiple />
+              <button id="docsUploadBtn" class="btn btn-outline-primary" type="button"><%= t("section.documentsUploadButton") %></button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0 app-table">
+                <thead>
+                  <tr>
+                    <th>Arquivo</th>
+                    <th>Tamanho</th>
+                    <th>Acesso</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% if (!documents || !documents.length) { %>
+                    <tr><td colspan="3" class="text-muted"><%= t("section.documentsNone") %></td></tr>
+                  <% } %>
+                  <% (documents || []).forEach((doc) => { %>
+                    <tr>
+                      <td><%= doc.originalName %></td>
+                      <td><%= (doc.sizeBytes / (1024 * 1024)).toFixed(2) %> MB</td>
+                      <td><a class="btn btn-sm btn-outline-secondary" href="<%= doc.downloadPath || doc.downloadUrl %>" target="_blank" rel="noreferrer"><%= t("section.documentsOpen") %></a></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <% } %>
+
+      <div class="form-actions-sticky">
+        <% if (reviewUrl) { %>
+          <a class="btn btn-outline-secondary" href="<%= reviewUrl %>"><%= t("section.cancel") %></a>
+        <% } %>
+        <button class="btn btn-primary" type="submit" name="action" value="draft"><%= t("section.saveSpecifications") %></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const form = document.getElementById("specificationForm");
+    const uploadBtn = document.getElementById("docsUploadBtn");
+    const input = document.getElementById("docsInput");
+    const feedback = document.getElementById("docsFeedback");
+    if (!form || !uploadBtn || !input || !feedback) return;
+
+    const maxCount = <%= docsMaxCount %>;
+    const existingCount = <%= (documents || []).length %>;
+    const maxSize = <%= docsMaxSizeBytes %>;
+    const csrfToken = "<%= csrfToken %>";
+    const uploadUrl = "<%= uploadUrl || '' %>";
+    const msgs = {
+      invalidType: "<%= t('section.documentsInvalidType') %>",
+      maxCount: "<%= t('section.documentsMaxCount') %>",
+      maxSize: "<%= t('section.documentsMaxSize', { sizeMb: Math.floor(docsMaxSizeBytes / (1024 * 1024)) }) %>",
+      uploading: "<%= t('section.documentsUploading') %>",
+      success: "<%= t('section.documentsSent') %>",
+      error: "<%= t('section.documentsUploadError') %>",
+      errorEmpty: "<%= t('section.documentsUploadErrorEmpty') %>",
+      errorStorage: "<%= t('section.documentsUploadErrorStorage') %>",
+      errorSession: "<%= t('section.documentsUploadErrorSession') %>",
+      saveError: "<%= t('section.documentsSaveBeforeUploadError') %>"
+    };
+
+    function setMessage(message, isError) {
+      feedback.textContent = message;
+      feedback.className = isError ? "small text-danger mb-2" : "small text-success mb-2";
+    }
+
+    async function saveFormDraftBeforeUpload() {
+      if (!form.checkValidity()) {
+        form.classList.add("was-validated");
+        form.reportValidity();
+        return false;
+      }
+
+      const formData = new FormData(form);
+      formData.set("action", "draft");
+      const body = new URLSearchParams(formData);
+
+      const response = await fetch(form.getAttribute("action") || window.location.pathname, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+        },
+        body
+      });
+
+      return response.ok;
+    }
+
+    async function parseUploadErrorMessage(response) {
+      if (response.status === 403) return msgs.errorSession;
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch (_err) {
+        payload = null;
+      }
+      const code = payload && payload.errorCode ? String(payload.errorCode) : "";
+      if (code === "DOC_FILE_TOO_LARGE" || response.status === 413) return msgs.maxSize;
+      if (code === "DOC_INVALID_TYPE") return msgs.invalidType;
+      if (code === "DOC_MAX_COUNT") return msgs.maxCount;
+      if (code === "DOC_EMPTY_FILE") return msgs.errorEmpty;
+      if (code === "DOC_STORAGE_PERMISSION") return msgs.errorStorage;
+      return msgs.error;
+    }
+
+    uploadBtn.addEventListener("click", async function () {
+      const files = Array.from(input.files || []);
+      if (!files.length) return;
+      if (existingCount + files.length > maxCount) {
+        setMessage(msgs.maxCount, true);
+        return;
+      }
+      for (const file of files) {
+        if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+          setMessage(msgs.invalidType, true);
+          return;
+        }
+        if (file.size > maxSize) {
+          setMessage(msgs.maxSize, true);
+          return;
+        }
+      }
+
+      try {
+        uploadBtn.disabled = true;
+        setMessage(msgs.uploading, false);
+
+        const saved = await saveFormDraftBeforeUpload();
+        if (!saved) {
+          throw new Error("save failed");
+        }
+
+        for (const file of files) {
+          const buffer = await file.arrayBuffer();
+          const response = await fetch(uploadUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/pdf",
+              "X-File-Name": encodeURIComponent(file.name),
+              "X-CSRF-Token": csrfToken
+            },
+            body: buffer
+          });
+          if (!response.ok) {
+            const uploadMessage = await parseUploadErrorMessage(response);
+            throw new Error(uploadMessage);
+          }
+        }
+        setMessage(msgs.success, false);
+        window.location.reload();
+      } catch (err) {
+        uploadBtn.disabled = false;
+        if (err && err.message === "save failed") {
+          setMessage(msgs.saveError, true);
+          return;
+        }
+        setMessage((err && err.message) || msgs.error, true);
+      }
+    });
+  })();
+</script>
+
+<%- include("partials/footer") %>

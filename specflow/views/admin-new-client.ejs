@@ -1,0 +1,258 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card mb-4">
+  <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <div>
+      <h1 class="h4 app-card-title mb-1"><%= t("admin.newClientTitle") %></h1>
+      <p class="text-muted mb-0"><%= t("admin.newClientSubtitle") %></p>
+    </div>
+    <a class="btn btn-outline-secondary btn-sm" href="/admin/tokens"><%= t("admin.backToTokensButton") %></a>
+  </div>
+</div>
+
+<div class="card app-card">
+  <div class="card-body">
+    <form method="post" action="/admin/clients/new" class="row g-3 needs-validation" novalidate>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <% if (errors.generic) { %>
+        <div class="col-12">
+          <div class="alert alert-danger mb-0"><%= errors.generic %></div>
+        </div>
+      <% } %>
+
+      <div class="col-12">
+        <label for="purchaser" class="form-label"><%= t("admin.clientNameLabel") %></label>
+        <input
+          id="purchaser"
+          name="purchaser"
+          type="text"
+          class="form-control <%= errors.purchaser ? 'is-invalid' : '' %>"
+          value="<%= values.purchaser %>"
+          required
+        />
+        <% if (errors.purchaser) { %><div class="invalid-feedback d-block"><%= errors.purchaser %></div><% } %>
+      </div>
+
+      <div class="col-12">
+        <label for="purchaser_contact" class="form-label"><%= t("admin.clientContactLabel") %></label>
+        <input
+          id="purchaser_contact"
+          name="purchaser_contact"
+          type="text"
+          class="form-control <%= errors.purchaser_contact ? 'is-invalid' : '' %>"
+          value="<%= values.purchaser_contact %>"
+          required
+        />
+        <% if (errors.purchaser_contact) { %><div class="invalid-feedback d-block"><%= errors.purchaser_contact %></div><% } %>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <label for="contact_email" class="form-label"><%= t("admin.clientContactEmailLabel") %></label>
+        <input
+          id="contact_email"
+          name="contact_email"
+          type="email"
+          class="form-control <%= errors.contact_email ? 'is-invalid' : '' %>"
+          value="<%= values.contact_email || '' %>"
+          required
+        />
+        <% if (errors.contact_email) { %><div class="invalid-feedback d-block"><%= errors.contact_email %></div><% } %>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <label for="contact_phone" class="form-label"><%= t("admin.clientContactPhoneLabel") %></label>
+        <input
+          id="contact_phone"
+          name="contact_phone"
+          type="text"
+          class="form-control <%= errors.contact_phone ? 'is-invalid' : '' %>"
+          value="<%= values.contact_phone || '' %>"
+          required
+        />
+        <% if (errors.contact_phone) { %><div class="invalid-feedback d-block"><%= errors.contact_phone %></div><% } %>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <label for="project_name" class="form-label"><%= t("admin.projectNameLabel") %></label>
+        <input
+          id="project_name"
+          name="project_name"
+          type="text"
+          class="form-control <%= errors.project_name ? 'is-invalid' : '' %>"
+          value="<%= values.project_name || '' %>"
+          required
+        />
+        <% if (errors.project_name) { %><div class="invalid-feedback d-block"><%= errors.project_name %></div><% } %>
+      </div>
+
+      <div class="col-12 col-lg-6">
+        <label for="site_name" class="form-label"><%= t("admin.siteNameLabel") %></label>
+        <input
+          id="site_name"
+          name="site_name"
+          type="text"
+          class="form-control <%= errors.site_name ? 'is-invalid' : '' %>"
+          value="<%= values.site_name || '' %>"
+          required
+        />
+        <% if (errors.site_name) { %><div class="invalid-feedback d-block"><%= errors.site_name %></div><% } %>
+      </div>
+
+      <div class="col-12">
+        <label for="address" class="form-label"><%= t("admin.addressLabel") %></label>
+        <input
+          id="address"
+          name="address"
+          type="text"
+          class="form-control <%= errors.address ? 'is-invalid' : '' %>"
+          value="<%= values.address || '' %>"
+          required
+        />
+        <% if (errors.address) { %><div class="invalid-feedback d-block"><%= errors.address %></div><% } %>
+      </div>
+
+      <div class="col-12">
+        <label for="profile_id" class="form-label"><%= t("admin.profileSelectLabel") %></label>
+        <select id="profile_id" name="profile_id" class="form-select <%= errors.profile_id ? 'is-invalid' : '' %>">
+          <option value=""><%= t("admin.profileManualOption") %></option>
+          <% profiles.forEach((profile) => { %>
+            <option value="<%= profile.id %>" <%= String(values.profile_id || '') === String(profile.id) ? 'selected' : '' %>>
+              <%= profile.name %> (<%= profile.fieldsCount %>)
+            </option>
+          <% }) %>
+        </select>
+        <% if (errors.profile_id) { %><div class="invalid-feedback d-block"><%= errors.profile_id %></div><% } %>
+      </div>
+
+      <div class="col-12">
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-primary btn-sm" type="button" data-toggle-fields="all"><%= t("admin.enableAll") %></button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" data-toggle-fields="none"><%= t("admin.disableAll") %></button>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <label class="form-label"><%= t("admin.clientFieldsLabel") %></label>
+        <% if (errors.enabled_fields) { %><div class="text-danger small mb-2"><%= errors.enabled_fields %></div><% } %>
+        <div class="accordion" id="fieldsAccordion">
+          <% sections.forEach((section, idx) => { %>
+            <div class="accordion-item app-accordion-item mb-2 border rounded-3 field-section-item">
+              <h2 class="accordion-header" id="heading_<%= idx %>">
+                <button class="accordion-button <%= idx > 0 ? 'collapsed' : '' %>" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_<%= idx %>">
+                  <span class="section-title"><%= section.name %></span> (<span class="section-count"><%= section.fields.length %></span>)
+                </button>
+              </h2>
+              <div id="collapse_<%= idx %>" class="accordion-collapse collapse <%= idx === 0 ? 'show' : '' %>" data-bs-parent="#fieldsAccordion">
+                <div class="accordion-body">
+                  <div class="row g-2">
+                    <% section.fields.forEach((field) => { %>
+                      <div class="col-12 col-md-6 field-item">
+                        <div class="form-check">
+                          <input
+                            class="form-check-input field-checkbox"
+                            type="checkbox"
+                            id="enabled_field_<%= field.id %>"
+                            name="enabled_fields"
+                            value="<%= field.id %>"
+                            <%= selectedFieldIds.includes(field.id) ? 'checked' : '' %>
+                          />
+                          <label class="form-check-label" for="enabled_field_<%= field.id %>">
+                            <%= field.label %> <span class="text-muted">(<code><%= field.key %></code>)</span>
+                          </label>
+                        </div>
+                      </div>
+                    <% }) %>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+
+      <div class="col-12 actions-row">
+        <button id="newClientSubmitBtn" class="btn btn-primary ms-auto" type="submit"><%= t("admin.generateTokenAndGoButton") %></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const profileFieldMap = <%- JSON.stringify(profileFieldMap || {}) %>;
+    const profileSelect = document.getElementById("profile_id");
+    const fieldCheckboxes = Array.from(document.querySelectorAll(".field-checkbox"));
+    const sectionItems = Array.from(document.querySelectorAll(".field-section-item"));
+    const toggleButtons = document.querySelectorAll("[data-toggle-fields]");
+    const formEl = document.querySelector('form[action="/admin/clients/new"]');
+    const submitBtn = document.getElementById("newClientSubmitBtn");
+
+    function setAll(checked) {
+      fieldCheckboxes.forEach((checkbox) => {
+        checkbox.checked = checked;
+      });
+    }
+
+    function applyProfileFields(profileId) {
+      if (!profileId || !profileFieldMap[profileId]) return false;
+      const enabled = new Set((profileFieldMap[profileId] || []).map(String));
+      fieldCheckboxes.forEach((checkbox) => {
+        checkbox.checked = enabled.has(String(checkbox.value));
+      });
+      updateSectionsVisibility(enabled);
+      return true;
+    }
+
+    function updateSectionsVisibility(enabledSet) {
+      const hasFilter = enabledSet instanceof Set;
+      fieldCheckboxes.forEach((checkbox) => {
+        const item = checkbox.closest(".field-item");
+        if (!item) return;
+        const visible = !hasFilter || enabledSet.has(String(checkbox.value));
+        item.style.display = visible ? "" : "none";
+        if (!visible) checkbox.checked = false;
+      });
+
+      sectionItems.forEach((sectionEl) => {
+        const visibleItems = Array.from(sectionEl.querySelectorAll(".field-item")).filter((item) => item.style.display !== "none");
+        const countEl = sectionEl.querySelector(".section-count");
+        if (countEl) countEl.textContent = String(visibleItems.length);
+        sectionEl.style.display = visibleItems.length ? "" : "none";
+      });
+    }
+
+    toggleButtons.forEach((button) => {
+      button.addEventListener("click", function () {
+        updateSectionsVisibility(null);
+        setAll(button.dataset.toggleFields === "all");
+      });
+    });
+
+    if (profileSelect) {
+      profileSelect.addEventListener("change", function () {
+        const profileId = String(profileSelect.value || "");
+        if (!applyProfileFields(profileId)) {
+          updateSectionsVisibility(null);
+          setAll(false);
+        }
+      });
+
+      const initialProfileId = String(profileSelect.value || "");
+      if (initialProfileId) {
+        profileSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      } else {
+        updateSectionsVisibility(null);
+      }
+    }
+
+    if (formEl && submitBtn) {
+      formEl.addEventListener("submit", function () {
+        if (submitBtn.disabled) return;
+        submitBtn.disabled = true;
+        submitBtn.setAttribute("aria-disabled", "true");
+      });
+    }
+  })();
+</script>
+
+<%- include("partials/footer") %>

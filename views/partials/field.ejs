@@ -1,0 +1,50 @@
+<%
+  const inputName = `field_${field.id}`;
+  const value = field.displayValue === null || field.displayValue === undefined ? "" : String(field.displayValue);
+  const error = errors[field.id] || "";
+  const isInvalid = error ? "is-invalid" : "";
+  const placeholder = field.unit ? `${field.label} (${field.unit})` : field.label;
+%>
+<div class="col-12 form-field">
+  <div class="field-row <%= isInvalid ? 'has-error' : '' %>">
+    <div class="field-row-label">
+      <label for="<%= inputName %>" class="form-label fw-semibold mb-0">
+        <%= field.label %>
+        <% if (field.isRequired) { %><span class="text-danger ms-1">*</span><% } %>
+      </label>
+      <% if (field.cameFromDefault) { %>
+        <span class="app-default-badge ms-1"><%= t("field.defaultBadge") %></span>
+      <% } %>
+    </div>
+    <div class="field-row-control">
+      <% if (field.fieldType === "enum") { %>
+        <select id="<%= inputName %>" name="<%= inputName %>" class="form-select <%= isInvalid %>" <%= field.isRequired ? "required" : "" %>>
+          <option value=""><%= t("field.selectPlaceholder") %></option>
+          <% (field.enumOptions || []).forEach((opt) => { %>
+            <option value="<%= opt %>" <%= value === opt ? "selected" : "" %>><%= opt %></option>
+          <% }) %>
+        </select>
+      <% } else if (field.fieldType === "boolean") { %>
+        <select id="<%= inputName %>" name="<%= inputName %>" class="form-select <%= isInvalid %>" <%= field.isRequired ? "required" : "" %>>
+          <option value=""><%= t("field.selectPlaceholder") %></option>
+          <option value="true" <%= value === "true" ? "selected" : "" %>>yes</option>
+          <option value="false" <%= value === "false" ? "selected" : "" %>>no</option>
+        </select>
+      <% } else { %>
+        <input
+          id="<%= inputName %>"
+          name="<%= inputName %>"
+          type="<%= field.fieldType === 'number' ? 'number' : field.fieldType === 'time' ? 'time' : 'text' %>"
+          class="form-control <%= isInvalid %>"
+          value="<%= value %>"
+          placeholder="<%= placeholder %>"
+          step="<%= field.fieldType === 'number' ? 'any' : '' %>"
+          <%= field.isRequired ? "required" : "" %>
+        />
+      <% } %>
+
+      <% if (field.unit) { %><div class="unit-chip"><%= field.unit %></div><% } %>
+      <% if (error) { %><div class="invalid-feedback d-block"><%= error %></div><% } %>
+    </div>
+  </div>
+</div>
