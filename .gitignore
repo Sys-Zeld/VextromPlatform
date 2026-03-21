@@ -29,6 +29,7 @@ backup/
 backups/
 *.bak
 
+*.html
 *.pdf
 *.txt
 *.xls
