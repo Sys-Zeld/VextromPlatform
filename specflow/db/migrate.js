@@ -207,6 +207,28 @@ async function migrate() {
     ALTER TABLE admin_users
     ADD COLUMN IF NOT EXISTS ui_font TEXT NOT NULL DEFAULT 'inter';
   `);
+  await db.query(`
+    UPDATE admin_users
+    SET ui_font = lower(trim(coalesce(ui_font, 'inter')))
+    WHERE ui_font IS NULL
+      OR trim(coalesce(ui_font, '')) = ''
+      OR lower(trim(coalesce(ui_font, ''))) NOT IN ('inter', 'manrope', 'nunito', 'source-sans-3', 'ibm-plex-sans');
+  `);
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'admin_users_ui_font_check'
+      ) THEN
+        ALTER TABLE admin_users
+        ADD CONSTRAINT admin_users_ui_font_check
+        CHECK (ui_font IN ('inter', 'manrope', 'nunito', 'source-sans-3', 'ibm-plex-sans'));
+      END IF;
+    END
+    $$;
+  `);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_username_unique ON admin_users (username);`);
   await db.query(`
     CREATE TABLE IF NOT EXISTS public_token_links (
