@@ -355,6 +355,14 @@ async function migrateServiceReport() {
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_images_ref_id ON service_report_images (service_report_id, ref_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_images_report_id ON service_report_images (service_report_id);`);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   await seedServiceReportEquipment();
   await seedServiceReportSample();
 }

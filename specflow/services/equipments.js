@@ -1,6 +1,20 @@
 const { v4: uuidv4 } = require("uuid");
 const db = require("../db");
 
+const EQUIPMENT_STATUS = {
+  DRAFT: "draft",
+  SEND: "send",
+  CLOSED: "closed"
+};
+
+function normalizeEquipmentStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "sent") return EQUIPMENT_STATUS.SEND;
+  if (normalized === EQUIPMENT_STATUS.SEND) return EQUIPMENT_STATUS.SEND;
+  if (normalized === EQUIPMENT_STATUS.CLOSED) return EQUIPMENT_STATUS.CLOSED;
+  return EQUIPMENT_STATUS.DRAFT;
+}
+
 function normalizeEquipmentRow(row) {
   return {
     id: Number(row.id),
@@ -14,7 +28,7 @@ function normalizeEquipmentRow(row) {
     address: row.address || "",
     profileId: row.profile_id ? Number(row.profile_id) : null,
     profileName: row.profile_name || null,
-    status: row.status || "draft",
+    status: normalizeEquipmentStatus(row.status),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -144,7 +158,8 @@ async function listEquipments() {
 }
 
 async function updateEquipmentStatus(id, status) {
-  await db.query("UPDATE equipments SET status = $2, updated_at = NOW() WHERE id = $1", [id, status]);
+  const normalizedStatus = normalizeEquipmentStatus(status);
+  await db.query("UPDATE equipments SET status = $2, updated_at = NOW() WHERE id = $1", [id, normalizedStatus]);
 }
 
 async function updateEquipmentClientData(id, {
@@ -247,5 +262,7 @@ module.exports = {
   updateEquipmentConfiguration,
   updateEquipmentStatus,
   deleteEquipmentById,
-  getEnabledFieldIdsForEquipment
+  getEnabledFieldIdsForEquipment,
+  normalizeEquipmentStatus,
+  EQUIPMENT_STATUS
 };

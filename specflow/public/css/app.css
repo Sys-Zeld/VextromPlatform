@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap");
 
 :root,
 :root[data-theme="soft"] {
@@ -45,6 +45,8 @@
   --badge-default-text: #406486;
 
   --surface-rgb: 255, 255, 255;
+  --app-font-family: "Inter", "Segoe UI", Tahoma, sans-serif;
+  --bs-body-font-family: var(--app-font-family);
 }
 
 :root[data-theme="vextrom"] {
@@ -81,6 +83,60 @@
   --surface-rgb: 247, 248, 248;
 }
 
+:root[data-theme="xvextrom"] {
+  --background: #edf3ee;
+  --surface: #f8fcf9;
+  --surface-2: #ecf4ee;
+  --border: #c9d9ce;
+  --text: #264034;
+  --muted-text: #5f7669;
+
+  --primary: #6baa4b;
+  --primary-hover: #5b973f;
+  --danger: #c35a5a;
+  --warning: #c69735;
+  --success: #5f9f42;
+
+  --section-header-bg: #dcecd9;
+  --section-header-text: #2f5f3a;
+
+  --input-bg: #f8fcf9;
+  --input-border: #b8ccb9;
+  --input-focus: #7bb85a;
+  --input-text: #274037;
+  --input-placeholder: #7d9487;
+
+  --toggle-on: #6baa4b;
+  --toggle-off: #b7c9bc;
+
+  --badge-default-bg: #dceddd;
+  --badge-default-text: #2f5f3a;
+
+  --shadow-sm: 0 8px 18px rgba(27, 55, 36, 0.12);
+  --shadow-md: 0 14px 28px rgba(27, 55, 36, 0.18);
+  --surface-rgb: 248, 252, 249;
+}
+
+:root[data-font="inter"] {
+  --app-font-family: "Inter", "Segoe UI", Tahoma, sans-serif;
+}
+
+:root[data-font="manrope"] {
+  --app-font-family: "Manrope", "Segoe UI", Tahoma, sans-serif;
+}
+
+:root[data-font="nunito"] {
+  --app-font-family: "Nunito", "Segoe UI", Tahoma, sans-serif;
+}
+
+:root[data-font="source-sans-3"] {
+  --app-font-family: "Source Sans 3", "Segoe UI", Tahoma, sans-serif;
+}
+
+:root[data-font="ibm-plex-sans"] {
+  --app-font-family: "IBM Plex Sans", "Segoe UI", Tahoma, sans-serif;
+}
+
 
 * {
   box-sizing: border-box;
@@ -89,7 +145,7 @@
 body.app-shell {
   margin: 0;
   min-height: 100vh;
-  font-family: "Space Grotesk", "Segoe UI", Tahoma, sans-serif;
+  font-family: var(--app-font-family);
   color: var(--text);
   background:
     radial-gradient(circle at 12% 8%, rgba(111, 143, 174, 0.16) 0, transparent 38%),
@@ -107,6 +163,13 @@ body.app-shell {
   background:
     radial-gradient(circle at 8% 0%, rgba(95, 167, 58, 0.2) 0, transparent 28%),
     linear-gradient(180deg, #f5f7f6 0%, #e7ece9 100%);
+}
+
+:root[data-theme="xvextrom"] body.app-shell {
+  background:
+    radial-gradient(circle at 10% 2%, rgba(107, 170, 75, 0.18) 0, transparent 30%),
+    radial-gradient(circle at 88% 0%, rgba(139, 193, 100, 0.1) 0, transparent 24%),
+    linear-gradient(180deg, #f4f8f4 0%, #e8f0e9 100%);
 }
 
 
@@ -238,6 +301,10 @@ body.app-shell {
   background: linear-gradient(180deg, #fcfcfc 0%, #f2f4f3 100%);
 }
 
+:root[data-theme="xvextrom"] .app-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f3f7fd 100%);
+}
+
 
 .app-card .card-body {
   padding: var(--spacing-5);
@@ -271,6 +338,12 @@ body.app-shell {
   color: #18311a;
   background: linear-gradient(180deg, #94c76d 0%, #6daa42 100%);
   border-color: #5c8f3c;
+}
+
+:root[data-theme="xvextrom"] .token-code {
+  color: #264f2c;
+  background: linear-gradient(180deg, #dff0db 0%, #cde4c7 100%);
+  border-color: #b1ceaa;
 }
 
 
@@ -315,6 +388,11 @@ body.app-shell {
 :root[data-theme="vextrom"] .form-control,
 :root[data-theme="vextrom"] .form-select {
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.26);
+}
+
+:root[data-theme="xvextrom"] .form-control,
+:root[data-theme="xvextrom"] .form-select {
+  box-shadow: inset 0 1px 1px rgba(63, 98, 71, 0.16);
 }
 
 
@@ -484,6 +562,32 @@ body.app-shell {
   background: linear-gradient(180deg, #3e4d44 0%, #34423a 100%);
 }
 
+:root[data-theme="xvextrom"] .accordion .accordion-item {
+  border-color: #b9cdb9 !important;
+  box-shadow: 0 2px 10px rgba(40, 73, 45, 0.12);
+}
+
+:root[data-theme="xvextrom"] .accordion-button {
+  color: #f5fbf3;
+  background: linear-gradient(180deg, #7ebb5a 0%, #5fa73a 58%, #4b8f2f 100%);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+}
+
+:root[data-theme="xvextrom"] .accordion-button.collapsed {
+  color: #2f5038;
+  background: linear-gradient(180deg, #edf6ec 0%, #dfecdf 100%);
+  text-shadow: none;
+}
+
+:root[data-theme="xvextrom"] .accordion-button:not(.collapsed) {
+  color: #f6fcf4;
+  box-shadow: inset 0 -1px 0 rgba(25, 51, 29, 0.35);
+}
+
+:root[data-theme="xvextrom"] .accordion-body {
+  background: linear-gradient(180deg, #f8fcf8 0%, #eef5ee 100%);
+}
+
 .actions-row {
   display: flex;
   gap: var(--spacing-2);
@@ -517,6 +621,12 @@ body.app-shell {
   border-color: #5a9c37;
 }
 
+:root[data-theme="xvextrom"] .btn-primary,
+:root[data-theme="xvextrom"] .btn-success {
+  background: linear-gradient(180deg, #7ebb59 0%, #6baa4b 100%);
+  border-color: #619e45;
+}
+
 .btn-primary:hover,
 .btn-primary:focus,
 .btn-success:hover,
@@ -540,6 +650,14 @@ body.app-shell {
 :root[data-theme="vextrom"] .btn-success:focus {
   background: linear-gradient(180deg, #6fb043 0%, #4f9031 100%);
   border-color: #4f9031;
+}
+
+:root[data-theme="xvextrom"] .btn-primary:hover,
+:root[data-theme="xvextrom"] .btn-primary:focus,
+:root[data-theme="xvextrom"] .btn-success:hover,
+:root[data-theme="xvextrom"] .btn-success:focus {
+  background: linear-gradient(180deg, #74b251 0%, #5b973f 100%);
+  border-color: #548a3b;
 }
 
 .btn-outline-primary {
@@ -572,6 +690,12 @@ body.app-shell {
  
 }
 
+:root[data-theme="xvextrom"] .btn-outline-secondary {
+  color: #355643;
+  background: linear-gradient(180deg, #f5faf5 0%, #e9f1ea 100%);
+  border-color: #b8cdbb;
+}
+
 .btn-outline-secondary:hover,
 .btn-outline-secondary:focus {
   color: var(--text);
@@ -584,6 +708,13 @@ body.app-shell {
   color: #ffffff;
   background: linear-gradient(180deg, #546159 0%, #3f4b44 100%);
   border-color: #596a61;
+}
+
+:root[data-theme="xvextrom"] .btn-outline-secondary:hover,
+:root[data-theme="xvextrom"] .btn-outline-secondary:focus {
+  color: #2f5038;
+  background: linear-gradient(180deg, #ecf5ec 0%, #deebdf 100%);
+  border-color: #adc6b0;
 }
 
 .btn:disabled,
@@ -604,7 +735,7 @@ body.app-shell {
   font-family: "Material Symbols Outlined";
   font-weight: normal;
   font-style: normal;
-  font-size: 1.1rem;
+  font-size: 1.92rem;
   line-height: 1;
   letter-spacing: normal;
   text-transform: none;
@@ -625,6 +756,10 @@ body.app-shell {
 
 :root[data-theme="vextrom"] .btn:not(.lang-btn):not(.btn-no-icon)::before {
   color: rgba(36, 46, 40, 0.92);
+}
+
+:root[data-theme="xvextrom"] .btn:not(.lang-btn):not(.btn-no-icon)::before {
+  color: rgba(39, 76, 47, 0.9);
 }
 
 .btn-outline-secondary:not(.lang-btn):not(.btn-no-icon)::before,
@@ -696,6 +831,21 @@ form[action*="/send-email"] .btn:not(.lang-btn):not(.btn-no-icon)::before {
   content: "send";
 }
 
+/* Module navigation buttons reuse Hub icon language. */
+.btn[href="/admin/hub"]:not(.lang-btn):not(.btn-no-icon)::before {
+  content: "build_circle";
+}
+
+.btn[href*="/admin/module-spec"]:not(.lang-btn):not(.btn-no-icon)::before {
+  content: "tune";
+}
+
+.btn[href*="/admin/report-service/orders"]:not(.lang-btn):not(.btn-no-icon)::before,
+.btn[href*="/admin/report-service/equipments"]:not(.lang-btn):not(.btn-no-icon)::before,
+.btn[href*="/admin/report-service/customers"]:not(.lang-btn):not(.btn-no-icon)::before {
+  content: "monitoring";
+}
+
 .btn[type="submit"]:not(.lang-btn):not(.btn-no-icon)::before {
   content: "save";
 }
@@ -748,6 +898,16 @@ form[action*="/send-email"] .btn:not(.lang-btn):not(.btn-no-icon)::before {
   color: #2f3633;
 }
 
+:root[data-theme="xvextrom"] .app-table {
+  --bs-table-bg: #f6f9ff;
+  --bs-table-striped-bg: #e9f0fb;
+  --bs-table-hover-bg: #dfe9f8;
+}
+
+:root[data-theme="xvextrom"] .app-table th {
+  color: #2f5f3a;
+}
+
 .alert {
   border-radius: var(--radius-sm);
 }
@@ -785,6 +945,19 @@ form[action*="/send-email"] .btn:not(.lang-btn):not(.btn-no-icon)::before {
   color: #2f4236;
 }
 
+:root[data-theme="xvextrom"] .app-form-shell {
+  background: linear-gradient(180deg, #f8fcf8 0%, #ebf3eb 100%);
+  border-color: #bfd0c1;
+}
+
+:root[data-theme="xvextrom"] .app-form-header {
+  background: linear-gradient(180deg, #ffffff 0%, #eef6ef 100%);
+}
+
+:root[data-theme="xvextrom"] .app-form-header .app-card-title {
+  color: #2f5f3a;
+}
+
 .form-actions-sticky {
   position: fixed;
   left: 50%;
@@ -810,6 +983,11 @@ form[action*="/send-email"] .btn:not(.lang-btn):not(.btn-no-icon)::before {
 :root[data-theme="vextrom"] .form-actions-sticky {
   border-color: #5c6c63;
   background: rgba(49, 61, 54, 0.92);
+}
+
+:root[data-theme="xvextrom"] .form-actions-sticky {
+  border-color: #b8ccb9;
+  background: rgba(240, 247, 240, 0.92);
 }
 
 .form-actions-sticky .btn {
@@ -1084,6 +1262,12 @@ code {
   border-color: #5d8f3d;
 }
 
+:root[data-theme="xvextrom"] .module-hub-card .module-hub-icon {
+  color: #f2f8ef;
+  background: linear-gradient(180deg, #7ebb59 0%, #5d9e3d 100%);
+  border-color: #6aa64d;
+}
+
 :root[data-theme="soft"] .module-hub-card--module-spec .module-hub-icon {
   color: #445f3d;
   background: linear-gradient(180deg, #e1eddc 0%, #d0e1c7 100%);
@@ -1106,6 +1290,18 @@ code {
   color: #fbf5e8;
   background: linear-gradient(180deg, #9a7a3e 0%, #6f5629 100%);
   border-color: #8a6c36;
+}
+
+:root[data-theme="xvextrom"] .module-hub-card--module-spec .module-hub-icon {
+  color: #f1f8ed;
+  background: linear-gradient(180deg, #7cae63 0%, #5b8d45 100%);
+  border-color: #6e9f58;
+}
+
+:root[data-theme="xvextrom"] .module-hub-card--report-service .module-hub-icon {
+  color: #fff8ee;
+  background: linear-gradient(180deg, #c09152 0%, #9a6f39 100%);
+  border-color: #ad8047;
 }
 
 @media (max-width: 1024px) {

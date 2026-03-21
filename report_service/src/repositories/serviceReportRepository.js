@@ -395,6 +395,14 @@ async function updateEquipment(id, payload) {
   return result.rows[0] || null;
 }
 
+async function deleteEquipment(id) {
+  const result = await db.query(
+    "DELETE FROM service_report_equipments WHERE id = $1",
+    [id]
+  );
+  return result.rowCount > 0;
+}
+
 async function attachEquipmentToOrder(serviceOrderId, equipmentId, notes = "") {
   const result = await db.query(
     `
@@ -1272,6 +1280,7 @@ module.exports = {
   getEquipmentById,
   createEquipment,
   updateEquipment,
+  deleteEquipment,
   attachEquipmentToOrder,
   listOrderEquipments,
   listTimesheetByOrder,

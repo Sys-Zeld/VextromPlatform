@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checklist Manual - Modo Usuario</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --card: #ffffff;
+      --line: #d9e1ec;
+      --text: #1f2a37;
+      --muted: #607286;
+      --ok: #0f766e;
+      --warn: #b45309;
+      --bad: #b91c1c;
+      --primary: #1d4ed8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 24px auto;
+      padding: 0 16px 32px;
+    }
+    .head {
+      background: linear-gradient(130deg, #0f172a, #1e3a8a);
+      color: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .head h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+    }
+    .head p {
+      margin: 4px 0;
+      color: #dbeafe;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 12px 0 0;
+    }
+    button {
+      border: 1px solid #93c5fd;
+      background: #eff6ff;
+      color: #1e3a8a;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:hover { background: #dbeafe; }
+    .danger {
+      border-color: #fecaca;
+      color: #991b1b;
+      background: #fef2f2;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-top: 12px;
+      overflow: hidden;
+    }
+    .card h2 {
+      margin: 0;
+      padding: 12px 16px;
+      font-size: 16px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fafc;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #334155;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .id { white-space: nowrap; width: 90px; font-weight: 700; }
+    .route { color: var(--muted); font-family: Consolas, monospace; }
+    .status {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .status label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      font-size: 12px;
+      color: #334155;
+    }
+    .obs {
+      width: 100%;
+      min-height: 48px;
+      resize: vertical;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 6px;
+      font: inherit;
+    }
+    .footer {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .legend {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 8px;
+      border: 1px solid transparent;
+      font-weight: 700;
+    }
+    .pill.ok { color: var(--ok); border-color: #99f6e4; background: #f0fdfa; }
+    .pill.warn { color: var(--warn); border-color: #fde68a; background: #fffbeb; }
+    .pill.bad { color: var(--bad); border-color: #fecaca; background: #fef2f2; }
+    @media print {
+      .toolbar { display: none; }
+      body { background: #fff; }
+      .wrap { max-width: 100%; margin: 0; padding: 0; }
+      .card { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="head">
+      <h1>Checklist Manual - Modo Usuario</h1>
+      <p>Objetivo: validar fluxos principais com conta de perfil <strong>user</strong> (sem permissao de manutencao global).</p>
+      <p>Ambiente: preencher URL base, usuario e data do teste antes de iniciar.</p>
+      <div class="legend">
+        <span class="pill ok">PASSOU</span>
+        <span class="pill warn">PARCIAL</span>
+        <span class="pill bad">FALHOU</span>
+      </div>
+      <div class="toolbar">
+        <button type="button" id="saveBtn">Salvar progresso</button>
+        <button type="button" id="loadBtn">Recarregar progresso</button>
+        <button type="button" id="printBtn">Imprimir / PDF</button>
+        <button type="button" id="clearBtn" class="danger">Limpar checklist</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>0) Dados do teste</h2>
+      <table>
+        <tbody>
+          <tr>
+            <td style="width:240px;"><strong>URL base</strong></td>
+            <td><input class="obs" id="meta_base_url" placeholder="Ex.: http://localhost:3000" /></td>
+          </tr>
+          <tr>
+            <td><strong>Usuario (role=user)</strong></td>
+            <td><input class="obs" id="meta_user" placeholder="Ex.: qa.user" /></td>
+          </tr>
+          <tr>
+            <td><strong>Data/hora inicio</strong></td>
+            <td><input class="obs" id="meta_start" placeholder="Ex.: 2026-03-21 10:00" /></td>
+          </tr>
+          <tr>
+            <td><strong>Build/commit</strong></td>
+            <td><input class="obs" id="meta_build" placeholder="Ex.: v1.1.2 / commit abc123" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>1) Login, sessao e permissao (user)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="id">ID</th>
+            <th>Cenario</th>
+            <th>Resultado esperado</th>
+            <th>Status</th>
+            <th>Observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">AUTH-01</td>
+            <td>Abrir tela de login <div class="route">/admin/login</div></td>
+            <td>Pagina carrega sem erro.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="AUTH-01"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">AUTH-02</td>
+            <td>Login com usuario valido (role=user)</td>
+            <td>Redireciona para <code>/admin/hub</code>.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="AUTH-02"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">AUTH-03</td>
+            <td>Acessar manutencao do sistema <div class="route">/admin/maintenance/system</div></td>
+            <td>Acesso negado para role user (sem permissao admin).</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="AUTH-03"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">AUTH-04</td>
+            <td>Logout</td>
+            <td>Sessao encerrada e retorno para login.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="AUTH-04"></textarea></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>2) Hub e acesso por modulo</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="id">ID</th>
+            <th>Cenario</th>
+            <th>Resultado esperado</th>
+            <th>Status</th>
+            <th>Observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">HUB-01</td>
+            <td>Abrir hub <div class="route">/admin/hub</div></td>
+            <td>Cards de modulos aparecem conforme module_access do usuario.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="HUB-01"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">HUB-02</td>
+            <td>Modulo sem permissao</td>
+            <td>Card indica "Sem acesso" e nao permite entrar.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="HUB-02"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">HUB-03</td>
+            <td>Modulo desabilitado por config</td>
+            <td>Card indica "Indisponivel".</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="HUB-03"></textarea></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>3) SpecFlow - Tokens e formulario</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="id">ID</th>
+            <th>Cenario</th>
+            <th>Resultado esperado</th>
+            <th>Status</th>
+            <th>Observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">SPF-01</td>
+            <td>Lista de tokens <div class="route">/admin/tokens</div></td>
+            <td>Lista, busca e paginacao funcionam.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-01"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-02</td>
+            <td>Criar cliente/token <div class="route">/admin/clients/new</div></td>
+            <td>Token criado e aparece na lista.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-02"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-03</td>
+            <td>Editar configuracao do token <div class="route">/admin/tokens/:id/config</div></td>
+            <td>Campos habilitados/ajustes salvos com sucesso.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-03"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-04</td>
+            <td>Alterar status do token na grade</td>
+            <td>Status muda para draft/send/closed conforme selecao.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-04"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-05</td>
+            <td>Abrir especificacao <div class="route">/form/:token/specification</div></td>
+            <td>Formulario carrega com campos corretos.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-05"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-06</td>
+            <td>Salvar especificacao</td>
+            <td>Persistencia de respostas; reload mantem dados.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-06"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-07</td>
+            <td>Upload de documento PDF</td>
+            <td>Upload concluido e documento listado.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-07"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-08</td>
+            <td>Tentar upload arquivo nao-PDF</td>
+            <td>Sistema bloqueia com mensagem de erro.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-08"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-09</td>
+            <td>Pagina de review <div class="route">/form/:token/review</div></td>
+            <td>Resumo aparece com dados e documentos.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-09"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-10</td>
+            <td>Gerar PDF <div class="route">/form/:token/pdf</div></td>
+            <td>Download/visualizacao do PDF sem erro.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-10"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-11</td>
+            <td>Envio de email + PDF</td>
+            <td>Email enviado e fluxo retorna com confirmacao.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-11"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SPF-12</td>
+            <td>Tema visual (soft/vextrom)</td>
+            <td>Troca aplica no front e persiste ao recarregar.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SPF-12"></textarea></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>4) SpecFlow - Perfis, campos e importacao JSON</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="id">ID</th>
+            <th>Cenario</th>
+            <th>Resultado esperado</th>
+            <th>Status</th>
+            <th>Observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">CFG-01</td>
+            <td>Gestao de perfis <div class="route">/admin/profiles</div></td>
+            <td>Criar, editar, clonar e excluir perfil funcionando.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="CFG-01"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">CFG-02</td>
+            <td>Exportar/importar perfil JSON</td>
+            <td>Arquivo exporta e importa sem perder estrutura.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="CFG-02"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">CFG-03</td>
+            <td>Gestao de campos <div class="route">/admin/fields</div></td>
+            <td>CRUD de campo funciona para os tipos suportados.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="CFG-03"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">CFG-04</td>
+            <td>Importar token por JSON na tela de tokens</td>
+            <td>Inspecao e aplicacao (update/create) funcionando.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="CFG-04"></textarea></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>5) Module Spec - fluxo web (usuario com acesso ao modulo)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="id">ID</th>
+            <th>Cenario</th>
+            <th>Resultado esperado</th>
+            <th>Status</th>
+            <th>Observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">MSP-01</td>
+            <td>Abrir modulo <div class="route">/admin/module-spec</div></td>
+            <td>Pagina carrega se usuario tiver permissao do modulo.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="MSP-01"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">MSP-02</td>
+            <td>CRUD familias</td>
+            <td>Criar, editar e excluir familia sem erro.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="MSP-02"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">MSP-03</td>
+            <td>CRUD atributos</td>
+            <td>Criar, editar e excluir atributo sem erro.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="MSP-03"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">MSP-04</td>
+            <td>CRUD modelos e variantes</td>
+            <td>Fluxo completo funcionando.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="MSP-04"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">MSP-05</td>
+            <td>Atribuir atributos a variante</td>
+            <td>Persistencia correta e reload consistente.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="MSP-05"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">MSP-06</td>
+            <td>Mapeamentos de filtro por perfil</td>
+            <td>Salvar e testar filtro sem erro de validacao indevida.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="MSP-06"></textarea></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>6) Report Service - fluxo web (usuario com acesso ao modulo)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="id">ID</th>
+            <th>Cenario</th>
+            <th>Resultado esperado</th>
+            <th>Status</th>
+            <th>Observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">RPT-01</td>
+            <td>Abrir home do modulo <div class="route">/admin/report-service</div></td>
+            <td>Redireciona/lista ordens sem erro.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="RPT-01"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">RPT-02</td>
+            <td>Cadastro de cliente e site</td>
+            <td>Entidades criadas e listadas corretamente.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="RPT-02"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">RPT-03</td>
+            <td>Cadastro de equipamento</td>
+            <td>Equipamento criado e vinculado sem erro.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="RPT-03"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">RPT-04</td>
+            <td>Criar ordem de servico</td>
+            <td>OS criada e acessivel no editor.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="RPT-04"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">RPT-05</td>
+            <td>Editor de OS (secoes/componentes)</td>
+            <td>Salvar secoes, componentes, assinatura e imagens.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="RPT-05"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">RPT-06</td>
+            <td>Preview e geracao de PDF</td>
+            <td>Preview abre e PDF eh gerado sem erro.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="RPT-06"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">RPT-07</td>
+            <td>Excluir ordem</td>
+            <td>Exclusao remove registro e nao deixa orfaos visiveis.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="RPT-07"></textarea></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>7) Fluxos publicos (sem login)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="id">ID</th>
+            <th>Cenario</th>
+            <th>Resultado esperado</th>
+            <th>Status</th>
+            <th>Observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">PUB-01</td>
+            <td>Inicio publico <div class="route">/form/start</div></td>
+            <td>Pagina carrega e orienta fluxo por token/link.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="PUB-01"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">PUB-02</td>
+            <td>Link publico valido <div class="route">/form/public/:slug/start</div></td>
+            <td>Gera/abre draft token e entra no formulario.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="PUB-02"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">PUB-03</td>
+            <td>Link publico invalido ou desativado</td>
+            <td>Sistema bloqueia acesso com mensagem adequada.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="PUB-03"></textarea></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>8) Permissao, seguranca e regressao rapida</h2>
+      <table>
+        <thead>
+          <tr>
+            <th class="id">ID</th>
+            <th>Cenario</th>
+            <th>Resultado esperado</th>
+            <th>Status</th>
+            <th>Observacoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">SEC-01</td>
+            <td>Usuario comum acessar API Keys <div class="route">/admin/api-keys</div></td>
+            <td>Acesso negado.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SEC-01"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SEC-02</td>
+            <td>POST sem CSRF valido (simulacao)</td>
+            <td>Requisicao bloqueada por CSRF.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SEC-02"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SEC-03</td>
+            <td>Download de documento sem sessao admin apos envio</td>
+            <td>Bloqueio conforme regra de status/token.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SEC-03"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SEC-04</td>
+            <td>Logs/erros de tela apos restore recente</td>
+            <td>Sem erro 500 em paginas principais.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SEC-04"></textarea></td>
+          </tr>
+          <tr>
+            <td class="id">SEC-05</td>
+            <td>Sessao expirada</td>
+            <td>Redireciona para login sem quebrar fluxo.</td>
+            <td class="status-cell"></td>
+            <td><textarea class="obs" data-id="SEC-05"></textarea></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <p class="footer">
+      Dica: preencha uma observacao curta para cada falha e anexe print/URL da tela no relatorio final de QA.
+    </p>
+  </div>
+
+  <script>
+    (function () {
+      var STORAGE_KEY = "manual_checklist_user_mode_v1";
+      var statusOptions = [
+        { value: "passou", label: "PASSOU" },
+        { value: "parcial", label: "PARCIAL" },
+        { value: "falhou", label: "FALHOU" },
+        { value: "nao_testado", label: "NAO TESTADO" }
+      ];
+
+      function buildStatusCell(rowId) {
+        var cell = document.createElement("div");
+        cell.className = "status";
+        statusOptions.forEach(function (opt) {
+          var label = document.createElement("label");
+          var input = document.createElement("input");
+          input.type = "radio";
+          input.name = "status_" + rowId;
+          input.value = opt.value;
+          label.appendChild(input);
+          label.appendChild(document.createTextNode(" " + opt.label));
+          cell.appendChild(label);
+        });
+        return cell;
+      }
+
+      function initStatusCells() {
+        var rows = document.querySelectorAll("tbody tr");
+        rows.forEach(function (tr) {
+          var idCell = tr.querySelector(".id");
+          var target = tr.querySelector(".status-cell");
+          if (!idCell || !target) return;
+          var rowId = idCell.textContent.trim();
+          target.appendChild(buildStatusCell(rowId));
+        });
+      }
+
+      function collectData() {
+        var data = {
+          meta: {
+            base_url: document.getElementById("meta_base_url").value || "",
+            user: document.getElementById("meta_user").value || "",
+            start: document.getElementById("meta_start").value || "",
+            build: document.getElementById("meta_build").value || ""
+          },
+          rows: {}
+        };
+
+        var rows = document.querySelectorAll("tbody tr");
+        rows.forEach(function (tr) {
+          var idCell = tr.querySelector(".id");
+          if (!idCell) return;
+          var rowId = idCell.textContent.trim();
+          if (!rowId || rowId.indexOf("-") < 0) return;
+          var checked = tr.querySelector('input[type="radio"]:checked');
+          var obs = tr.querySelector("textarea.obs");
+          data.rows[rowId] = {
+            status: checked ? checked.value : "",
+            obs: obs ? obs.value : ""
+          };
+        });
+        return data;
+      }
+
+      function applyData(data) {
+        if (!data) return;
+        document.getElementById("meta_base_url").value = data.meta && data.meta.base_url ? data.meta.base_url : "";
+        document.getElementById("meta_user").value = data.meta && data.meta.user ? data.meta.user : "";
+        document.getElementById("meta_start").value = data.meta && data.meta.start ? data.meta.start : "";
+        document.getElementById("meta_build").value = data.meta && data.meta.build ? data.meta.build : "";
+
+        var rows = data.rows || {};
+        Object.keys(rows).forEach(function (rowId) {
+          var row = rows[rowId] || {};
+          var statusInput = document.querySelector('input[name="status_' + rowId + '"][value="' + row.status + '"]');
+          if (statusInput) statusInput.checked = true;
+          var obs = document.querySelector('textarea.obs[data-id="' + rowId + '"]');
+          if (obs) obs.value = row.obs || "";
+        });
+      }
+
+      function save() {
+        var data = collectData();
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        window.alert("Checklist salvo no navegador.");
+      }
+
+      function load() {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          window.alert("Nenhum progresso salvo.");
+          return;
+        }
+        try {
+          var data = JSON.parse(raw);
+          applyData(data);
+          window.alert("Checklist carregado.");
+        } catch (err) {
+          window.alert("Falha ao carregar checklist salvo.");
+        }
+      }
+
+      function clearAll() {
+        if (!window.confirm("Limpar todos os status e observacoes?")) return;
+        localStorage.removeItem(STORAGE_KEY);
+        document.querySelectorAll('input[type="radio"]').forEach(function (el) { el.checked = false; });
+        document.querySelectorAll("textarea.obs").forEach(function (el) { el.value = ""; });
+        ["meta_base_url", "meta_user", "meta_start", "meta_build"].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+      }
+
+      initStatusCells();
+      document.getElementById("saveBtn").addEventListener("click", save);
+      document.getElementById("loadBtn").addEventListener("click", load);
+      document.getElementById("printBtn").addEventListener("click", function () { window.print(); });
+      document.getElementById("clearBtn").addEventListener("click", clearAll);
+      load();
+    })();
+  </script>
+</body>
+</html>
+

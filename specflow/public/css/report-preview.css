@@ -1,3 +1,10 @@
+.report-doc,
+.report-page,
+.report-rich-text,
+.rich-output {
+  font-family: var(--app-font-family, "Inter", "Segoe UI", Tahoma, sans-serif);
+}
+
 .report-doc {
   width: min(980px, 100%);
   margin: 0 auto;

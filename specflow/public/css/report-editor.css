@@ -1,3 +1,10 @@
+.report-editor-layout,
+.report-section-card,
+.report-quill-title-editor .ql-editor,
+.report-quill-editor .ql-editor {
+  font-family: var(--app-font-family, "Inter", "Segoe UI", Tahoma, sans-serif);
+}
+
 .report-section-cards {
   display: grid;
   gap: 14px;

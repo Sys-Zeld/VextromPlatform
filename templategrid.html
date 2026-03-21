@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Template Grid.js</title>
+    <link href="https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        font-family: Arial, sans-serif;
+        background: #f4f4f4;
+      }
+
+      .token-grid-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .token-grid-wrap .gridjs-wrapper {
+        border: 0;
+        box-shadow: none;
+      }
+
+      .token-grid-wrap .gridjs-table {
+        width: 100%;
+      }
+
+      .token-grid-wrap .gridjs-container {
+        min-width: max-content;
+      }
+
+      .token-grid-wrap .gridjs-th,
+      .token-grid-wrap .gridjs-td {
+        border-color: rgba(0, 0, 0, 0.08);
+        vertical-align: top;
+        padding: 0.5rem 0.65rem !important;
+        line-height: 1.25;
+      }
+
+      .token-grid-wrap .gridjs-th {
+        text-align: center !important;
+      }
+
+      .token-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(odd) > .gridjs-td {
+        background-color: rgba(120, 120, 120, 0.1) !important;
+      }
+
+      .token-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(even) > .gridjs-td {
+        background-color: rgba(110, 110, 110, 0.28) !important;
+      }
+
+      .token-grid-wrap .token-code {
+        display: inline-block;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: bottom;
+        background: #73b44c;
+        border-radius: 8px;
+        padding: 4px 8px;
+      }
+
+      .token-grid-wrap .token-row-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: nowrap;
+      }
+
+      .token-grid-wrap .token-row-actions button {
+        padding: 0.2rem 0.45rem;
+        font-size: 0.78rem;
+        line-height: 1.2;
+        border: 1px solid #999;
+        border-radius: 6px;
+        background: #fff;
+        cursor: pointer;
+      }
+
+      @media (max-width: 768px) {
+        .token-grid-wrap .gridjs-container,
+        .token-grid-wrap .gridjs-head,
+        .token-grid-wrap .gridjs-wrapper,
+        .token-grid-wrap .gridjs-table {
+          min-width: 1080px !important;
+        }
+
+        .token-grid-wrap .gridjs-th,
+        .token-grid-wrap .gridjs-td {
+          white-space: nowrap;
+        }
+      }
+
+      @media (min-width: 769px) {
+        .token-grid-wrap .gridjs-container,
+        .token-grid-wrap .gridjs-head,
+        .token-grid-wrap .gridjs-wrapper,
+        .token-grid-wrap .gridjs-table {
+          min-width: 0 !important;
+          width: 100% !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1 style="margin-top: 0;">Template Grid.js reutilizavel</h1>
+    <div class="token-grid-wrap">
+      <div id="tokensGrid"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+    <script>
+      (function () {
+        // Troque para "en" para usar o dicionario em ingles.
+        var lang = "pt";
+
+        var labelsByLang = {
+          pt: {
+            tableToken: "Token",
+            tableBuyer: "Comprador",
+            tableProfile: "Perfil",
+            tableStatus: "Status",
+            tableUpdatedAt: "Atualizado em",
+            tableActions: "Acoes",
+            viewButton: "Abrir",
+            configButton: "Configurar",
+            deleteButton: "Excluir",
+            confirmDelete: "Deseja realmente excluir este item?",
+            searchPlaceholder: "Digite uma palavra-chave...",
+            sortAsc: "Ordenar coluna em ordem crescente",
+            sortDesc: "Ordenar coluna em ordem decrescente",
+            paginationPrevious: "Anterior",
+            paginationNext: "Proximo",
+            paginationNavigate: "Pagina {page} de {pages}",
+            paginationPage: "Pagina {page}",
+            paginationShowing: "Mostrando",
+            paginationOf: "de",
+            paginationTo: "a",
+            paginationResults: "resultados",
+            loading: "Carregando...",
+            noRecordsFound: "Nenhum registro encontrado.",
+            error: "Falha ao carregar dados."
+          },
+          en: {
+            tableToken: "Token",
+            tableBuyer: "Buyer",
+            tableProfile: "Profile",
+            tableStatus: "Status",
+            tableUpdatedAt: "Updated at",
+            tableActions: "Actions",
+            viewButton: "Open",
+            configButton: "Configure",
+            deleteButton: "Delete",
+            confirmDelete: "Do you really want to delete this item?",
+            searchPlaceholder: "Type a keyword...",
+            sortAsc: "Sort column ascending",
+            sortDesc: "Sort column descending",
+            paginationPrevious: "Previous",
+            paginationNext: "Next",
+            paginationNavigate: "Page {page} of {pages}",
+            paginationPage: "Page {page}",
+            paginationShowing: "Showing",
+            paginationOf: "of",
+            paginationTo: "to",
+            paginationResults: "results",
+            loading: "Loading...",
+            noRecordsFound: "No matching records found.",
+            error: "An error occurred while loading data."
+          }
+        };
+
+        var labels = labelsByLang[lang] || labelsByLang.pt;
+
+        // Modelo de dados. Em outros modulos, substitua pelo payload real.
+        var rows = [
+          {
+            id: 1,
+            token: "8cfda7dd6248-f8b8f6-0121-abcdef",
+            buyer: "VITOR DE JESUS SUARES",
+            profile: "PADRAO CHLORIDE",
+            status: "draft",
+            updatedAt: "2026-03-21T15:15:10.000Z"
+          },
+          {
+            id: 2,
+            token: "7d694dc5a2e6-0237aa-7712-ghijkl",
+            buyer: "Cliente Padrao SpecFlow",
+            profile: "PADRAO CHLORIDE",
+            status: "send",
+            updatedAt: "2026-03-21T15:18:00.000Z"
+          }
+        ];
+
+        function escapeHtml(value) {
+          return String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+        }
+
+        function buildActionsHtml(row) {
+          var idSafe = encodeURIComponent(String(row.id || ""));
+          var confirmText = String(labels.confirmDelete || "")
+            .replace(/\\/g, "\\\\")
+            .replace(/'/g, "\\'")
+            .replace(/\r?\n/g, " ");
+
+          return ""
+            + "<div class=\"token-row-actions\">"
+            + "<button type=\"button\" onclick=\"alert('Abrir: " + idSafe + "')\">" + escapeHtml(labels.viewButton) + "</button>"
+            + "<button type=\"button\" onclick=\"alert('Configurar: " + idSafe + "')\">" + escapeHtml(labels.configButton) + "</button>"
+            + "<button type=\"button\" onclick=\"if(confirm('" + confirmText + "')){alert('Excluir: " + idSafe + "')}\" style=\"border-color:#c55;\">"
+            + escapeHtml(labels.deleteButton)
+            + "</button>"
+            + "</div>";
+        }
+
+        var data = rows.map(function (row) {
+          return {
+            token: "<code class=\"token-code\" title=\"" + escapeHtml(row.token) + "\">" + escapeHtml(row.token) + "</code>",
+            buyer: "<strong>" + escapeHtml(row.buyer || "-") + "</strong>",
+            profile: escapeHtml(row.profile || "-"),
+            status: escapeHtml(row.status || "-"),
+            updatedAt: new Date(row.updatedAt).toLocaleString(lang === "pt" ? "pt-BR" : "en-US"),
+            actions: buildActionsHtml(row)
+          };
+        });
+
+        new window.gridjs.Grid({
+          columns: [
+            { id: "token", name: labels.tableToken, width: "140px", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "buyer", name: labels.tableBuyer, formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "profile", name: labels.tableProfile },
+            { id: "status", name: labels.tableStatus },
+            { id: "updatedAt", name: labels.tableUpdatedAt },
+            { id: "actions", name: labels.tableActions, sort: false, formatter: function (cell) { return window.gridjs.html(cell); } }
+          ],
+          data: data,
+          search: true,
+          sort: true,
+          language: {
+            search: {
+              placeholder: labels.searchPlaceholder
+            },
+            sort: {
+              sortAsc: labels.sortAsc,
+              sortDesc: labels.sortDesc
+            },
+            pagination: {
+              previous: labels.paginationPrevious,
+              next: labels.paginationNext,
+              navigate: function (page, pages) {
+                return labels.paginationNavigate
+                  .replace("{page}", String(page))
+                  .replace("{pages}", String(pages));
+              },
+              page: function (page) {
+                return labels.paginationPage.replace("{page}", String(page));
+              },
+              showing: labels.paginationShowing,
+              of: labels.paginationOf,
+              to: labels.paginationTo,
+              results: labels.paginationResults
+            },
+            loading: labels.loading,
+            noRecordsFound: labels.noRecordsFound,
+            error: labels.error
+          },
+          pagination: {
+            limit: 20,
+            summary: false
+          }
+        }).render(document.getElementById("tokensGrid"));
+      })();
+    </script>
+  </body>
+</html>

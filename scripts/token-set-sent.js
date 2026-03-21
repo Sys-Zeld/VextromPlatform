@@ -23,10 +23,10 @@ async function run() {
     throw new Error("Token/equipamento nao encontrado.");
   }
 
-  await updateEquipmentStatus(equipment.id, "sent");
+  await updateEquipmentStatus(equipment.id, "send");
 
   // eslint-disable-next-line no-console
-  console.log(`Status atualizado para sent: id=${equipment.id}, token=${equipment.token}`);
+  console.log(`Status atualizado para send: id=${equipment.id}, token=${equipment.token}`);
 }
 
 run()

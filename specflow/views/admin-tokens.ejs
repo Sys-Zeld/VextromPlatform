@@ -1,4 +1,110 @@
 <%- include("partials/head", { pageTitle }) %>
+<style>
+  @import url("https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css");
+
+  .token-grid-wrap .gridjs-wrapper {
+    border: 0;
+    box-shadow: none;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .token-grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .token-grid-wrap .gridjs-table {
+    width: 100%;
+  }
+
+  .token-grid-wrap .gridjs-container {
+    min-width: max-content;
+  }
+
+  .token-grid-wrap .gridjs-th,
+  .token-grid-wrap .gridjs-td {
+    border-color: color-mix(in srgb, var(--border) 58%, transparent);
+    vertical-align: top;
+    padding: 0.5rem 0.65rem !important;
+    line-height: 1.25;
+  }
+
+  .token-grid-wrap .gridjs-th {
+    text-align: center !important;
+  }
+
+  .token-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(odd) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 78%, transparent) !important;
+  }
+
+  .token-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(even) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 92%, transparent) !important;
+  }
+
+  .token-grid-wrap .token-code {
+    display: inline-block;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  .token-grid-wrap .token-row-actions {
+    flex-wrap: nowrap !important;
+  }
+
+  .token-grid-wrap .token-row-actions .btn {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .token-grid-wrap .form-select.form-select-sm {
+    min-width: 86px;
+    padding-top: 0.15rem;
+    padding-bottom: 0.15rem;
+    font-size: 0.78rem;
+    background: var(--input-bg);
+    border-color: var(--input-border);
+    color: var(--input-text);
+  }
+
+  .token-grid-wrap .token-status-badge {
+    font-size: 0.72rem;
+  }
+
+  .token-grid-wrap .d-flex.gap-1.mt-2 {
+    margin-top: 0.35rem !important;
+  }
+
+  @media (max-width: 768px) {
+    .token-grid-wrap .gridjs-container,
+    .token-grid-wrap .gridjs-head,
+    .token-grid-wrap .gridjs-wrapper,
+    .token-grid-wrap .gridjs-table {
+      min-width: 1080px !important;
+    }
+
+    .token-grid-wrap .gridjs-th,
+    .token-grid-wrap .gridjs-td {
+      white-space: nowrap;
+    }
+  }
+
+  @media (min-width: 769px) {
+    .token-grid-wrap .gridjs-container,
+    .token-grid-wrap .gridjs-head,
+    .token-grid-wrap .gridjs-wrapper,
+    .token-grid-wrap .gridjs-table {
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+  }
+</style>
 
 <section class="token-console">
   <div class="card app-card token-hero-card mb-4">
@@ -12,9 +118,6 @@
         <a class="btn btn-primary btn-sm" href="/admin/clients/new"><%= t("admin.newClientButton") %></a>
         <a class="btn btn-outline-primary btn-sm" href="/admin/hub">Service Hub</a>
         <a class="btn btn-outline-primary btn-sm" href="/admin/profiles"><%= t("admin.manageProfilesButton") %></a>
-        <% if (isMaintenanceAdmin) { %>
-          <a class="btn btn-outline-danger btn-sm" href="/admin/maintenance">Manutencao</a>
-        <% } %>
         <form method="post" action="/admin/logout">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <button class="btn btn-outline-secondary btn-sm" type="submit"><%= t("admin.logoutSessionButton") %></button>
@@ -29,114 +132,21 @@
   <% if (saved) { %>
     <div class="alert alert-success token-feedback"><%= t("admin.clientConfigSaved") %></div>
   <% } %>
+  <% if (tokenStatusSaved) { %>
+    <div class="alert alert-success token-feedback">Status do token atualizado com sucesso.</div>
+  <% } %>
   <% if (imported) { %>
     <div class="alert alert-success token-feedback"><%= t("admin.tokenImportApplied") %></div>
   <% } %>
 
   <div class="card app-card token-search-card">
     <div class="card-body">
-      <form id="tokenSearchForm" class="token-search-form" method="get" action="/admin/tokens">
-        <div class="token-search-copy">
-          <label class="form-label mb-1" for="tokenSearchInput"><%= t("admin.searchTextLabel") %></label>
-        </div>
-        <div class="token-search-controls">
-          <div class="token-search-input-wrap">
-            <span class="token-search-icon material-symbols-outlined" aria-hidden="true">search</span>
-            <input
-              id="tokenSearchInput"
-              class="form-control"
-              type="text"
-              name="search"
-              value="<%= filters ? filters.search : '' %>"
-              placeholder="<%= t('admin.searchTextPlaceholder') %>"
-            />
-          </div>
-          <a class="btn btn-outline-secondary token-search-clear" href="/admin/tokens"><%= t("admin.searchClearButton") %></a>
-        </div>
-      </form>
-
-      <div class="token-table-toolbar">
-        <div class="small text-muted token-table-meta">
-          <%= t("admin.paginationInfo", { page: pagination.page, totalPages: pagination.totalPages, total: pagination.total }) %>
-        </div>
-        <div class="d-flex gap-2 token-pagination">
-          <% if (pagination.hasPrev) { %>
-            <a
-              class="btn btn-outline-secondary btn-sm btn-no-icon pagination-arrow"
-              href="/admin/tokens?page=<%= pagination.page - 1 %><%= pagination.querySuffix || '' %>"
-              aria-label="<%= t('admin.paginationPrev') %>"
-              title="<%= t('admin.paginationPrev') %>"
-            >&#8592;</a>
-          <% } else { %>
-            <button
-              class="btn btn-outline-secondary btn-sm btn-no-icon pagination-arrow"
-              type="button"
-              disabled
-              aria-label="<%= t('admin.paginationPrev') %>"
-              title="<%= t('admin.paginationPrev') %>"
-            >&#8592;</button>
-          <% } %>
-          <% if (pagination.hasNext) { %>
-            <a
-              class="btn btn-outline-secondary btn-sm btn-no-icon pagination-arrow"
-              href="/admin/tokens?page=<%= pagination.page + 1 %><%= pagination.querySuffix || '' %>"
-              aria-label="<%= t('admin.paginationNext') %>"
-              title="<%= t('admin.paginationNext') %>"
-            >&#8594;</a>
-          <% } else { %>
-            <button
-              class="btn btn-outline-secondary btn-sm btn-no-icon pagination-arrow"
-              type="button"
-              disabled
-              aria-label="<%= t('admin.paginationNext') %>"
-              title="<%= t('admin.paginationNext') %>"
-            >&#8594;</button>
-          <% } %>
-        </div>
+      <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+        <h2 class="h6 app-card-title mb-0">Gerenciamento de tokens</h2>
+        <span class="badge text-bg-secondary" id="tokens-count">Total: 0</span>
       </div>
-      <div class="table-responsive token-table-wrap">
-        <table class="table table-sm align-middle mb-0 app-table token-table">
-          <thead>
-            <tr>
-              <th><%= t("admin.tableToken") %></th>
-              <th><%= t("admin.tableBuyer") %></th>
-              <th><%= t("admin.tableContact") %></th>
-              <th><%= t("admin.tableProfile") %></th>
-              <th><%= t("admin.tableStatus") %></th>
-              <th><%= t("admin.tableUpdatedAt") %></th>
-              <th><%= t("admin.tableActions") %></th>
-            </tr>
-          </thead>
-          <tbody>
-            <% if (!rows.length) { %>
-              <tr>
-                <td colspan="7" class="text-center text-muted py-4"><%= t("admin.noRecords") %></td>
-              </tr>
-            <% } %>
-            <% rows.forEach((row) => { %>
-              <tr class="token-row">
-                <td>
-                  <code class="token-code"><%= row.token %></code>
-                </td>
-                <td><span class="token-cell-strong"><%= row.purchaser || "-" %></span></td>
-                <td><%= row.purchaserContact || "-" %></td>
-                <td><%= row.profileName || "-" %></td>
-                <td><span class="badge text-bg-light border token-status-badge"><%= row.status %></span></td>
-                <td><%= row.updatedAt ? new Date(row.updatedAt).toLocaleString(lang === "pt" ? "pt-BR" : "en-US") : "-" %></td>
-                <td>
-                  <div class="d-flex gap-2 flex-wrap token-row-actions">
-                    <a class="btn btn-outline-primary btn-sm" href="/form/<%= row.token %>/review"><%= t("admin.viewButton") %></a>
-                    <a class="btn btn-outline-secondary btn-sm" href="/admin/tokens/<%= row.id %>/config"><%= t("admin.clientConfigButton") %></a>
-                    <form method="post" action="/admin/tokens/<%= row.id %>/delete" onsubmit="return confirm('<%= t("admin.confirmDelete") %>')">
-                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                      <button class="btn btn-outline-danger btn-sm" type="submit"><%= t("admin.deleteButton") %></button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+      <div class="token-grid-wrap">
+        <div id="tokensGrid"></div>
       </div>
     </div>
   </div>
@@ -192,28 +202,186 @@
 </section>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
 <script>
   (function () {
-    var form = document.getElementById("tokenSearchForm");
-    var input = document.getElementById("tokenSearchInput");
-    if (!form || !input) return;
+    var csrfToken = <%- JSON.stringify(csrfToken || "") %>;
+    var gridRows = <%- JSON.stringify((rows || []).map(function (row) {
+      return {
+        id: row.id,
+        token: row.token || "",
+        purchaser: row.purchaser || "",
+        purchaserContact: row.purchaserContact || "",
+        profileName: row.profileName || "",
+        status: row.status || "",
+        updatedAt: row.updatedAt || null
+      };
+    })).replace(/</g, "\\u003c") %>;
+    var labels = <%- JSON.stringify({
+      tableToken: t("admin.tableToken"),
+      tableBuyer: t("admin.tableBuyer"),
+      tableProfile: t("admin.tableProfile"),
+      tableStatus: t("admin.tableStatus"),
+      tableUpdatedAt: t("admin.tableUpdatedAt"),
+      tableActions: t("admin.tableActions"),
+      viewButton: t("admin.viewButton"),
+      clientConfigButton: t("admin.clientConfigButton"),
+      deleteButton: t("admin.deleteButton"),
+      noRecords: t("admin.noRecords"),
+      saveStatusButton: "Salvar",
+      statusAriaLabel: "Status do token",
+      confirmDelete: t("admin.confirmDelete"),
+      gridSearchPlaceholder: t("admin.grid.searchPlaceholder"),
+      gridSortAsc: t("admin.grid.sortAsc"),
+      gridSortDesc: t("admin.grid.sortDesc"),
+      gridPaginationPrevious: t("admin.grid.paginationPrevious"),
+      gridPaginationNext: t("admin.grid.paginationNext"),
+      gridPaginationNavigate: t("admin.grid.paginationNavigate"),
+      gridPaginationPage: t("admin.grid.paginationPage"),
+      gridPaginationShowing: t("admin.grid.paginationShowing"),
+      gridPaginationOf: t("admin.grid.paginationOf"),
+      gridPaginationTo: t("admin.grid.paginationTo"),
+      gridPaginationResults: t("admin.grid.paginationResults"),
+      gridLoading: t("admin.grid.loading"),
+      gridNoRecordsFound: t("admin.grid.noRecordsFound"),
+      gridError: t("admin.grid.error")
+    }) %>;
+    var locale = <%- JSON.stringify(lang === "pt" ? "pt-BR" : "en-US") %>;
 
-    var lastValue = String(input.value || "");
-    function submitIfChanged() {
-      var current = String(input.value || "");
-      if (current === lastValue) return;
-      lastValue = current;
-      form.submit();
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     }
 
-    // Submit only when field value is committed (change/blur) to avoid
-    // reloading while user is still typing.
-    input.addEventListener("change", submitIfChanged);
-    input.addEventListener("keydown", function (event) {
-      if (event.key !== "Enter") return;
-      event.preventDefault();
-      submitIfChanged();
-    });
+    function normalizeStatus(status) {
+      var value = String(status || "").toLowerCase();
+      if (value === "sent") return "send";
+      if (value === "send" || value === "closed") return value;
+      return "draft";
+    }
+
+    function statusBadgeClass(status) {
+      if (status === "send") return "text-bg-primary";
+      if (status === "closed") return "text-bg-dark";
+      return "text-bg-secondary";
+    }
+
+    function buildStatusOptions(current) {
+      var options = ["draft", "send", "closed"];
+      return options.map(function (value) {
+        return "<option value=\"" + value + "\"" + (value === current ? " selected" : "") + ">" + value + "</option>";
+      }).join("");
+    }
+
+    function formatUpdatedAt(value) {
+      if (!value) return "-";
+      var date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "-";
+      return date.toLocaleString(locale);
+    }
+
+    function buildStatusHtml(row) {
+      var currentStatus = normalizeStatus(row.status);
+      return ""
+        + "<span class=\"badge " + statusBadgeClass(currentStatus) + " token-status-badge\">" + escapeHtml(currentStatus) + "</span>"
+        + "<form method=\"post\" action=\"/admin/tokens/" + encodeURIComponent(row.id) + "/status\" class=\"d-flex gap-1 mt-2\">"
+        + "<input type=\"hidden\" name=\"_csrf\" value=\"" + escapeHtml(csrfToken) + "\" />"
+        + "<select class=\"form-select form-select-sm\" name=\"status\" aria-label=\"" + escapeHtml(labels.statusAriaLabel) + "\">"
+        + buildStatusOptions(currentStatus)
+        + "</select>"
+        + "<button class=\"btn btn-outline-primary btn-sm\" type=\"submit\">" + escapeHtml(labels.saveStatusButton) + "</button>"
+        + "</form>";
+    }
+
+    function buildActionsHtml(row) {
+      var tokenSafe = encodeURIComponent(String(row.token || ""));
+      var idSafe = encodeURIComponent(String(row.id || ""));
+      var confirmText = String(labels.confirmDelete || "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/\r?\n/g, " ");
+      return ""
+        + "<div class=\"d-flex gap-2 flex-wrap token-row-actions\">"
+        + "<a class=\"btn btn-outline-primary btn-sm\" href=\"/form/" + tokenSafe + "/review\">" + escapeHtml(labels.viewButton) + "</a>"
+        + "<a class=\"btn btn-outline-secondary btn-sm\" href=\"/admin/tokens/" + idSafe + "/config\">" + escapeHtml(labels.clientConfigButton) + "</a>"
+        + "<form method=\"post\" action=\"/admin/tokens/" + idSafe + "/delete\" onsubmit=\"return confirm('" + confirmText + "')\">"
+        + "<input type=\"hidden\" name=\"_csrf\" value=\"" + escapeHtml(csrfToken) + "\" />"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">" + escapeHtml(labels.deleteButton) + "</button>"
+        + "</form>"
+        + "</div>";
+    }
+
+    var tokensGrid = document.getElementById("tokensGrid");
+    var tokensCount = document.getElementById("tokens-count");
+    if (tokensCount) {
+      tokensCount.textContent = "Total: " + String(gridRows.length);
+    }
+    if (tokensGrid && window.gridjs && window.gridjs.Grid) {
+      if (!gridRows.length) {
+        tokensGrid.innerHTML = "<div class=\"text-center text-muted py-4\">" + escapeHtml(labels.noRecords) + "</div>";
+      } else {
+        var formattedRows = gridRows.map(function (row) {
+          return {
+            token: "<code class=\"token-code\" title=\"" + escapeHtml(row.token) + "\">" + escapeHtml(row.token) + "</code>",
+            buyer: "<span class=\"token-cell-strong\">" + escapeHtml(row.purchaser || "-") + "</span>",
+            profile: escapeHtml(row.profileName || "-"),
+            status: buildStatusHtml(row),
+            updatedAt: escapeHtml(formatUpdatedAt(row.updatedAt)),
+            actions: buildActionsHtml(row)
+          };
+        });
+
+        new window.gridjs.Grid({
+          columns: [
+            { id: "token", name: labels.tableToken, width: "140px", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "buyer", name: labels.tableBuyer, formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "profile", name: labels.tableProfile },
+            { id: "status", name: labels.tableStatus, sort: false, formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "updatedAt", name: labels.tableUpdatedAt },
+            { id: "actions", name: labels.tableActions, sort: false, formatter: function (cell) { return window.gridjs.html(cell); } }
+          ],
+          data: formattedRows,
+          search: true,
+          sort: true,
+          language: {
+            search: {
+              placeholder: labels.gridSearchPlaceholder
+            },
+            sort: {
+              sortAsc: labels.gridSortAsc,
+              sortDesc: labels.gridSortDesc
+            },
+            pagination: {
+              previous: labels.gridPaginationPrevious,
+              next: labels.gridPaginationNext,
+              navigate: function (page, pages) {
+                return labels.gridPaginationNavigate
+                  .replace("{page}", String(page))
+                  .replace("{pages}", String(pages));
+              },
+              page: function (page) {
+                return labels.gridPaginationPage.replace("{page}", String(page));
+              },
+              showing: labels.gridPaginationShowing,
+              of: labels.gridPaginationOf,
+              to: labels.gridPaginationTo,
+              results: labels.gridPaginationResults
+            },
+            loading: labels.gridLoading,
+            noRecordsFound: labels.gridNoRecordsFound,
+            error: labels.gridError
+          },
+          pagination: {
+            limit: 20,
+            summary: false
+          }
+        }).render(tokensGrid);
+      }
+    }
 
     var importForm = document.getElementById("admin-token-json-import-form");
     var importFileInput = document.getElementById("admin-token-json-file");

@@ -3,16 +3,12 @@
 <div class="card app-card mb-4">
   <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
     <div>
-      <h1 class="h4 app-card-title mb-1">Manutencao SpecFlow</h1>
-      <p class="text-muted mb-0">Configuracoes exclusivas do modulo SpecFlow.</p>
+      <h1 class="h4 app-card-title mb-1">Manutencao Report Service</h1>
+      <p class="text-muted mb-0">Operacoes exclusivas do modulo Report Service.</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-outline-secondary btn-sm" href="/admin/maintenance/system">Manutencao do sistema</a>
-      <a class="btn btn-outline-secondary btn-sm" href="/admin/tokens">Voltar para tokens</a>
-      <form method="post" action="/admin/logout">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <button class="btn btn-outline-secondary btn-sm" type="submit"><%= t("admin.logoutSessionButton") %></button>
-      </form>
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Voltar ao hub</a>
     </div>
   </div>
 </div>
@@ -25,11 +21,6 @@
   <div class="card app-card mb-4">
     <div class="card-body">
       <h2 class="h6 app-card-title">Saida</h2>
-      <% if (commandResult.downloadPath) { %>
-        <div class="mb-2">
-          <a class="btn btn-sm btn-outline-primary" href="<%= commandResult.downloadPath %>">Baixar backup .sql</a>
-        </div>
-      <% } %>
       <pre class="mb-0" style="white-space: pre-wrap;"><%= commandResult.output || "(sem saida)" %></pre>
     </div>
   </div>
@@ -37,9 +28,6 @@
 
 <% if (smtpUpdateResult) { %>
   <div class="alert <%= smtpUpdateResult.ok ? 'alert-success' : 'alert-danger' %>"><%= smtpUpdateResult.message %></div>
-<% } %>
-<% if (smtpTestResult) { %>
-  <div class="alert <%= smtpTestResult.ok ? 'alert-success' : 'alert-danger' %>"><%= smtpTestResult.message %></div>
 <% } %>
 <% if (emailTemplatesUpdateResult) { %>
   <div class="alert <%= emailTemplatesUpdateResult.ok ? 'alert-success' : 'alert-danger' %>"><%= emailTemplatesUpdateResult.message %></div>
@@ -50,21 +38,55 @@
 
 <div class="card app-card mb-4">
   <div class="card-body">
-    <h2 class="h6 app-card-title mb-2">Links publicos por perfil</h2>
-    <p class="text-muted mb-3">Criacao e exclusao de links publicos em pagina separada.</p>
-    <a class="btn btn-primary btn-sm" href="/admin/public-token-links">Abrir gestao de links publicos</a>
+    <h2 class="h6 app-card-title mb-3">Comandos de manutencao</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <form method="post" action="/admin/maintenance/report-service/command" class="maintenance-command-form" data-confirm="Confirma backup do banco Report Service?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="action" value="db_backup" />
+        <button class="btn btn-outline-primary btn-sm" type="submit">Backup banco Report Service</button>
+      </form>
+      <form method="post" action="/admin/maintenance/report-service/command" class="maintenance-command-form" data-confirm="Confirma resetar banco Report Service e reaplicar seed?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="action" value="db_reset" />
+        <button class="btn btn-outline-danger btn-sm" type="submit">Reset banco Report Service</button>
+      </form>
+    </div>
   </div>
 </div>
 
 <div class="card app-card mb-4">
   <div class="card-body">
-    <h2 class="h6 app-card-title mb-2">Configuracao SMTP (Mailtrap)</h2>
-    <p class="text-muted mb-3">Essas configuracoes valem apenas para o envio de documentos do modulo SpecFlow.</p>
-    <form method="post" action="/admin/maintenance/smtp" class="row g-3">
+    <h2 class="h6 app-card-title mb-2">Destinatarios padrao</h2>
+    <p class="text-muted mb-3">E-mails padrao utilizados no contexto do modulo Report Service.</p>
+    <form method="post" action="/admin/maintenance/report-service/default-recipients" class="row g-3">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div class="col-12">
+        <label class="form-label" for="default_email_recipients">E-mails padrao</label>
+        <textarea
+          id="default_email_recipients"
+          name="default_email_recipients"
+          class="form-control"
+          rows="4"
+          maxlength="4000"
+          placeholder="relatorios@empresa.com; engenharia@empresa.com"
+        ><%= emailSettings && emailSettings.defaultRecipientsRaw ? emailSettings.defaultRecipientsRaw : "" %></textarea>
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary btn-sm" type="submit">Salvar destinatarios</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card app-card mb-4">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-2">Configuracao SMTP</h2>
+    <p class="text-muted mb-3">Configuracao de e-mail dedicada ao modulo Report Service.</p>
+    <form method="post" action="/admin/maintenance/report-service/smtp" class="row g-3">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
 
       <div class="col-12 col-md-6">
-        <label class="form-label" for="smtp_host">SMTP Host (Mailtrap)</label>
+        <label class="form-label" for="smtp_host">SMTP Host</label>
         <input id="smtp_host" name="smtp_host" type="text" class="form-control" required value="<%= emailSettings && emailSettings.smtp ? emailSettings.smtp.host : '' %>" />
       </div>
       <div class="col-12 col-md-3">
@@ -74,7 +96,7 @@
       <div class="col-12 col-md-3 d-flex align-items-end">
         <div class="form-check mb-2">
           <input id="smtp_secure" name="smtp_secure" type="checkbox" class="form-check-input" value="true" <%= emailSettings && emailSettings.smtp && emailSettings.smtp.secure ? "checked" : "" %> />
-          <label class="form-check-label" for="smtp_secure">SSL/TLS</label>
+          <label class="form-check-label" for="smtp_secure">Usar conexao segura (SSL/TLS)</label>
         </div>
       </div>
 
@@ -103,42 +125,14 @@
         <button class="btn btn-primary btn-sm" type="submit">Salvar SMTP</button>
       </div>
     </form>
-
-    <hr class="my-4" />
-
-    <form method="post" action="/admin/maintenance/smtp/test" class="row g-3">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-      <div class="col-12 col-md-8">
-        <label class="form-label" for="test_email_to">E-mail para teste SMTP</label>
-        <input
-          id="test_email_to"
-          name="test_email_to"
-          type="email"
-          class="form-control"
-          required
-          placeholder="destinatario@dominio.com"
-          value="<%= maintenanceEmailTestTo || '' %>"
-        />
-      </div>
-      <div class="col-12 col-md-4 d-flex align-items-end">
-        <button class="btn btn-outline-primary btn-sm" type="submit">Testar envio</button>
-      </div>
-    </form>
   </div>
 </div>
 
 <div class="card app-card mb-4">
   <div class="card-body">
     <h2 class="h6 app-card-title mb-2">Modelos HTML de e-mail</h2>
-    <p class="text-muted mb-3">
-      Placeholders disponiveis:
-      <code>{{token}}</code>, <code>{{cliente}}</code>, <code>{{contato}}</code>,
-      <code>{{nome_perfil_formulario}}</code>, <code>{{token_link}}</code>,
-      <code>{{review_link}}</code>, <code>{{specification_link}}</code>,
-      <code>{{purchaser}}</code>, <code>{{project_name}}</code>, <code>{{site_name}}</code>, <code>{{address}}</code>.
-    </p>
-
-    <form method="post" action="/admin/maintenance/email-templates/save" class="row g-3" id="email-template-form">
+    <p class="text-muted mb-3">Modelos de mensagem exclusivos do modulo Report Service.</p>
+    <form method="post" action="/admin/maintenance/report-service/email-templates/save" class="row g-3" id="email-template-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <input type="hidden" id="template_id" name="template_id" value="<%= emailTemplateEditorValues && emailTemplateEditorValues.template_id ? emailTemplateEditorValues.template_id : '' %>" />
       <div class="col-12 col-md-5">
@@ -150,7 +144,6 @@
           class="form-control"
           required
           maxlength="120"
-          placeholder="Ex.: Modelo comercial Vextrom"
           value="<%= emailTemplateEditorValues && emailTemplateEditorValues.template_name ? emailTemplateEditorValues.template_name : '' %>"
         />
       </div>
@@ -163,7 +156,6 @@
           class="form-control"
           required
           maxlength="200"
-          placeholder="Ex.: Vextrom SpecFlow - {{token}}"
           value="<%= emailTemplateEditorValues && emailTemplateEditorValues.template_subject ? emailTemplateEditorValues.template_subject : '' %>"
         />
       </div>
@@ -176,7 +168,6 @@
           rows="12"
           required
           maxlength="120000"
-          placeholder="Cole aqui o HTML completo do modelo..."
         ><%= emailTemplateEditorValues && emailTemplateEditorValues.template_html ? emailTemplateEditorValues.template_html : "" %></textarea>
       </div>
       <div class="col-12 col-md-4">
@@ -191,7 +182,7 @@
             class="form-check-input"
             <%= emailTemplateEditorValues && emailTemplateEditorValues.set_default_template ? "checked" : "" %>
           />
-          <label class="form-check-label" for="set_default_template">Definir como padrao ao salvar</label>
+          <label class="form-check-label" for="set_default_template">Definir como modelo padrao ao salvar</label>
         </div>
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-primary btn-sm" type="submit">Salvar modelo</button>
@@ -241,12 +232,12 @@
                   >
                     Editar
                   </button>
-                  <form method="post" action="/admin/maintenance/email-templates/default" class="maintenance-command-form" data-confirm="Confirma definir este modelo como padrao?">
+                  <form method="post" action="/admin/maintenance/report-service/email-templates/default" class="maintenance-command-form" data-confirm="Confirma definir este modelo como padrao?">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
                     <input type="hidden" name="template_id" value="<%= template.id %>" />
                     <button class="btn btn-outline-success btn-sm" type="submit" <%= emailSettings.defaultTemplateId === template.id ? "disabled" : "" %>>Definir padrao</button>
                   </form>
-                  <form method="post" action="/admin/maintenance/email-templates/<%= template.id %>/delete" class="maintenance-command-form" data-confirm="Confirma remover este modelo HTML?">
+                  <form method="post" action="/admin/maintenance/report-service/email-templates/<%= template.id %>/delete" class="maintenance-command-form" data-confirm="Confirma remover este modelo HTML?">
                     <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
                     <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
                   </form>
@@ -257,56 +248,6 @@
           <% }) %>
         </tbody>
       </table>
-    </div>
-  </div>
-</div>
-
-<div class="card app-card mb-4">
-  <div class="card-body">
-    <h2 class="h6 app-card-title mb-2">Destinatarios padrao de documentos</h2>
-    <p class="text-muted mb-3">
-      Esses e-mails sao enviados por padrao junto com os destinatarios informados no fluxo Envio + PDF.
-      Use <code>;</code>, <code>,</code> ou quebra de linha para separar os e-mails.
-    </p>
-    <form method="post" action="/admin/maintenance/default-recipients" class="row g-3">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-      <div class="col-12">
-        <label class="form-label" for="default_email_recipients">E-mails padrao</label>
-        <textarea
-          id="default_email_recipients"
-          name="default_email_recipients"
-          class="form-control"
-          rows="4"
-          maxlength="4000"
-          placeholder="comercial@empresa.com; engenharia@empresa.com"
-        ><%= emailSettings && emailSettings.defaultRecipientsRaw ? emailSettings.defaultRecipientsRaw : "" %></textarea>
-      </div>
-      <div class="col-12">
-        <button class="btn btn-primary btn-sm" type="submit">Salvar destinatarios padrao</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<div class="card app-card mb-4">
-  <div class="card-body">
-    <h2 class="h6 app-card-title mb-3">Manutencao do banco (SpecFlow)</h2>
-    <div class="d-flex gap-2 flex-wrap">
-      <form method="post" action="/admin/maintenance/command" class="maintenance-command-form" data-confirm="Confirma resetar banco e reaplicar seed?">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <input type="hidden" name="action" value="db_reseed" />
-        <button class="btn btn-outline-danger btn-sm" type="submit">Reset banco</button>
-      </form>
-      <form method="post" action="/admin/maintenance/command" class="maintenance-command-form" data-confirm="Confirma executar seed padrao?">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <input type="hidden" name="action" value="db_seed_default" />
-        <button class="btn btn-outline-primary btn-sm" type="submit">Seed padrao</button>
-      </form>
-      <form method="post" action="/admin/maintenance/command" class="maintenance-command-form" data-confirm="Confirma gerar backup do banco SpecFlow?">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <input type="hidden" name="action" value="db_backup" />
-        <button class="btn btn-outline-primary btn-sm" type="submit">Backup banco</button>
-      </form>
     </div>
   </div>
 </div>

@@ -1,4 +1,103 @@
 <%- include("../partials/head", { pageTitle }) %>
+<style>
+  @import url("https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css");
+
+  .equipments-grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .equipments-grid-wrap .gridjs-wrapper {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .equipments-grid-wrap .gridjs-table {
+    width: 100%;
+  }
+
+  .equipments-grid-wrap .gridjs-container {
+    min-width: max-content;
+  }
+
+  .equipments-grid-wrap .gridjs-th,
+  .equipments-grid-wrap .gridjs-td {
+    border-color: color-mix(in srgb, var(--border) 58%, transparent);
+    vertical-align: middle !important;
+    padding: 0.18rem 0.42rem !important;
+    line-height: 1.05 !important;
+    font-size: 0.78rem !important;
+  }
+
+  .equipments-grid-wrap .gridjs-th {
+    text-align: center !important;
+    font-size: 0.8rem !important;
+    font-weight: 600;
+  }
+
+  .equipments-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(odd) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 78%, transparent) !important;
+  }
+
+  .equipments-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(even) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 92%, transparent) !important;
+  }
+
+  .equipments-grid-wrap .equipments-actions .btn {
+    padding: 0.12rem 0.34rem !important;
+    font-size: 0.72rem !important;
+    line-height: 1 !important;
+    white-space: nowrap;
+  }
+
+  .equipments-grid-wrap .form-control-sm,
+  .equipments-grid-wrap .form-select-sm {
+    min-width: 120px;
+    font-size: 0.76rem !important;
+    padding-top: 0.16rem !important;
+    padding-bottom: 0.16rem !important;
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+    color: var(--input-text) !important;
+  }
+
+  .equipments-grid-wrap .gridjs-search .gridjs-input {
+    max-width: 240px;
+    padding: 0.32rem 0.5rem !important;
+    font-size: 0.84rem !important;
+  }
+
+  @media (max-width: 768px) {
+    .equipments-grid-wrap .gridjs-container,
+    .equipments-grid-wrap .gridjs-head,
+    .equipments-grid-wrap .gridjs-wrapper,
+    .equipments-grid-wrap .gridjs-table {
+      min-width: 2200px !important;
+    }
+
+    .equipments-grid-wrap .gridjs-th,
+    .equipments-grid-wrap .gridjs-td {
+      white-space: nowrap;
+    }
+  }
+
+  @media (min-width: 769px) {
+    .equipments-grid-wrap .gridjs-container,
+    .equipments-grid-wrap .gridjs-head,
+    .equipments-grid-wrap .gridjs-wrapper,
+    .equipments-grid-wrap .gridjs-table {
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+
+    .equipments-grid-wrap .gridjs-td {
+      white-space: normal;
+      word-break: break-word;
+    }
+  }
+</style>
 
 <section class="token-console">
   <div class="card app-card token-hero-card">
@@ -16,78 +115,479 @@
   </div>
 
   <% if (created) { %><div class="alert alert-success mb-0">Equipamento salvo com sucesso.</div><% } %>
+  <% if (updated) { %><div class="alert alert-success mb-0">Equipamento atualizado com sucesso.</div><% } %>
 
   <div class="card app-card">
     <div class="card-body">
-      <h2 class="h6 app-card-title mb-3">Novo equipamento</h2>
-      <form method="post" action="/admin/report-service/equipments" class="row g-2">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-        <div class="col-12 col-md-4">
-          <label class="form-label">Cliente</label>
-          <select class="form-select" name="customer_id">
-            <option value="">Nao vinculado</option>
-            <% customers.forEach((customer) => { %><option value="<%= customer.id %>"><%= customer.name %></option><% }) %>
-          </select>
+      <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <h2 class="h6 app-card-title mb-0">Base de equipamentos</h2>
+          <span class="badge text-bg-secondary" id="equipment-count">Total: 0</span>
         </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label">Site</label>
-          <select class="form-select" name="site_id">
-            <option value="">Nao vinculado</option>
-            <% sites.forEach((site) => { %><option value="<%= site.id %>"><%= site.site_name %></option><% }) %>
-          </select>
-        </div>
-        <div class="col-12 col-md-4">
-          <label class="form-label">TYPE</label>
-          <input class="form-control" name="type" required />
-        </div>
-        <div class="col-12 col-md-3"><input class="form-control" name="year_of_manufacture" placeholder="YEAR OF MANUFACTURE" /></div>
-        <div class="col-12 col-md-3"><input class="form-control" name="serial_number" placeholder="SERIAL No." /></div>
-        <div class="col-12 col-md-3"><input class="form-control" name="rated_ac_input_voltage" placeholder="RATED AC INPUT VOLTAGE" /></div>
-        <div class="col-12 col-md-3"><input class="form-control" name="input_frequency" placeholder="INPUT FREQUENCY" /></div>
-        <div class="col-12 col-md-3"><input class="form-control" name="rated_dc_voltage" placeholder="RATED DC VOLTAGE" /></div>
-        <div class="col-12 col-md-3"><input class="form-control" name="rated_ac_output_voltage" placeholder="RATED AC OUTPUT VOLTAGE" /></div>
-        <div class="col-12 col-md-3"><input class="form-control" name="output_frequency" placeholder="OUTPUT FREQUENCY" /></div>
-        <div class="col-12 col-md-3"><input class="form-control" name="degree_of_protection" placeholder="DEGREE OF PROTECTION" /></div>
-        <div class="col-12 col-md-4"><input class="form-control" name="main_label" placeholder="MAIN LABEL" /></div>
-        <div class="col-12 col-md-4"><input class="form-control" name="dt_number" placeholder="DT NUMBER" /></div>
-        <div class="col-12 col-md-4"><input class="form-control" name="tag_number" placeholder="TAG NUMBER" /></div>
-        <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit">Salvar equipamento</button></div>
-      </form>
-    </div>
-  </div>
-
-  <div class="card app-card">
-    <div class="card-body">
-      <h2 class="h6 app-card-title mb-3">Base de equipamentos</h2>
-      <div class="table-responsive">
-        <table class="table table-sm app-table mb-0">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Type</th>
-              <th>Serial</th>
-              <th>Tag</th>
-              <th>Cliente</th>
-              <th>Site</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% if (!equipments.length) { %><tr><td colspan="6" class="text-center text-muted py-4">Sem equipamentos.</td></tr><% } %>
-            <% equipments.forEach((equipment) => { %>
-              <tr>
-                <td><%= equipment.id %></td>
-                <td><%= equipment.type %></td>
-                <td><%= equipment.serial_number || "-" %></td>
-                <td><%= equipment.tag_number || "-" %></td>
-                <td><%= equipment.customer_name || "-" %></td>
-                <td><%= equipment.site_name || "-" %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+        <button class="btn btn-primary btn-sm" type="button" id="add-inline-equipment">Incluir novo</button>
+      </div>
+      <div class="equipments-grid-wrap">
+        <div id="equipmentsGrid"></div>
       </div>
     </div>
   </div>
+
+  <div id="equipment-inline-feedback" class="alert d-none mt-2" role="alert"></div>
 </section>
+
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+<script>
+  (function () {
+    var csrfToken = <%- JSON.stringify(csrfToken || "") %>;
+    var customers = <%- JSON.stringify((customers || []).map(function (item) {
+      return { id: item.id, name: item.name || "-" };
+    })).replace(/</g, "\\u003c") %>;
+    var sites = <%- JSON.stringify((sites || []).map(function (item) {
+      return { id: item.id, site_name: item.site_name || "-" };
+    })).replace(/</g, "\\u003c") %>;
+    var equipments = <%- JSON.stringify((equipments || []).map(function (item) {
+      return {
+        id: item.id,
+        customer_id: item.customer_id,
+        site_id: item.site_id,
+        type: item.type || "",
+        year_of_manufacture: item.year_of_manufacture || "",
+        serial_number: item.serial_number || "",
+        rated_ac_input_voltage: item.rated_ac_input_voltage || "",
+        input_frequency: item.input_frequency || "",
+        rated_dc_voltage: item.rated_dc_voltage || "",
+        rated_ac_output_voltage: item.rated_ac_output_voltage || "",
+        output_frequency: item.output_frequency || "",
+        degree_of_protection: item.degree_of_protection || "",
+        main_label: item.main_label || "",
+        dt_number: item.dt_number || "",
+        tag_number: item.tag_number || "",
+        manufacturer: item.manufacturer || "",
+        model_family: item.model_family || "",
+        notes: item.notes || "",
+        created_at: item.created_at || "",
+        updated_at: item.updated_at || "",
+        customer_name: item.customer_name || "-",
+        site_name: item.site_name || "-"
+      };
+    })).replace(/</g, "\\u003c") %>;
+    var feedbackEl = document.getElementById("equipment-inline-feedback");
+    var equipmentCountEl = document.getElementById("equipment-count");
+    var addInlineBtn = document.getElementById("add-inline-equipment");
+    var gridTarget = document.getElementById("equipmentsGrid");
+    var currentQuery = new URLSearchParams(window.location.search || "");
+    var inlineNewId = String(currentQuery.get("inline_new_id") || "");
+    var inlineNewFlag = currentQuery.get("inline_new") === "1";
+    var rowsState = equipments.map(function (item) {
+      return Object.assign({}, item, { __isNew: false, __editing: false });
+    });
+    var gridInstance = null;
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function showInlineFeedback(message, isError) {
+      if (!feedbackEl) return;
+      feedbackEl.classList.remove("d-none", "alert-success", "alert-danger");
+      feedbackEl.classList.add(isError ? "alert-danger" : "alert-success");
+      feedbackEl.textContent = String(message || "");
+    }
+
+    function refreshEquipmentCount() {
+      if (!equipmentCountEl) return;
+      equipmentCountEl.textContent = "Total: " + String(rowsState.length);
+    }
+
+    function buildCustomerOptions(currentValue) {
+      var normalizedCurrent = String(currentValue || "");
+      var base = "<option value=\"\">Selecione o cliente</option>";
+      var options = customers.map(function (item) {
+        var value = String(item.id || "");
+        var selected = value === normalizedCurrent ? " selected" : "";
+        return "<option value=\"" + escapeHtml(value) + "\"" + selected + ">" + escapeHtml(item.name || "-") + "</option>";
+      }).join("");
+      return base + options;
+    }
+
+    function buildSiteOptions(currentValue) {
+      var normalizedCurrent = String(currentValue || "");
+      var base = "<option value=\"\">Selecione o site</option>";
+      var options = sites.map(function (item) {
+        var value = String(item.id || "");
+        var selected = value === normalizedCurrent ? " selected" : "";
+        return "<option value=\"" + escapeHtml(value) + "\"" + selected + ">" + escapeHtml(item.site_name || "-") + "</option>";
+      }).join("");
+      return base + options;
+    }
+
+    function buildActionsHtml(row) {
+      var idSafe = escapeHtml(row.id);
+      var primaryLabel = row.__isNew ? "Criar" : "Salvar";
+      var isNewAttr = row.__isNew ? "1" : "0";
+      return ""
+        + "<div class=\"equipments-actions\" data-new-row=\"" + isNewAttr + "\">"
+        + "<button class=\"btn btn-outline-primary btn-sm\" type=\"button\" data-save-equipment=\"" + idSafe + "\">" + primaryLabel + "</button>"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"button\" data-remove-equipment=\"" + idSafe + "\">Remover</button>"
+        + "</div>";
+    }
+
+    function inputDisabledAttr(_row) {
+      return "";
+    }
+
+    function formatDate(value) {
+      if (!value) return "-";
+      var date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "-";
+      return date.toLocaleString("pt-BR");
+    }
+
+    function getFieldValue(equipmentId, fieldName) {
+      var id = "eq-" + String(equipmentId) + "-" + String(fieldName);
+      var el = document.getElementById(id);
+      return el ? String(el.value || "") : "";
+    }
+
+    function findRowById(equipmentId) {
+      var idText = String(equipmentId || "");
+      return rowsState.find(function (row) { return String(row.id) === idText; }) || null;
+    }
+
+    function clearInlineNewQueryParams() {
+      if (!window.history || !window.history.replaceState) return;
+      var nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("inline_new");
+      nextUrl.searchParams.delete("inline_new_id");
+      window.history.replaceState({}, "", nextUrl.toString());
+    }
+
+    function clearGridSearchInput() {
+      if (!gridTarget) return;
+      var searchInput = gridTarget.querySelector(".gridjs-search .gridjs-input, .gridjs-search input");
+      if (!searchInput) return;
+      searchInput.value = "";
+      if (typeof Event === "function") {
+        searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        var ev = document.createEvent("Event");
+        ev.initEvent("input", true, true);
+        searchInput.dispatchEvent(ev);
+      }
+    }
+
+    function syncRowFromInputs(row) {
+      var id = row.id;
+      row.customer_id = getFieldValue(id, "customer_id");
+      row.site_id = getFieldValue(id, "site_id");
+      row.type = getFieldValue(id, "type");
+      row.year_of_manufacture = getFieldValue(id, "year_of_manufacture");
+      row.serial_number = getFieldValue(id, "serial_number");
+      row.rated_ac_input_voltage = getFieldValue(id, "rated_ac_input_voltage");
+      row.input_frequency = getFieldValue(id, "input_frequency");
+      row.rated_dc_voltage = getFieldValue(id, "rated_dc_voltage");
+      row.rated_ac_output_voltage = getFieldValue(id, "rated_ac_output_voltage");
+      row.output_frequency = getFieldValue(id, "output_frequency");
+      row.degree_of_protection = getFieldValue(id, "degree_of_protection");
+      row.main_label = getFieldValue(id, "main_label");
+      row.dt_number = getFieldValue(id, "dt_number");
+      row.tag_number = getFieldValue(id, "tag_number");
+      row.manufacturer = getFieldValue(id, "manufacturer");
+      row.model_family = getFieldValue(id, "model_family");
+      row.notes = getFieldValue(id, "notes");
+    }
+
+    function buildPayloadFromRow(row) {
+      var payload = new URLSearchParams();
+      payload.set("_csrf", csrfToken);
+      payload.set("customer_id", row.customer_id || "");
+      payload.set("site_id", row.site_id || "");
+      payload.set("type", row.type || "");
+      payload.set("year_of_manufacture", row.year_of_manufacture || "");
+      payload.set("serial_number", row.serial_number || "");
+      payload.set("rated_ac_input_voltage", row.rated_ac_input_voltage || "");
+      payload.set("input_frequency", row.input_frequency || "");
+      payload.set("rated_dc_voltage", row.rated_dc_voltage || "");
+      payload.set("rated_ac_output_voltage", row.rated_ac_output_voltage || "");
+      payload.set("output_frequency", row.output_frequency || "");
+      payload.set("degree_of_protection", row.degree_of_protection || "");
+      payload.set("main_label", row.main_label || "");
+      payload.set("dt_number", row.dt_number || "");
+      payload.set("tag_number", row.tag_number || "");
+      payload.set("manufacturer", row.manufacturer || "");
+      payload.set("model_family", row.model_family || "");
+      payload.set("notes", row.notes || "");
+      return payload;
+    }
+
+    async function saveInlineEquipment(equipmentId) {
+      var row = findRowById(equipmentId);
+      if (!row) return;
+      syncRowFromInputs(row);
+      if (!row.customer_id || Number(row.customer_id) <= 0) {
+        showInlineFeedback("Cliente e obrigatorio.", true);
+        return;
+      }
+      if (!row.site_id || Number(row.site_id) <= 0) {
+        showInlineFeedback("Site e obrigatorio.", true);
+        return;
+      }
+      var payload = buildPayloadFromRow(row);
+      var url = row.__isNew
+        ? "/admin/report-service/equipments/create-inline"
+        : ("/admin/report-service/equipments/" + encodeURIComponent(String(row.id)) + "/update-inline");
+
+      try {
+        var response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+          },
+          body: payload.toString(),
+          credentials: "same-origin"
+        });
+        var result = await response.json().catch(function () { return { ok: false, error: "Falha ao atualizar equipamento." }; });
+        if (!response.ok || !result.ok) {
+          showInlineFeedback(result.error || "Falha ao atualizar equipamento.", true);
+          return;
+        }
+        if (row.__isNew) {
+          row.id = result.id;
+          row.__isNew = false;
+          row.created_at = new Date().toISOString();
+          row.updated_at = row.created_at;
+          clearInlineNewQueryParams();
+          renderGrid();
+          showInlineFeedback("Novo equipamento criado com sucesso.", false);
+        } else {
+          row.updated_at = new Date().toISOString();
+          clearInlineNewQueryParams();
+          renderGrid();
+          showInlineFeedback("Equipamento atualizado com sucesso.", false);
+        }
+      } catch (_err) {
+        showInlineFeedback("Falha ao atualizar equipamento.", true);
+      }
+    }
+
+    async function removeInlineEquipment(equipmentId) {
+      var row = findRowById(equipmentId);
+      if (!row) return;
+
+      var confirmed = window.confirm("Deseja remover este equipamento?");
+      if (!confirmed) return;
+
+      if (row.__isNew) {
+        rowsState = rowsState.filter(function (item) { return String(item.id) !== String(equipmentId); });
+        renderGrid();
+        showInlineFeedback("Linha removida.", false);
+        return;
+      }
+
+      var payload = new URLSearchParams();
+      payload.set("_csrf", csrfToken);
+
+      try {
+        var response = await fetch("/admin/report-service/equipments/" + encodeURIComponent(String(row.id)) + "/delete-inline", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+          },
+          body: payload.toString(),
+          credentials: "same-origin"
+        });
+        var result = await response.json().catch(function () { return { ok: false, error: "Falha ao remover equipamento." }; });
+        if (!response.ok || !result.ok) {
+          showInlineFeedback(result.error || "Falha ao remover equipamento.", true);
+          return;
+        }
+
+        rowsState = rowsState.filter(function (item) { return String(item.id) !== String(equipmentId); });
+        renderGrid();
+        showInlineFeedback("Equipamento removido com sucesso.", false);
+      } catch (_err) {
+        showInlineFeedback("Falha ao remover equipamento.", true);
+      }
+    }
+
+    function buildGridData() {
+      return rowsState.map(function (row) {
+          var disabled = inputDisabledAttr(row);
+          return {
+            id: escapeHtml(row.id),
+            customer: "<select id=\"eq-" + escapeHtml(row.id) + "-customer_id\" class=\"form-select form-select-sm\"" + disabled + ">" + buildCustomerOptions(row.customer_id) + "</select>",
+            site: "<select id=\"eq-" + escapeHtml(row.id) + "-site_id\" class=\"form-select form-select-sm\"" + disabled + ">" + buildSiteOptions(row.site_id) + "</select>",
+            type: "<input id=\"eq-" + escapeHtml(row.id) + "-type\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.type || "") + "\"" + disabled + " />",
+            year: "<input id=\"eq-" + escapeHtml(row.id) + "-year_of_manufacture\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.year_of_manufacture || "") + "\"" + disabled + " />",
+            serial: "<input id=\"eq-" + escapeHtml(row.id) + "-serial_number\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.serial_number || "") + "\"" + disabled + " />",
+            acInVoltage: "<input id=\"eq-" + escapeHtml(row.id) + "-rated_ac_input_voltage\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.rated_ac_input_voltage || "") + "\"" + disabled + " />",
+            inputFreq: "<input id=\"eq-" + escapeHtml(row.id) + "-input_frequency\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.input_frequency || "") + "\"" + disabled + " />",
+            dcVoltage: "<input id=\"eq-" + escapeHtml(row.id) + "-rated_dc_voltage\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.rated_dc_voltage || "") + "\"" + disabled + " />",
+            acOutVoltage: "<input id=\"eq-" + escapeHtml(row.id) + "-rated_ac_output_voltage\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.rated_ac_output_voltage || "") + "\"" + disabled + " />",
+            outputFreq: "<input id=\"eq-" + escapeHtml(row.id) + "-output_frequency\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.output_frequency || "") + "\"" + disabled + " />",
+            protection: "<input id=\"eq-" + escapeHtml(row.id) + "-degree_of_protection\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.degree_of_protection || "") + "\"" + disabled + " />",
+            mainLabel: "<input id=\"eq-" + escapeHtml(row.id) + "-main_label\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.main_label || "") + "\"" + disabled + " />",
+            dtNumber: "<input id=\"eq-" + escapeHtml(row.id) + "-dt_number\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.dt_number || "") + "\"" + disabled + " />",
+            tag: "<input id=\"eq-" + escapeHtml(row.id) + "-tag_number\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.tag_number || "") + "\"" + disabled + " />",
+            manufacturer: "<input id=\"eq-" + escapeHtml(row.id) + "-manufacturer\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.manufacturer || "") + "\"" + disabled + " />",
+            modelFamily: "<input id=\"eq-" + escapeHtml(row.id) + "-model_family\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.model_family || "") + "\"" + disabled + " />",
+            notes: "<input id=\"eq-" + escapeHtml(row.id) + "-notes\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.notes || "") + "\"" + disabled + " />",
+            createdAt: escapeHtml(formatDate(row.created_at)),
+            updatedAt: escapeHtml(formatDate(row.updated_at)),
+            actions: buildActionsHtml(row)
+          };
+        });
+    }
+
+    function renderGrid() {
+      if (!gridTarget || !window.gridjs || !window.gridjs.Grid) return;
+      if (gridInstance && typeof gridInstance.destroy === "function") {
+        try {
+          gridInstance.destroy();
+        } catch (_err) {
+          // segue com novo render
+        }
+      }
+      gridInstance = null;
+      var data = buildGridData();
+      refreshEquipmentCount();
+      if (!data.length) {
+        gridTarget.innerHTML = "<div class=\"text-center text-muted py-4\">Sem equipamentos.</div>";
+        return;
+      }
+      gridTarget.innerHTML = "";
+      gridInstance = new window.gridjs.Grid({
+          columns: [
+            { id: "id", name: "ID", width: "90px" },
+            { id: "customer", name: "Cliente", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "site", name: "Site", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "type", name: "Type", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "year", name: "Year", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "serial", name: "Serial", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "acInVoltage", name: "AC Input V", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "inputFreq", name: "Input Freq", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "dcVoltage", name: "DC V", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "acOutVoltage", name: "AC Output V", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "outputFreq", name: "Output Freq", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "protection", name: "Protection", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "mainLabel", name: "Main Label", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "dtNumber", name: "DT Number", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "tag", name: "Tag", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "manufacturer", name: "Manufacturer", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "modelFamily", name: "Model Family", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "notes", name: "Notes", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "createdAt", name: "Criado em" },
+            { id: "updatedAt", name: "Atualizado em" },
+            { id: "actions", name: "Acoes", sort: false, formatter: function (cell) { return window.gridjs.html(cell); } }
+          ],
+          data: data,
+          search: true,
+          sort: true,
+          language: {
+            search: { placeholder: "Digite uma palavra-chave..." },
+            sort: {
+              sortAsc: "Ordenar coluna em ordem crescente",
+              sortDesc: "Ordenar coluna em ordem decrescente"
+            },
+            pagination: {
+              previous: "Anterior",
+              next: "Proximo",
+              navigate: function (page, pages) { return "Pagina " + page + " de " + pages; },
+              page: function (page) { return "Pagina " + page; },
+              showing: "Mostrando",
+              of: "de",
+              to: "a",
+              results: "resultados"
+            },
+            loading: "Carregando...",
+            noRecordsFound: "Nenhum registro encontrado.",
+            error: "Falha ao carregar dados."
+          },
+          pagination: {
+            limit: 20,
+            page: 0,
+            summary: false
+          }
+        }).render(gridTarget);
+    }
+
+    renderGrid();
+
+    if (inlineNewFlag) {
+      showInlineFeedback("Novo equipamento criado. Edite os campos e clique em Salvar.", false);
+      if (inlineNewId) {
+        window.setTimeout(function () {
+          var targetInput = document.getElementById("eq-" + inlineNewId + "-type");
+          if (!targetInput) return;
+          targetInput.scrollIntoView({ behavior: "smooth", block: "center" });
+          targetInput.focus();
+        }, 120);
+      }
+      clearInlineNewQueryParams();
+    }
+
+    async function addInlineEquipment() {
+      var tempId = "tmp-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
+      clearGridSearchInput();
+      rowsState.unshift({
+        id: tempId,
+        customer_id: "",
+        site_id: "",
+        type: "Novo Equipamento",
+        year_of_manufacture: "",
+        serial_number: "",
+        rated_ac_input_voltage: "",
+        input_frequency: "",
+        rated_dc_voltage: "",
+        rated_ac_output_voltage: "",
+        output_frequency: "",
+        degree_of_protection: "",
+        main_label: "",
+        dt_number: "",
+        tag_number: "",
+        manufacturer: "",
+        model_family: "",
+        notes: "",
+        created_at: "",
+        updated_at: "",
+        customer_name: "-",
+        site_name: "-",
+        __isNew: true,
+        __editing: false
+      });
+      renderGrid();
+      clearGridSearchInput();
+      showInlineFeedback("Nova linha criada. Preencha os campos e clique em Criar.", false);
+      window.setTimeout(function () {
+        var targetInput = document.getElementById("eq-" + tempId + "-type");
+        if (!targetInput) return;
+        targetInput.scrollIntoView({ behavior: "smooth", block: "center" });
+        targetInput.focus();
+      }, 80);
+    }
+
+    if (addInlineBtn) {
+      addInlineBtn.addEventListener("click", function () {
+        addInlineEquipment();
+      });
+    }
+
+    document.addEventListener("click", function (event) {
+      var btn = event.target.closest("[data-save-equipment]");
+      if (btn) {
+        saveInlineEquipment(btn.getAttribute("data-save-equipment"));
+        return;
+      }
+      var removeBtn = event.target.closest("[data-remove-equipment]");
+      if (!removeBtn) return;
+      removeInlineEquipment(String(removeBtn.getAttribute("data-remove-equipment") || ""));
+    });
+  })();
+</script>
 
 <%- include("../partials/footer") %>

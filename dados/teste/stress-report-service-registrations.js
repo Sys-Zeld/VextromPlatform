@@ -1,7 +1,7 @@
 require("dotenv").config();
 
-const db = require("../../specflow/db");
-const { createEquipment } = require("../../specflow/services/equipments");
+const db = require("../../report_service/db");
+const service = require("../../report_service/src/services/serviceReportService");
 const {
   readNumberArg,
   runWorkers,
@@ -16,16 +16,22 @@ async function runWorker(total, shared, workerId) {
     shared.next += 1;
 
     const id = index + 1;
+    const stamp = `${Date.now()}_${workerId}_${id}`;
     try {
-      await createEquipment({
-        purchaser: `Cliente Stress ${id}`,
-        purchaserContact: `Contato ${id}`,
-        contactEmail: `stress.cliente.${id}@example.com`,
-        contactPhone: `+55 11 90000-${String(id).padStart(4, "0")}`,
-        projectName: `Projeto Stress ${id}`,
-        siteName: `Site ${id}`,
-        address: `Endereco ${id}`
+      const customer = await service.createCustomer({
+        name: `Stress Customer ${stamp}`,
+        customerType: "others",
+        notes: "Criado via stress test"
       });
+
+      await service.createOrder({
+        customerId: customer.id,
+        title: `Stress Order ${stamp}`,
+        description: "OS criada via stress test",
+        status: "draft",
+        createdBy: "stress-test"
+      });
+
       shared.ok += 1;
       logWorkerOk(workerId, id, total);
     } catch (err) {
@@ -41,7 +47,7 @@ async function main() {
   const startedAt = Date.now();
 
   // eslint-disable-next-line no-console
-  console.log(`Starting stress client registrations: count=${count} (max 10000), concurrency=${concurrency}`);
+  console.log(`Starting report-service stress: count=${count} (max 10000), concurrency=${concurrency}`);
 
   const shared = await runWorkers(count, concurrency, runWorker);
 

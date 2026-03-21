@@ -1,4 +1,111 @@
 <%- include("../partials/head", { pageTitle }) %>
+<style>
+  @import url("https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css");
+
+  .orders-grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .orders-grid-wrap .gridjs-wrapper {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .orders-grid-wrap .gridjs-table {
+    width: 100%;
+    border-collapse: collapse !important;
+    table-layout: auto;
+  }
+
+  .orders-grid-wrap .gridjs-container {
+    min-width: max-content;
+  }
+
+  .orders-grid-wrap .gridjs-th,
+  .orders-grid-wrap .gridjs-td {
+    border-color: color-mix(in srgb, var(--border) 58%, transparent);
+    vertical-align: middle !important;
+    padding: 0.34rem 0.74rem !important;
+    line-height: 1.15 !important;
+    font-size: 0.88rem !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  .orders-grid-wrap .gridjs-th {
+    text-align: center !important;
+    font-size: 0.9rem !important;
+    font-weight: 600;
+  }
+
+  .orders-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(odd) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 78%, transparent) !important;
+  }
+
+  .orders-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(even) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 92%, transparent) !important;
+  }
+
+  .orders-grid-wrap .orders-status-badge {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: var(--text);
+    background: color-mix(in srgb, var(--surface-2) 94%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  }
+
+  .orders-grid-wrap .orders-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .orders-grid-wrap .orders-actions .btn {
+    padding: 0.23rem 0.5rem !important;
+    font-size: 0.76rem !important;
+    line-height: 1.12 !important;
+    white-space: nowrap;
+  }
+
+  .orders-grid-wrap .gridjs-td code {
+    font-size: 0.83rem !important;
+    line-height: 1 !important;
+    padding: 0 !important;
+  }
+
+  .orders-grid-wrap .gridjs-td .badge {
+    font-size: 0.76rem !important;
+    padding: 0.2rem 0.38rem !important;
+    line-height: 1 !important;
+  }
+
+  .orders-grid-wrap .gridjs-tr {
+    height: auto !important;
+  }
+
+  .orders-grid-wrap .gridjs-search .gridjs-input {
+    max-width: 260px;
+    padding: 0.41rem 0.56rem !important;
+    font-size: 0.88rem !important;
+  }
+
+  @media (max-width: 768px) {
+    .orders-grid-wrap .gridjs-container,
+    .orders-grid-wrap .gridjs-head,
+    .orders-grid-wrap .gridjs-wrapper,
+    .orders-grid-wrap .gridjs-table {
+      min-width: 980px !important;
+    }
+
+    .orders-grid-wrap .gridjs-th,
+    .orders-grid-wrap .gridjs-td {
+      white-space: nowrap;
+    }
+  }
+</style>
 
 <section class="token-console">
   <div class="card app-card token-hero-card">
@@ -63,43 +170,106 @@
   <div class="card app-card">
     <div class="card-body">
       <h2 class="h6 app-card-title mb-3">Lista de ordens</h2>
-      <div class="table-responsive">
-        <table class="table table-sm app-table mb-0">
-          <thead>
-            <tr>
-              <th>Codigo</th>
-              <th>Titulo</th>
-              <th>Cliente</th>
-              <th>Site</th>
-              <th>Status</th>
-              <th>Acoes</th>
-            </tr>
-          </thead>
-          <tbody>
-            <% if (!orders.length) { %><tr><td colspan="6" class="text-center text-muted py-4">Sem OS cadastrada.</td></tr><% } %>
-            <% orders.forEach((order) => { %>
-              <tr>
-                <td><code><%= order.service_order_display || "-" %></code></td>
-                <td><%= order.title %></td>
-                <td><%= order.customer_name %></td>
-                <td><%= order.site_name || "-" %></td>
-                <td><span class="badge text-bg-light border"><%= order.status %></span></td>
-                <td>
-                  <div class="d-flex gap-2 flex-wrap">
-                    <a class="btn btn-outline-primary btn-sm" href="/admin/report-service/orders/<%= order.id %>">Abrir Editor</a>
-                    <form method="post" action="/admin/report-service/orders/<%= order.id %>/delete" class="m-0" onsubmit="return confirm('Excluir esta OS e todos os dados vinculados?');">
-                      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                      <button class="btn btn-outline-danger btn-sm" type="submit">Excluir OS</button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+      <div class="orders-grid-wrap">
+        <div id="ordersGrid"></div>
       </div>
     </div>
   </div>
 </section>
+
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+<script>
+  (function () {
+    var csrfToken = <%- JSON.stringify(csrfToken || "") %>;
+    var orders = <%- JSON.stringify((orders || []).map(function (order) {
+      return {
+        id: order.id,
+        code: order.service_order_display || "-",
+        title: order.title || "-",
+        customer: order.customer_name || "-",
+        site: order.site_name || "-",
+        status: order.status || "-"
+      };
+    })).replace(/</g, "\\u003c") %>;
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function buildActionsHtml(order) {
+      var idSafe = encodeURIComponent(String(order.id || ""));
+      return ""
+        + "<div class=\"orders-actions\">"
+        + "<a class=\"btn btn-outline-primary btn-sm\" href=\"/admin/report-service/orders/" + idSafe + "\">Abrir Editor</a>"
+        + "<form method=\"post\" action=\"/admin/report-service/orders/" + idSafe + "/delete\" class=\"m-0\" onsubmit=\"return confirm('Excluir esta OS e todos os dados vinculados?');\">"
+        + "<input type=\"hidden\" name=\"_csrf\" value=\"" + escapeHtml(csrfToken) + "\" />"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">Excluir OS</button>"
+        + "</form>"
+        + "</div>";
+    }
+
+    var gridTarget = document.getElementById("ordersGrid");
+    if (!gridTarget || !window.gridjs || !window.gridjs.Grid) return;
+
+    if (!orders.length) {
+      gridTarget.innerHTML = "<div class=\"text-center text-muted py-4\">Sem OS cadastrada.</div>";
+      return;
+    }
+
+    var data = orders.map(function (order) {
+      return {
+        code: "<code>" + escapeHtml(order.code) + "</code>",
+        title: escapeHtml(order.title),
+        customer: escapeHtml(order.customer),
+        site: escapeHtml(order.site),
+        status: "<span class=\"badge orders-status-badge\">" + escapeHtml(order.status) + "</span>",
+        actions: buildActionsHtml(order)
+      };
+    });
+
+    new window.gridjs.Grid({
+      columns: [
+        { id: "code", name: "Codigo", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "title", name: "Titulo" },
+        { id: "customer", name: "Cliente" },
+        { id: "site", name: "Site" },
+        { id: "status", name: "Status", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "actions", name: "Acoes", sort: false, formatter: function (cell) { return window.gridjs.html(cell); } }
+      ],
+      data: data,
+      search: true,
+      sort: true,
+      language: {
+        search: { placeholder: "Digite uma palavra-chave..." },
+        sort: {
+          sortAsc: "Ordenar coluna em ordem crescente",
+          sortDesc: "Ordenar coluna em ordem decrescente"
+        },
+        pagination: {
+          previous: "Anterior",
+          next: "Proximo",
+          navigate: function (page, pages) { return "Pagina " + page + " de " + pages; },
+          page: function (page) { return "Pagina " + page; },
+          showing: "Mostrando",
+          of: "de",
+          to: "a",
+          results: "resultados"
+        },
+        loading: "Carregando...",
+        noRecordsFound: "Nenhum registro encontrado.",
+        error: "Falha ao carregar dados."
+      },
+      pagination: {
+        limit: 20,
+        summary: false
+      }
+    }).render(gridTarget);
+  })();
+</script>
 
 <%- include("../partials/footer") %>

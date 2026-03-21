@@ -19,7 +19,11 @@
             <div class="d-flex justify-content-between align-items-start gap-2">
               <div class="d-flex align-items-start gap-2">
                 <span class="module-hub-icon material-symbols-outlined" aria-hidden="true">
-                  <%= moduleItem.key === "specflow" ? "schema" : (moduleItem.key === "module-spec" ? "tune" : "monitoring") %>
+                  <%= moduleItem.key === "specflow"
+                    ? "schema"
+                    : (moduleItem.key === "module-spec"
+                      ? "tune"
+                      : (moduleItem.key === "report-service" ? "monitoring" : "build_circle")) %>
                 </span>
                 <h2 class="h5 app-card-title mb-0"><%= moduleItem.name %></h2>
               </div>

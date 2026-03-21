@@ -19,6 +19,7 @@ const {
 
 function createReportWebController(deps) {
   const sanitizeInput = deps.sanitizeInput;
+  const hasValidRequiredFk = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
 
   async function loadOrderEditorData(orderId) {
     const order = await repo.getOrderById(orderId);
@@ -156,11 +157,19 @@ function createReportWebController(deps) {
         customers,
         sites,
         created: req.query.created === "1",
+        updated: req.query.updated === "1",
         csrfToken: req.csrfToken()
       });
     },
 
     async createEquipment(req, res) {
+      if (!hasValidRequiredFk(req.body.customer_id)) {
+        return res.status(422).send("Cliente e obrigatorio.");
+      }
+      if (!hasValidRequiredFk(req.body.site_id)) {
+        return res.status(422).send("Site e obrigatorio.");
+      }
+
       await service.createEquipment({
         customerId: req.body.customer_id,
         siteId: req.body.site_id,
@@ -181,6 +190,133 @@ function createReportWebController(deps) {
         notes: req.body.notes
       });
       return res.redirect("/admin/report-service/equipments?created=1");
+    },
+
+    async updateEquipment(req, res) {
+      const equipmentId = Number(req.params.id);
+      if (!Number.isInteger(equipmentId) || equipmentId <= 0) {
+        return res.status(400).send("Equipamento invalido.");
+      }
+      if (!hasValidRequiredFk(req.body.customer_id)) {
+        return res.status(422).send("Cliente e obrigatorio.");
+      }
+      if (!hasValidRequiredFk(req.body.site_id)) {
+        return res.status(422).send("Site e obrigatorio.");
+      }
+
+      const updated = await service.updateEquipment(equipmentId, {
+        customerId: req.body.customer_id,
+        siteId: req.body.site_id,
+        type: req.body.type,
+        yearOfManufacture: req.body.year_of_manufacture,
+        serialNumber: req.body.serial_number,
+        ratedAcInputVoltage: req.body.rated_ac_input_voltage,
+        inputFrequency: req.body.input_frequency,
+        ratedDcVoltage: req.body.rated_dc_voltage,
+        ratedAcOutputVoltage: req.body.rated_ac_output_voltage,
+        outputFrequency: req.body.output_frequency,
+        degreeOfProtection: req.body.degree_of_protection,
+        mainLabel: req.body.main_label,
+        dtNumber: req.body.dt_number,
+        tagNumber: req.body.tag_number,
+        manufacturer: req.body.manufacturer,
+        modelFamily: req.body.model_family,
+        notes: req.body.notes
+      });
+
+      if (!updated) {
+        return res.status(404).send("Equipamento nao encontrado.");
+      }
+      return res.redirect("/admin/report-service/equipments?updated=1");
+    },
+
+    async updateEquipmentInline(req, res) {
+      const equipmentId = Number(req.params.id);
+      if (!Number.isInteger(equipmentId) || equipmentId <= 0) {
+        return res.status(400).json({ ok: false, error: "Equipamento invalido." });
+      }
+      if (!hasValidRequiredFk(req.body.customer_id)) {
+        return res.status(422).json({ ok: false, error: "Cliente e obrigatorio." });
+      }
+      if (!hasValidRequiredFk(req.body.site_id)) {
+        return res.status(422).json({ ok: false, error: "Site e obrigatorio." });
+      }
+
+      const updated = await service.updateEquipment(equipmentId, {
+        customerId: req.body.customer_id,
+        siteId: req.body.site_id,
+        type: req.body.type,
+        yearOfManufacture: req.body.year_of_manufacture,
+        serialNumber: req.body.serial_number,
+        ratedAcInputVoltage: req.body.rated_ac_input_voltage,
+        inputFrequency: req.body.input_frequency,
+        ratedDcVoltage: req.body.rated_dc_voltage,
+        ratedAcOutputVoltage: req.body.rated_ac_output_voltage,
+        outputFrequency: req.body.output_frequency,
+        degreeOfProtection: req.body.degree_of_protection,
+        mainLabel: req.body.main_label,
+        dtNumber: req.body.dt_number,
+        tagNumber: req.body.tag_number,
+        manufacturer: req.body.manufacturer,
+        modelFamily: req.body.model_family,
+        notes: req.body.notes
+      });
+
+      if (!updated) {
+        return res.status(404).json({ ok: false, error: "Equipamento nao encontrado." });
+      }
+
+      return res.status(200).json({ ok: true, id: updated.id });
+    },
+
+    async createEquipmentInline(req, res) {
+      const created = await service.createEquipment({
+        customerId: req.body.customer_id,
+        siteId: req.body.site_id,
+        type: req.body.type || "Novo Equipamento",
+        yearOfManufacture: req.body.year_of_manufacture,
+        serialNumber: req.body.serial_number,
+        ratedAcInputVoltage: req.body.rated_ac_input_voltage,
+        inputFrequency: req.body.input_frequency,
+        ratedDcVoltage: req.body.rated_dc_voltage,
+        ratedAcOutputVoltage: req.body.rated_ac_output_voltage,
+        outputFrequency: req.body.output_frequency,
+        degreeOfProtection: req.body.degree_of_protection,
+        mainLabel: req.body.main_label,
+        dtNumber: req.body.dt_number,
+        tagNumber: req.body.tag_number,
+        manufacturer: req.body.manufacturer,
+        modelFamily: req.body.model_family,
+        notes: req.body.notes
+      });
+
+      return res.status(201).json({ ok: true, id: created.id });
+    },
+
+    async deleteEquipmentInline(req, res) {
+      const equipmentId = Number(req.params.id);
+      if (!Number.isInteger(equipmentId) || equipmentId <= 0) {
+        return res.status(400).json({ ok: false, error: "Equipamento invalido." });
+      }
+
+      try {
+        const deleted = await service.deleteEquipment(equipmentId);
+        if (!deleted) {
+          return res.status(404).json({ ok: false, error: "Equipamento nao encontrado." });
+        }
+        return res.status(200).json({ ok: true });
+      } catch (err) {
+        if (err && err.code === "23503") {
+          return res.status(409).json({
+            ok: false,
+            error: "Nao foi possivel remover: equipamento vinculado a uma ou mais ordens de servico."
+          });
+        }
+        if (err && err.statusCode === 404) {
+          return res.status(404).json({ ok: false, error: "Equipamento nao encontrado." });
+        }
+        throw err;
+      }
     },
 
     async orderEditor(req, res) {

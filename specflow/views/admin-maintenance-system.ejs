@@ -1,0 +1,561 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card mb-4">
+  <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <div>
+      <h1 class="h4 app-card-title mb-1">Manutencao do sistema</h1>
+      <p class="text-muted mb-0">Central de operacoes administrativas dos modulos.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Voltar ao hub</a>
+      <form method="post" action="/admin/logout">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <button class="btn btn-outline-secondary btn-sm" type="submit"><%= t("admin.logoutSessionButton") %></button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<% if (commandResult) { %>
+  <div class="alert <%= commandResult.ok ? 'alert-success' : 'alert-danger' %>">
+    <div><strong>Comando:</strong> <code><%= commandResult.label %></code></div>
+    <div><strong>Exit code:</strong> <%= commandResult.code %></div>
+  </div>
+  <div class="card app-card mb-4">
+    <div class="card-body">
+      <h2 class="h6 app-card-title">Saida</h2>
+      <% if (commandResult.downloadPath) { %>
+        <div class="mb-2">
+          <a class="btn btn-sm btn-outline-primary" href="<%= commandResult.downloadPath %>">Baixar backup .sql</a>
+        </div>
+      <% } %>
+      <pre class="mb-0" style="white-space: pre-wrap;"><%= commandResult.output || "(sem saida)" %></pre>
+    </div>
+  </div>
+<% } %>
+<% if (userCreateResult) { %>
+  <div class="alert <%= userCreateResult.ok ? 'alert-success' : 'alert-danger' %>"><%= userCreateResult.message %></div>
+<% } %>
+<% if (userUpdateResult) { %>
+  <div class="alert <%= userUpdateResult.ok ? 'alert-success' : 'alert-danger' %>"><%= userUpdateResult.message %></div>
+<% } %>
+<% if (userDeleteResult) { %>
+  <div class="alert <%= userDeleteResult.ok ? 'alert-success' : 'alert-danger' %>"><%= userDeleteResult.message %></div>
+<% } %>
+<% if (systemFontResult) { %>
+  <div class="alert <%= systemFontResult.ok ? 'alert-success' : 'alert-danger' %>"><%= systemFontResult.message %></div>
+<% } %>
+<% if (selfPasswordResult) { %>
+  <div class="alert <%= selfPasswordResult.ok ? 'alert-success' : 'alert-danger' %>"><%= selfPasswordResult.message %></div>
+<% } %>
+
+<% if (!canManageSystem) { %>
+  <div class="card app-card mb-4">
+    <div class="card-body">
+      <h2 class="h6 app-card-title mb-3">Minha conta</h2>
+      <p class="text-muted mb-3">Altere sua senha de acesso.</p>
+      <form method="post" action="/admin/maintenance/system/password" class="row g-3">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <div class="col-12 col-md-4">
+          <label class="form-label">Senha atual</label>
+          <input class="form-control" type="password" name="current_password" minlength="8" required />
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Nova senha</label>
+          <input class="form-control" type="password" name="new_password" minlength="8" required />
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Confirmar nova senha</label>
+          <input class="form-control" type="password" name="new_password_confirm" minlength="8" required />
+        </div>
+        <div class="col-12">
+          <button class="btn btn-outline-primary btn-sm" type="submit">Salvar nova senha</button>
+        </div>
+      </form>
+    </div>
+  </div>
+<% } %>
+
+<div class="card app-card mb-4">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-3">Tipografia por usuario</h2>
+    <p class="text-muted mb-3">A fonte selecionada fica salva no usuario logado e personalizada por conta.</p>
+    <form method="post" action="/admin/maintenance/system/font" class="row g-3 align-items-end">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div class="col-12 col-lg-6">
+        <label class="form-label">Fonte principal</label>
+        <select class="form-select" name="system_font" required>
+          <% (systemFontOptions || []).forEach((fontOption) => { %>
+            <option value="<%= fontOption.key %>" <%= currentSystemFont === fontOption.key ? "selected" : "" %>>
+              <%= fontOption.name %>
+            </option>
+          <% }) %>
+        </select>
+      </div>
+      <div class="col-12 col-lg-6">
+        <div class="small text-muted">
+          <% (systemFontOptions || []).forEach((fontOption) => { %>
+            <div><strong><%= fontOption.name %>:</strong> <%= fontOption.description %></div>
+          <% }) %>
+        </div>
+      </div>
+      <div class="col-12">
+        <button class="btn btn-outline-primary btn-sm" type="submit">Salvar minha fonte</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<% if (!canManageSystem) { %>
+  <div class="alert alert-info">Perfil user com acesso limitado: somente alteracao de senha e tipografia.</div>
+<% } %>
+
+<% if (canManageSystem) { %>
+<div class="card app-card mb-4">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-3">Comandos globais</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <form method="post" action="/admin/maintenance/system/command" class="maintenance-command-form" data-confirm="Confirma backup de todos os bancos?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="action" value="backup_all" />
+        <button class="btn btn-outline-primary btn-sm" type="submit">Backup todos os bancos</button>
+      </form>
+      <form method="post" action="/admin/maintenance/system/command" class="maintenance-command-form" data-confirm="Confirma executar migracoes de todos os modulos?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="action" value="migrate_all" />
+        <button class="btn btn-outline-primary btn-sm" type="submit">Migrar todos os modulos</button>
+      </form>
+      <form method="post" action="/admin/maintenance/system/command" class="maintenance-command-form" data-confirm="Confirma executar seed de todos os modulos?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="action" value="seed_all" />
+        <button class="btn btn-outline-primary btn-sm" type="submit">Seed todos os modulos</button>
+      </form>
+      <form method="post" action="/admin/maintenance/system/command" class="maintenance-command-form" data-confirm="Confirma limpar as sessoes administrativas?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="action" value="admin_sessions_clear" />
+        <button class="btn btn-outline-warning btn-sm" type="submit">Limpar sessoes</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card app-card mb-4">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-3">Backup e restore (SpecFlow)</h2>
+    <div class="row g-3 mt-1">
+      <div class="col-12 col-lg-4">
+        <form
+          id="maintenance-import-restore-form"
+          class="border rounded p-3"
+          data-url="/admin/maintenance/system/restore-import"
+          data-confirm="Confirma importar este arquivo .sql para a lista de backups?"
+        >
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <label class="form-label">Importar arquivo .sql</label>
+          <div class="d-flex flex-column gap-2">
+            <input class="form-control" type="file" name="sqlFile" accept=".sql" required />
+            <button class="btn btn-outline-primary" type="submit">Importar backup</button>
+            <div id="maintenance-import-progress-wrap" style="display:none;">
+              <div class="progress" role="progressbar" aria-label="Progresso de upload" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div
+                  id="maintenance-import-progress-bar"
+                  class="progress-bar progress-bar-striped progress-bar-animated"
+                  style="width: 0%;"
+                >0%</div>
+              </div>
+              <small id="maintenance-import-progress-text" class="text-muted">Aguardando upload...</small>
+            </div>
+            <small class="text-muted">Limite: 50 MB. O arquivo sera salvo em <code>dados/backups</code> e aparecera na lista abaixo para restore.</small>
+            <pre id="maintenance-import-restore-output" class="mb-0 small" style="white-space: pre-wrap; display:none;"></pre>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card app-card mb-4">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-3">Backups disponiveis para restore</h2>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 app-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Timestamp</th>
+            <th>Arquivo</th>
+            <th>Pasta</th>
+            <th>Tamanho</th>
+            <th>Status</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!backups || !backups.length) { %>
+            <tr>
+              <td colspan="7" class="text-muted">Nenhum backup catalogado.</td>
+            </tr>
+          <% } %>
+          <% (backups || []).forEach((backup) => { %>
+            <tr>
+              <td><code><%= backup.id %></code></td>
+              <td><%= backup.backupTimestamp ? new Date(backup.backupTimestamp).toLocaleString(lang === "pt" ? "pt-BR" : "en-US") : "-" %></td>
+              <td><code><%= backup.fileName %></code></td>
+              <td><small><%= backup.folderPath || "-" %></small></td>
+              <td><%= (Number(backup.sizeBytes || 0) / (1024 * 1024)).toFixed(2) %> MB</td>
+              <td>
+                <% if (backup.existsOnDisk) { %>
+                  <span class="badge text-bg-success">OK</span>
+                <% } else { %>
+                  <span class="badge text-bg-danger">Arquivo ausente</span>
+                <% } %>
+              </td>
+              <td>
+                <div class="d-flex gap-2 flex-wrap">
+                  <a class="btn btn-outline-primary btn-sm <%= backup.existsOnDisk ? '' : 'disabled' %>" href="<%= backup.existsOnDisk ? `/admin/backups/${backup.id}/download` : '#' %>" <%= backup.existsOnDisk ? '' : 'tabindex="-1" aria-disabled="true"' %>>Baixar</a>
+                  <form method="post" action="/admin/maintenance/system/command" class="maintenance-command-form" data-confirm="Confirma restore deste backup?">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <input type="hidden" name="action" value="db_restore_selected" />
+                    <input type="hidden" name="backupId" value="<%= backup.id %>" />
+                    <button class="btn btn-outline-danger btn-sm" type="submit" <%= backup.existsOnDisk ? "" : "disabled" %>>Restaurar</button>
+                  </form>
+                  <form method="post" action="/admin/maintenance/system/command" class="maintenance-command-form" data-confirm="Confirma deletar este backup? Esta acao remove o arquivo .sql do disco e do catalogo.">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <input type="hidden" name="action" value="db_delete_selected" />
+                    <input type="hidden" name="backupId" value="<%= backup.id %>" />
+                    <button class="btn btn-outline-danger btn-sm" type="submit">Deletar</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <% maintenanceCards.forEach((card) => { %>
+    <div class="col-12 col-md-6 col-xl-4">
+      <article class="card app-card h-100">
+        <div class="card-body d-flex flex-column gap-3">
+          <div>
+            <h2 class="h5 app-card-title mb-1"><%= card.title %></h2>
+            <p class="text-muted mb-0"><%= card.description %></p>
+          </div>
+          <div class="mt-auto">
+            <a class="btn btn-outline-primary btn-sm" href="<%= card.href %>">Acessar manutencao</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  <% }) %>
+</div>
+
+<div class="card app-card mb-4 mt-4">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-3">Cadastrar usuarios do sistema</h2>
+    <form method="post" action="/admin/maintenance/system/admin-users/create" class="row g-3">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div class="col-12 col-md-3">
+        <label class="form-label">Usuario</label>
+        <input class="form-control" type="text" name="username" minlength="3" required />
+        <small class="text-muted">Aceita maiusculas, minusculas e caracteres especiais.</small>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label">Perfil</label>
+        <select class="form-select" name="role" required>
+          <option value="user">user</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label d-block mb-2">Modulos permitidos (para user)</label>
+        <div class="d-flex gap-3 flex-wrap">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="module_access" id="create_module_specflow" value="specflow" checked />
+            <label class="form-check-label" for="create_module_specflow">SpecFlow</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="module_access" id="create_module_module_spec" value="module-spec" checked />
+            <label class="form-check-label" for="create_module_module_spec">ModuleSpec</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="module_access" id="create_module_report_service" value="report-service" checked />
+            <label class="form-check-label" for="create_module_report_service">Report Service</label>
+          </div>
+        </div>
+        <small class="text-muted">Usuarios admin sempre tem acesso total aos modulos.</small>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label">Senha</label>
+        <input class="form-control" type="password" name="password" minlength="8" required />
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label">Confirmar senha</label>
+        <input class="form-control" type="password" name="passwordConfirm" minlength="8" required />
+      </div>
+      <div class="col-12">
+        <button class="btn btn-primary" type="submit">Cadastrar usuario</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card app-card">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-3">Usuarios admin cadastrados</h2>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 app-table">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Perfil</th>
+            <th>Modulos</th>
+            <th>Criado em</th>
+            <th>Atualizado em</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code><%= envAdminUser || "admin" %></code> <span class="badge text-bg-secondary">principal</span></td>
+            <td><span class="badge text-bg-danger">admin</span></td>
+            <td><small>SpecFlow, ModuleSpec, Report Service</small></td>
+            <td>-</td>
+            <td>-</td>
+            <td>-</td>
+          </tr>
+          <% if (!users || !users.length) { %>
+            <tr>
+              <td colspan="6" class="text-muted">Nenhum usuario adicional cadastrado.</td>
+            </tr>
+          <% } %>
+          <% (users || []).forEach((user) => { %>
+            <tr>
+              <td><code><%= user.username %></code></td>
+              <td><span class="badge <%= user.role === "admin" ? "text-bg-danger" : "text-bg-secondary" %>"><%= user.role %></span></td>
+              <td><small><%= user.role === "admin" ? "SpecFlow, ModuleSpec, Report Service" : ((user.moduleAccess || []).join(", ") || "-") %></small></td>
+              <td><%= user.createdAt ? new Date(user.createdAt).toLocaleString(lang === "pt" ? "pt-BR" : "en-US") : "-" %></td>
+              <td><%= user.updatedAt ? new Date(user.updatedAt).toLocaleString(lang === "pt" ? "pt-BR" : "en-US") : "-" %></td>
+              <td>
+                <div class="d-flex flex-column gap-2">
+                  <form method="post" action="/admin/maintenance/system/admin-users/<%= user.id %>/update" class="maintenance-user-update-form" data-confirm="Confirma salvar alteracoes deste usuario?">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <div class="d-flex flex-column gap-2">
+                      <input class="form-control form-control-sm" type="text" name="username" value="<%= user.username %>" minlength="3" required />
+                      <small class="text-muted">Aceita maiusculas, minusculas e caracteres especiais.</small>
+                      <select class="form-select form-select-sm" name="role" required>
+                        <option value="user" <%= user.role === "user" ? "selected" : "" %>>user</option>
+                        <option value="admin" <%= user.role === "admin" ? "selected" : "" %>>admin</option>
+                      </select>
+                      <div class="border rounded p-2">
+                        <div class="small fw-semibold mb-1">Modulos (user)</div>
+                        <div class="d-flex gap-2 flex-wrap">
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="module_access" id="user_<%= user.id %>_specflow" value="specflow" <%= user.role === "admin" || (user.moduleAccess || []).includes("specflow") ? "checked" : "" %> />
+                            <label class="form-check-label" for="user_<%= user.id %>_specflow">SpecFlow</label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="module_access" id="user_<%= user.id %>_module_spec" value="module-spec" <%= user.role === "admin" || (user.moduleAccess || []).includes("module-spec") ? "checked" : "" %> />
+                            <label class="form-check-label" for="user_<%= user.id %>_module_spec">ModuleSpec</label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="module_access" id="user_<%= user.id %>_report_service" value="report-service" <%= user.role === "admin" || (user.moduleAccess || []).includes("report-service") ? "checked" : "" %> />
+                            <label class="form-check-label" for="user_<%= user.id %>_report_service">Report Service</label>
+                          </div>
+                        </div>
+                      </div>
+                      <input class="form-control form-control-sm" type="password" name="password" minlength="8" placeholder="Nova senha (opcional)" />
+                      <input class="form-control form-control-sm" type="password" name="passwordConfirm" minlength="8" placeholder="Confirmar nova senha" />
+                      <button class="btn btn-outline-primary btn-sm" type="submit">Salvar</button>
+                    </div>
+                  </form>
+                  <form method="post" action="/admin/maintenance/system/admin-users/<%= user.id %>/delete" class="maintenance-user-update-form" data-confirm="Confirma remover este usuario?">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <button class="btn btn-outline-danger btn-sm" type="submit">Deletar usuario</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<% } %>
+
+<script>
+  (function () {
+    var forms = document.querySelectorAll(".maintenance-command-form, .maintenance-user-update-form");
+    forms.forEach(function (form) {
+      form.addEventListener("submit", function (event) {
+        var message = form.getAttribute("data-confirm") || "Confirma executar este comando?";
+        if (!window.confirm(message)) {
+          event.preventDefault();
+        }
+      });
+    });
+
+    var importForm = document.getElementById("maintenance-import-restore-form");
+    if (!importForm) return;
+
+    var fileInput = importForm.querySelector('input[name="sqlFile"]');
+    var csrfInput = importForm.querySelector('input[name="_csrf"]');
+    var outputEl = document.getElementById("maintenance-import-restore-output");
+    var progressWrap = document.getElementById("maintenance-import-progress-wrap");
+    var progressBar = document.getElementById("maintenance-import-progress-bar");
+    var progressText = document.getElementById("maintenance-import-progress-text");
+    var submitBtn = importForm.querySelector('button[type="submit"]');
+    var maxBytes = 50 * 1024 * 1024;
+    var requestTimeoutMs = 25 * 60 * 1000;
+
+    function showImportOutput(text, isError) {
+      if (!outputEl) return;
+      outputEl.style.display = "block";
+      outputEl.style.color = isError ? "#b42318" : "#1f2937";
+      outputEl.textContent = String(text || "").trim() || "(sem saida)";
+    }
+
+    function formatBytes(bytes) {
+      var value = Number(bytes || 0);
+      if (value < 1024) return value + " B";
+      if (value < 1024 * 1024) return (value / 1024).toFixed(1) + " KB";
+      return (value / (1024 * 1024)).toFixed(2) + " MB";
+    }
+
+    function showUploadProgress() {
+      if (progressWrap) progressWrap.style.display = "block";
+    }
+
+    function resetUploadProgress() {
+      if (progressWrap) progressWrap.style.display = "none";
+      if (progressBar) {
+        progressBar.style.width = "0%";
+        progressBar.textContent = "0%";
+        progressBar.parentElement && progressBar.parentElement.setAttribute("aria-valuenow", "0");
+      }
+      if (progressText) progressText.textContent = "Aguardando upload...";
+    }
+
+    function updateUploadProgress(percent, loaded, total) {
+      var normalizedPercent = Math.max(0, Math.min(100, Math.floor(Number(percent || 0))));
+      if (progressBar) {
+        progressBar.style.width = normalizedPercent + "%";
+        progressBar.textContent = normalizedPercent + "%";
+        progressBar.parentElement && progressBar.parentElement.setAttribute("aria-valuenow", String(normalizedPercent));
+      }
+      if (progressText) {
+        if (Number(total || 0) > 0) {
+          progressText.textContent = "Enviado " + formatBytes(loaded) + " de " + formatBytes(total) + ".";
+        } else {
+          progressText.textContent = "Enviado " + formatBytes(loaded) + ".";
+        }
+      }
+    }
+
+    function sendImportRequest(endpoint, payload, fileName, csrfTokenValue, timeoutMs, onProgress) {
+      return new Promise(function (resolve, reject) {
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", endpoint, true);
+        xhr.withCredentials = true;
+        xhr.timeout = timeoutMs;
+        xhr.setRequestHeader("Content-Type", "application/octet-stream");
+        xhr.setRequestHeader("x-sql-file-name", fileName);
+        xhr.setRequestHeader("csrf-token", csrfTokenValue || "");
+
+        xhr.upload.onprogress = function (event) {
+          if (typeof onProgress === "function" && event.lengthComputable) {
+            onProgress(event.loaded, event.total);
+          }
+        };
+
+        xhr.onload = function () {
+          var data = null;
+          try {
+            data = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+          } catch (_parseErr) {
+            data = null;
+          }
+          resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, data: data });
+        };
+
+        xhr.onerror = function () {
+          reject(new Error("Falha de rede durante upload."));
+        };
+        xhr.ontimeout = function () {
+          reject(new Error("Timeout da requisicao no navegador durante a importacao."));
+        };
+
+        xhr.send(payload);
+      });
+    }
+
+    importForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var file = fileInput && fileInput.files ? fileInput.files[0] : null;
+      if (!file) {
+        showImportOutput("Selecione um arquivo .sql para importar.", true);
+        return;
+      }
+      if (!String(file.name || "").toLowerCase().endsWith(".sql")) {
+        showImportOutput("Somente arquivos .sql sao permitidos.", true);
+        return;
+      }
+      if (file.size > maxBytes) {
+        showImportOutput("Arquivo SQL excede limite de 50 MB.", true);
+        return;
+      }
+
+      var message = importForm.getAttribute("data-confirm") || "Confirma importar este arquivo?";
+      if (!window.confirm(message)) return;
+
+      if (submitBtn) submitBtn.disabled = true;
+      resetUploadProgress();
+      showUploadProgress();
+      updateUploadProgress(0, 0, file.size);
+      showImportOutput("Importando backup, aguarde...", false);
+
+      try {
+        var endpoint = importForm.getAttribute("data-url");
+        var payload = await file.arrayBuffer();
+        var response = await sendImportRequest(
+          endpoint,
+          payload,
+          file.name,
+          csrfInput ? csrfInput.value : "",
+          requestTimeoutMs,
+          function (loaded, total) {
+            var percent = total > 0 ? (loaded / total) * 100 : 0;
+            updateUploadProgress(percent, loaded, total);
+          }
+        );
+
+        updateUploadProgress(100, file.size, file.size);
+        if (progressText) {
+          progressText.textContent = "Upload concluido. Aguardando atualizacao da lista...";
+        }
+
+        var data = response.data;
+        if (!response.ok || !data || data.ok !== true) {
+          var errorOutput = data && data.output ? data.output : "Falha ao importar o arquivo .sql.";
+          showImportOutput(errorOutput, true);
+          return;
+        }
+
+        showImportOutput(data.output || "Arquivo importado com sucesso.", false);
+        window.setTimeout(function () {
+          window.location.reload();
+        }, 300);
+      } catch (err) {
+        showImportOutput(err && err.message ? err.message : "Falha inesperada ao enviar arquivo.", true);
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  })();
+</script>
+
+<%- include("partials/footer") %>

@@ -1,7 +1,7 @@
 require("dotenv").config();
 
-const db = require("../../specflow/db");
-const { createEquipment } = require("../../specflow/services/equipments");
+const db = require("../../module_spec/db");
+const repository = require("../../module_spec/src/repositories/simpleRepository");
 const {
   readNumberArg,
   runWorkers,
@@ -16,16 +16,31 @@ async function runWorker(total, shared, workerId) {
     shared.next += 1;
 
     const id = index + 1;
+    const stamp = `${Date.now()}_${workerId}_${id}`;
     try {
-      await createEquipment({
-        purchaser: `Cliente Stress ${id}`,
-        purchaserContact: `Contato ${id}`,
-        contactEmail: `stress.cliente.${id}@example.com`,
-        contactPhone: `+55 11 90000-${String(id).padStart(4, "0")}`,
-        projectName: `Projeto Stress ${id}`,
-        siteName: `Site ${id}`,
-        address: `Endereco ${id}`
+      const family = await repository.createFamily({
+        key: `stress_family_${stamp}`,
+        name: `Stress Family ${stamp}`,
+        description: "Criado via stress test",
+        status: "active"
       });
+
+      const model = await repository.createModel({
+        familyId: family.id,
+        manufacturer: "Stress Manufacturer",
+        brand: "Stress Brand",
+        model: `Stress Model ${stamp}`,
+        sku: `SKU-${stamp}`,
+        description: "Modelo criado via stress test",
+        status: "active"
+      });
+
+      await repository.createVariant(model.id, {
+        variantName: `Stress Variant ${stamp}`,
+        variantCode: `VAR-${stamp}`,
+        status: "active"
+      });
+
       shared.ok += 1;
       logWorkerOk(workerId, id, total);
     } catch (err) {
@@ -41,7 +56,7 @@ async function main() {
   const startedAt = Date.now();
 
   // eslint-disable-next-line no-console
-  console.log(`Starting stress client registrations: count=${count} (max 10000), concurrency=${concurrency}`);
+  console.log(`Starting module-spec stress: count=${count} (max 10000), concurrency=${concurrency}`);
 
   const shared = await runWorkers(count, concurrency, runWorker);
 

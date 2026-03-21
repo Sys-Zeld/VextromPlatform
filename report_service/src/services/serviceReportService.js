@@ -166,25 +166,36 @@ async function updateEquipment(id, input = {}) {
     err.statusCode = 404;
     throw err;
   }
+  const pick = (value, fallback) => (value === undefined ? fallback : value);
   return repo.updateEquipment(id, {
-    customerId: repo.toInt(input.customerId || existing.customer_id),
-    siteId: repo.toInt(input.siteId || existing.site_id),
-    type: sanitizeText(input.type || existing.type),
-    yearOfManufacture: sanitizeText(input.yearOfManufacture || existing.year_of_manufacture),
-    serialNumber: sanitizeText(input.serialNumber || existing.serial_number),
-    ratedAcInputVoltage: sanitizeText(input.ratedAcInputVoltage || existing.rated_ac_input_voltage),
-    inputFrequency: sanitizeText(input.inputFrequency || existing.input_frequency),
-    ratedDcVoltage: sanitizeText(input.ratedDcVoltage || existing.rated_dc_voltage),
-    ratedAcOutputVoltage: sanitizeText(input.ratedAcOutputVoltage || existing.rated_ac_output_voltage),
-    outputFrequency: sanitizeText(input.outputFrequency || existing.output_frequency),
-    degreeOfProtection: sanitizeText(input.degreeOfProtection || existing.degree_of_protection),
-    mainLabel: sanitizeText(input.mainLabel || existing.main_label),
-    dtNumber: sanitizeText(input.dtNumber || existing.dt_number),
-    tagNumber: sanitizeText(input.tagNumber || existing.tag_number),
-    manufacturer: sanitizeText(input.manufacturer || existing.manufacturer),
-    modelFamily: sanitizeText(input.modelFamily || existing.model_family),
-    notes: sanitizeText(input.notes || existing.notes)
+    customerId: repo.toInt(pick(input.customerId, existing.customer_id)),
+    siteId: repo.toInt(pick(input.siteId, existing.site_id)),
+    type: sanitizeText(pick(input.type, existing.type)),
+    yearOfManufacture: sanitizeText(pick(input.yearOfManufacture, existing.year_of_manufacture)),
+    serialNumber: sanitizeText(pick(input.serialNumber, existing.serial_number)),
+    ratedAcInputVoltage: sanitizeText(pick(input.ratedAcInputVoltage, existing.rated_ac_input_voltage)),
+    inputFrequency: sanitizeText(pick(input.inputFrequency, existing.input_frequency)),
+    ratedDcVoltage: sanitizeText(pick(input.ratedDcVoltage, existing.rated_dc_voltage)),
+    ratedAcOutputVoltage: sanitizeText(pick(input.ratedAcOutputVoltage, existing.rated_ac_output_voltage)),
+    outputFrequency: sanitizeText(pick(input.outputFrequency, existing.output_frequency)),
+    degreeOfProtection: sanitizeText(pick(input.degreeOfProtection, existing.degree_of_protection)),
+    mainLabel: sanitizeText(pick(input.mainLabel, existing.main_label)),
+    dtNumber: sanitizeText(pick(input.dtNumber, existing.dt_number)),
+    tagNumber: sanitizeText(pick(input.tagNumber, existing.tag_number)),
+    manufacturer: sanitizeText(pick(input.manufacturer, existing.manufacturer)),
+    modelFamily: sanitizeText(pick(input.modelFamily, existing.model_family)),
+    notes: sanitizeText(pick(input.notes, existing.notes))
   });
+}
+
+async function deleteEquipment(id) {
+  const existing = await repo.getEquipmentById(id);
+  if (!existing) {
+    const err = new Error("Equipamento nao encontrado.");
+    err.statusCode = 404;
+    throw err;
+  }
+  return repo.deleteEquipment(id);
 }
 
 async function ensureReportForOrder(serviceOrderId, fallbackTitle = "") {
@@ -411,6 +422,7 @@ module.exports = {
   createSite,
   createEquipment,
   updateEquipment,
+  deleteEquipment,
   ensureReportForOrder,
   updateReport,
   upsertReportSection,

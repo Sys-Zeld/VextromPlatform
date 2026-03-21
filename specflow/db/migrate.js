@@ -86,6 +86,16 @@ async function migrate() {
   await db.query(`ALTER TABLE equipments ADD COLUMN IF NOT EXISTS site_name TEXT NOT NULL DEFAULT '';`);
   await db.query(`ALTER TABLE equipments ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT '';`);
   await db.query(`
+    UPDATE equipments
+    SET status = 'send'
+    WHERE lower(coalesce(status, '')) = 'sent';
+  `);
+  await db.query(`
+    UPDATE equipments
+    SET status = 'draft'
+    WHERE lower(coalesce(status, '')) NOT IN ('draft', 'send', 'closed');
+  `);
+  await db.query(`
     ALTER TABLE equipments
     ADD COLUMN IF NOT EXISTS profile_id BIGINT REFERENCES field_profiles(id) ON DELETE SET NULL;
   `);
@@ -182,6 +192,7 @@ async function migrate() {
       username TEXT NOT NULL UNIQUE,
       role TEXT NOT NULL DEFAULT 'user',
       module_access JSONB NOT NULL DEFAULT '["specflow","module-spec","report-service"]'::jsonb,
+      ui_font TEXT NOT NULL DEFAULT 'inter',
       salt TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -191,6 +202,10 @@ async function migrate() {
   await db.query(`
     ALTER TABLE admin_users
     ADD COLUMN IF NOT EXISTS module_access JSONB NOT NULL DEFAULT '["specflow","module-spec","report-service"]'::jsonb;
+  `);
+  await db.query(`
+    ALTER TABLE admin_users
+    ADD COLUMN IF NOT EXISTS ui_font TEXT NOT NULL DEFAULT 'inter';
   `);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_username_unique ON admin_users (username);`);
   await db.query(`

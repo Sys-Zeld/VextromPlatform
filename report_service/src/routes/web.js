@@ -42,6 +42,10 @@ function createReportServiceWebRouter(deps) {
 
   router.get("/equipments", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.listEquipments));
   router.post("/equipments", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createEquipment));
+  router.post("/equipments/create-inline", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createEquipmentInline));
+  router.post("/equipments/:id/update", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateEquipment));
+  router.post("/equipments/:id/update-inline", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateEquipmentInline));
+  router.post("/equipments/:id/delete-inline", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteEquipmentInline));
 
   return router;
 }

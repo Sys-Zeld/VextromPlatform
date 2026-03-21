@@ -1,10 +1,72 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const { Pool } = require("pg");
 const env = require("../specflow/config/env");
-const db = require("../specflow/db");
 const { resolvePostgresCommand, buildNotFoundHint } = require("./utils/postgres-cli");
 const DEFAULT_RESTORE_TIMEOUT_MS = 20 * 60 * 1000;
+
+const MODULE_CONFIG = {
+  specflow: {
+    dbUrl: env.databases.specflow.url,
+    ssl: env.databases.specflow.ssl
+  },
+  "module-spec": {
+    dbUrl: env.databases.moduleSpec.url,
+    ssl: env.databases.moduleSpec.ssl
+  },
+  "report-service": {
+    dbUrl: env.databases.reportService.url,
+    ssl: env.databases.reportService.ssl
+  }
+};
+
+const MODULE_FILE_PREFIXES = {
+  specflow: ["db-backup-", "specflow-backup-", "db-import-"],
+  "module-spec": ["module-spec-backup-"],
+  "report-service": ["report-service-backup-"]
+};
+
+function normalizeModuleName(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (text === "specflow" || text === "module-spec" || text === "report-service") return text;
+  return "";
+}
+
+function resolveModuleFromFlag() {
+  const arg = process.argv.slice(2).find((item) => String(item).startsWith("--module="));
+  if (!arg) return "";
+  return normalizeModuleName(String(arg).slice("--module=".length));
+}
+
+function resolveModuleFromFileName(filePath) {
+  const fileName = path.basename(String(filePath || "")).toLowerCase();
+  const matchedModule = Object.keys(MODULE_FILE_PREFIXES).find((moduleName) => (
+    MODULE_FILE_PREFIXES[moduleName].some((prefix) => fileName.startsWith(prefix))
+  ));
+  return matchedModule || "";
+}
+
+function resolveTargetModule({ moduleFromFlag, backupFilePath, strict = true }) {
+  const fromFlag = normalizeModuleName(moduleFromFlag);
+  const fromFile = resolveModuleFromFileName(backupFilePath);
+
+  if (fromFlag && fromFile && fromFlag !== fromFile) {
+    throw new Error(
+      `Conflito de modulo: --module=${fromFlag} mas arquivo parece ser ${fromFile} (${path.basename(backupFilePath)}).`
+    );
+  }
+  if (fromFlag) return fromFlag;
+  if (fromFile) return fromFile;
+
+  if (strict) {
+    throw new Error(
+      "Nao foi possivel identificar o modulo pelo nome do arquivo. "
+      + "Use --module=specflow|module-spec|report-service."
+    );
+  }
+  return "specflow";
+}
 
 function resolveBackupFileFromArgs() {
   const argPath = process.argv.slice(2).find((arg) => arg && !String(arg).startsWith("--"));
@@ -27,7 +89,14 @@ function shouldSkipClean() {
   return process.argv.includes("--no-clean");
 }
 
-function findLatestBackup() {
+function isSqlBackupFile(fileName, targetModule) {
+  const normalized = String(fileName || "").toLowerCase();
+  if (!normalized.endsWith(".sql")) return false;
+  const prefixes = MODULE_FILE_PREFIXES[targetModule] || [];
+  return prefixes.some((prefix) => normalized.startsWith(prefix));
+}
+
+function findLatestBackup(targetModule) {
   const backupDir = path.join(process.cwd(), "dados", "backups");
   if (!fs.existsSync(backupDir)) {
     throw new Error(`Diretorio de backups nao encontrado: ${backupDir}`);
@@ -35,7 +104,7 @@ function findLatestBackup() {
 
   const files = fs
     .readdirSync(backupDir)
-    .filter((file) => file.toLowerCase().endsWith(".sql"))
+    .filter((file) => isSqlBackupFile(file, targetModule))
     .map((file) => {
       const fullPath = path.join(backupDir, file);
       const stat = fs.statSync(fullPath);
@@ -57,7 +126,7 @@ function findLatestBackup() {
     .filter((entry) => entry.isFile);
 
   if (!files.length) {
-    throw new Error(`Nenhum arquivo .sql encontrado em: ${backupDir}`);
+    throw new Error(`Nenhum backup .sql encontrado para o modulo ${targetModule} em: ${backupDir}`);
   }
 
   files.sort((a, b) => {
@@ -130,38 +199,77 @@ async function runPsql(databaseUrl, inputFile) {
   });
 }
 
-async function resetPublicSchema() {
-  await db.query("BEGIN");
+async function resetPublicSchema(moduleName) {
+  const config = MODULE_CONFIG[moduleName];
+  if (!config || !config.dbUrl) {
+    throw new Error(`URL de banco nao configurada para modulo: ${moduleName}.`);
+  }
+
+  const pool = new Pool({
+    connectionString: config.dbUrl,
+    ssl: config.ssl ? { rejectUnauthorized: false } : false
+  });
+  const client = await pool.connect();
+
   try {
-    await db.query("DROP SCHEMA IF EXISTS public CASCADE;");
-    await db.query("CREATE SCHEMA public;");
-    await db.query("GRANT ALL ON SCHEMA public TO CURRENT_USER;");
-    await db.query("GRANT ALL ON SCHEMA public TO public;");
-    await db.query("COMMIT");
+    await client.query("BEGIN");
+    await client.query("DROP SCHEMA IF EXISTS public CASCADE;");
+    await client.query("CREATE SCHEMA public;");
+    await client.query("GRANT ALL ON SCHEMA public TO CURRENT_USER;");
+    await client.query("GRANT ALL ON SCHEMA public TO public;");
+    await client.query("COMMIT");
   } catch (err) {
-    await db.query("ROLLBACK");
+    try {
+      await client.query("ROLLBACK");
+    } catch (_rollbackErr) {
+      // noop
+    }
     throw err;
+  } finally {
+    client.release();
+    await pool.end();
   }
 }
 
 async function run() {
-  const databaseUrl = env.database.url;
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL nao configurado.");
+  const moduleFromFlag = resolveModuleFromFlag();
+  if (moduleFromFlag === "") {
+    const hasModuleFlag = process.argv.slice(2).some((arg) => String(arg).startsWith("--module="));
+    if (hasModuleFlag) {
+      throw new Error("Modulo invalido em --module. Use: specflow | module-spec | report-service.");
+    }
   }
 
   const manualBackup = resolveBackupFileFromArgs();
-  const backupFile = manualBackup || findLatestBackup();
+  let targetModule = "specflow";
+  let backupFile = manualBackup;
+
+  if (backupFile) {
+    targetModule = resolveTargetModule({
+      moduleFromFlag,
+      backupFilePath: backupFile,
+      strict: true
+    });
+  } else {
+    targetModule = moduleFromFlag || "specflow";
+    backupFile = findLatestBackup(targetModule);
+  }
+
+  const databaseUrl = MODULE_CONFIG[targetModule] && MODULE_CONFIG[targetModule].dbUrl;
+  if (!databaseUrl) {
+    throw new Error(`URL de banco nao configurada para modulo: ${targetModule}.`);
+  }
+
   const skipClean = shouldSkipClean();
 
   if (!skipClean) {
     // eslint-disable-next-line no-console
-    console.log("Limpando schema public antes do restore...");
-    await resetPublicSchema();
+    console.log(`Limpando schema public antes do restore (${targetModule})...`);
+    await resetPublicSchema(targetModule);
   }
 
   // eslint-disable-next-line no-console
-  console.log(`Restaurando backup: ${backupFile}`);
+  console.log(`Restaurando backup (${targetModule}): ${backupFile}`);
   await runPsql(databaseUrl, backupFile);
   // eslint-disable-next-line no-console
   console.log("Restore concluido com sucesso.");
@@ -171,11 +279,5 @@ run().catch((err) => {
   // eslint-disable-next-line no-console
   console.error("Falha no restore:", err.message);
   process.exit(1);
-}).finally(async () => {
-  try {
-    await db.end();
-  } catch (_err) {
-    // noop
-  }
 });
 

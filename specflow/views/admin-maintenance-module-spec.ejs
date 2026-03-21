@@ -1,0 +1,61 @@
+<%- include("partials/head", { pageTitle }) %>
+
+<div class="card app-card mb-4">
+  <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
+    <div>
+      <h1 class="h4 app-card-title mb-1">Manutencao Module Spec</h1>
+      <p class="text-muted mb-0">Operacoes exclusivas do modulo Module Spec.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/maintenance/system">Manutencao do sistema</a>
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Voltar ao hub</a>
+    </div>
+  </div>
+</div>
+
+<% if (commandResult) { %>
+  <div class="alert <%= commandResult.ok ? 'alert-success' : 'alert-danger' %>">
+    <div><strong>Comando:</strong> <code><%= commandResult.label %></code></div>
+    <div><strong>Exit code:</strong> <%= commandResult.code %></div>
+  </div>
+  <div class="card app-card mb-4">
+    <div class="card-body">
+      <h2 class="h6 app-card-title">Saida</h2>
+      <pre class="mb-0" style="white-space: pre-wrap;"><%= commandResult.output || "(sem saida)" %></pre>
+    </div>
+  </div>
+<% } %>
+
+<div class="card app-card">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-3">Comandos de manutencao</h2>
+    <div class="d-flex gap-2 flex-wrap">
+      <form method="post" action="/admin/maintenance/module-spec/command" class="maintenance-command-form" data-confirm="Confirma backup do banco Module Spec?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="action" value="db_backup" />
+        <button class="btn btn-outline-primary btn-sm" type="submit">Backup banco Module Spec</button>
+      </form>
+      <form method="post" action="/admin/maintenance/module-spec/command" class="maintenance-command-form" data-confirm="Confirma resetar banco Module Spec e reaplicar seed?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+        <input type="hidden" name="action" value="db_reset" />
+        <button class="btn btn-outline-danger btn-sm" type="submit">Reset banco Module Spec</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var forms = document.querySelectorAll(".maintenance-command-form");
+    forms.forEach(function (form) {
+      form.addEventListener("submit", function (event) {
+        var message = form.getAttribute("data-confirm") || "Confirma executar este comando?";
+        if (!window.confirm(message)) {
+          event.preventDefault();
+        }
+      });
+    });
+  })();
+</script>
+
+<%- include("partials/footer") %>

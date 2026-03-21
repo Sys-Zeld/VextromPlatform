@@ -39,7 +39,7 @@ Aplicacao: `http://localhost:3000`
 - O `npm run start` e `npm run dev` executam `src/app.js`.
 - `src/app.js` inicializa e sobe o servidor via `specflow/app.js`.
 
-## Comandos de manutenÃ§Ão APP via NPM
+## Comandos de manutencao APP via NPM
 
 - `npm run dev`: sobe a aplicacao em modo desenvolvimento (`nodemon`).
 - `npm run start`: sobe a aplicacao em modo normal.
@@ -49,51 +49,86 @@ Aplicacao: `http://localhost:3000`
 - `npm run module-spec:enable` / `npm run module-spec:disable`: habilita/desabilita o modulo Module Spec.
 - `npm run report-service:enable` / `npm run report-service:disable`: habilita/desabilita o modulo Report Service.
 - `npm run db:migrate`: aplica as migracoes do banco.
-- `npm run db:backup-database`: gera backup `.sql` em `dados/backups`.
+- `npm run db:backup-database`: alias de `npm run db:backup:specflow` (backup isolado do banco `dbspeflow`).
+- `npm run db:backup:specflow`: backup apenas do banco `dbspeflow`.
+- `npm run db:backup:module-spec`: backup apenas do banco `dbmodulespec`.
+- `npm run db:backup:report-service`: backup apenas do banco `reportservice`.
+- `npm run db:backup:all`: backup dos 3 bancos isolados.
 - `npm run db:restore-database`: restaura o backup mais recente de `dados/backups` (limpa o schema `public` antes por padrao).
+- `npm run db:restore:specflow`: restaura backup do banco `dbspeflow`.
+- `npm run db:restore:module-spec`: restaura backup do banco `dbmodulespec`.
+- `npm run db:restore:report-service`: restaura backup do banco `reportservice`.
 - `npm run db:seed`: executa seed dos modulos (specflow + report_service + module_spec quando habilitado).
 - `npm run db:seed:specflow`: aplica seed do SpecFlow (campos Anexo D).
 - `npm run db:seed:module-spec`: executa seed do Module Spec.
 - `npm run db:seed:report-service`: executa seed do Report Service.
-- `npm run db:seed:default`: aplica seed dos campos e cria/atualiza o perfil padrÃ£o `PADRÃO CHLORIDE`.
+- `npm run db:seed:default`: aplica `db:seed` + `node scripts/seed-profile-purchase.js`.
 - `npm run db:reset`: limpa tabelas principais e reinicia IDs.
 - `npm run db:reset-schema`: remove e recria o schema `public` (limpeza estrutural total para restore).
 - `npm run db:restore-clean`: executa `db:reset-schema` + `db:restore-database`.
 - `npm run db:reseed`: executa `db:reset` + `db:seed`.
-- `npm run db:seed:default`: aplica `db:seed` + `node scripts/seed-profile-purchase.js`.
 - `npm run api:key:create -- --name "integracao-x" --scopes "fields:read,spec:read,spec:write"`: cria API key.
 - `npm run api:key:list`: lista API keys cadastradas.
 - `npm run api:key:revoke -- 1`: revoga API key por ID.
 - `npm run api:key:delete -- 1`: deleta API key por ID.
 - `npm run admin:sessions:clear`: invalida todas as sessoes admin ativas.
 - `npm run admin:public-limit:reset`: reseta o contador de limite do modulo publico (IP/sessao navegador).
-- `npm run token:set-sent -- --token=<TOKEN>`: forÃ§a status do token para `sent` (uso de teste).
-- `npm run token:set-draft -- --token=<TOKEN>`: forÃ§a status do token para `draft` (uso de teste).
-- `npm run teste-cliente`: executa teste de cadastro em lote de clientes (`dados/teste/stress-client-registrations.js` exemplo: 'npm' run teste-cliente -- --count=500 --concurrency=20').
-- `npm run teste-perfil-form`: executa teste de cadastro em lote de perfis de formulario (`dados/teste/stress-profile-form-registrations.js`).
+- `npm run token:set-sent -- --token=<TOKEN>`: forca status do token para `send` (uso de teste).
+- `npm run token:set-draft -- --token=<TOKEN>`: forca status do token para `draft` (uso de teste).
+- `npm run stress:specflow`: stress de clientes no SpecFlow.
+- `npm run stress:specflow:profile`: stress de perfis de formulario do SpecFlow.
+- `npm run stress:module-spec`: stress do modulo Module Spec.
+- `npm run stress:report-service`: stress do modulo Report Service.
+- `npm run teste-cliente`: alias legado para `npm run stress:specflow`.
+- `npm run teste-perfil-form`: alias legado para `npm run stress:specflow:profile`.
 
 ### Painel de manutencao admin
 
-- Acesse `/admin/maintenance` para executar comandos de manutencao.
-- Esta rota e restrita ao administrador principal (`ADMIN_USER`/`ADMIN_PASS`).
-- Nessa tela tambem e possivel cadastrar usuarios admin adicionais para login no painel.
+- Acesse `/admin/maintenance/system` para manutencao global do sistema (backup de todos os bancos, migrate/seed e links dos modulos).
+- Em `/admin/maintenance/system`, na secao **Backup e restore (SpecFlow)**, ficou apenas a opcao de **importar banco** (`.sql`).
+- Acesse `/admin/maintenance/specflow` (ou `/admin/maintenance`) para manutencao do SpecFlow (backup banco, reset/seed, links publicos, SMTP, templates e destinatarios padrao).
+- Acesse `/admin/maintenance/module-spec` para manutencao do Module Spec (backup do banco dedicado).
+- Acesse `/admin/maintenance/report-service` para manutencao do Report Service (backup, SMTP e templates dedicados).
+- Perfil `admin`: acesso completo a comandos, backup/restore, cards de modulos e gestao de usuarios.
+- Perfil `user`: acesso limitado em `/admin/maintenance/system` para:
+  - alterar a propria senha
+  - alterar a tipografia do proprio perfil
+- O cadastro e a gestao de usuarios adicionais ficam em `/admin/maintenance/system` (somente `admin`).
 
-## Exemplos CMD - stress de cliente
+## Exemplos CMD - stress por modulo
 
 ```cmd
-npm run teste-cliente -- --count=500 --concurrency=20
+npm run stress:specflow -- --count=500 --concurrency=20
 ```
 
 ```cmd
-npm run teste-cliente -- --count=10000 --concurrency=50
+npm run stress:specflow:profile -- --count=200 --concurrency=10 --with-field
+```
+
+```cmd
+npm run stress:module-spec -- --count=300 --concurrency=15
+```
+
+```cmd
+npm run stress:report-service -- --count=300 --concurrency=15
 ```
 
 ## Backup e restore do banco
 
-- Backup:
+- Backup isolado por modulo:
+  - `npm run db:backup:specflow`
+  - `npm run db:backup:module-spec`
+  - `npm run db:backup:report-service`
+- Backup de todos os modulos:
+  - `npm run db:backup:all`
+- Alias legado (SpecFlow):
   - `npm run db:backup-database`
 - Restore do ultimo backup (mais recente, com limpeza automatica do schema `public`):
   - `npm run db:restore-database`
+- Restore isolado por modulo:
+  - `npm run db:restore:specflow -- "dados/backups/specflow-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
+  - `npm run db:restore:module-spec -- "dados/backups/module-spec-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
+  - `npm run db:restore:report-service -- "dados/backups/report-service-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
 - Restore de arquivo especifico:
   - `npm run db:restore-database -- "dados/backups/db-backup-2026-03-07T03-43-17-589Z.sql"`
 - Importacao de arquivo `.sql` pela UI:
@@ -162,12 +197,31 @@ npm run teste-cliente -- --count=10000 --concurrency=50
 
 ## Temas visuais do formulario
 
-- O projeto possui dois temas: `Soft` e `Vextrom` (padrao).
+- O projeto possui tres temas: `Soft`, `Vextrom` (padrao) e `XVextrom`.
 - A troca e feita no seletor `Tema` no topo da tela.
-- A preferencia fica salva em `localStorage` na chave `app_theme` (`soft` ou `vextrom`).
+- A preferencia fica salva em `localStorage` na chave `app_theme` (`soft`, `vextrom` ou `xvextrom`).
 - Os tokens visuais (cores, sombras, bordas, espacamentos) ficam centralizados em `specflow/public/css/app.css`:
   - bloco `:root, :root[data-theme="soft"]`
   - bloco `:root[data-theme="vextrom"]`
+  - bloco `:root[data-theme="xvextrom"]`
+
+## Tipografia por usuario
+
+- A selecao de fonte e feita em `/admin/maintenance/system`, no card **Tipografia por usuario**.
+- A preferencia de fonte e individual por conta e salva na tabela `admin_users` (coluna `ui_font`).
+- Fontes disponiveis:
+  - `Inter` (atual)
+  - `Manrope`
+  - `Nunito`
+  - `Source Sans 3`
+  - `IBM Plex Sans`
+
+## Navegacao dos modulos (icones)
+
+- Os botoes de navegacao de modulos usam o mesmo padrao de icones do Hub:
+  - `/admin/hub` -> `build_circle`
+  - `module-spec` -> `tune`
+  - `report-service` (`orders/equipments/customers`) -> `monitoring`
 
 ## Seed do Anexo D
 
@@ -180,7 +234,7 @@ npm run teste-cliente -- --count=10000 --concurrency=50
   - cliente, site e equipamento padrao
   - ordem de servico padrao
   - relatorio padrao vinculado a ordem
-- `npm run db:seed:default` tambÃ©m cria/atualiza o perfil padrÃ£o `PADRÃO CHLORIDE`
+- `npm run db:seed:default` tambÃƒÂ©m cria/atualiza o perfil padrÃƒÂ£o `PADRÃƒO CHLORIDE`
 - O servidor tambem chama `seedAnnexDFields()` no startup para garantir estrutura base
 
 ## Como adicionar/editar campos
@@ -227,5 +281,6 @@ Autenticacao da API:
 ## Documentacao da API
 
 - Arquivo HTML da documentacao: `api.html`
+
 
 

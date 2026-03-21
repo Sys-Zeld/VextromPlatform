@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Template Grid Editavel</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; }
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+    .btn { border: 1px solid #bfc4cb; background: #fff; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+    .btn-primary { border-color: #2f6feb; color: #2f6feb; }
+    .btn-danger { border-color: #d73a49; color: #d73a49; }
+    .grid-wrap { overflow-x: auto; }
+    .grid-wrap .gridjs-th, .grid-wrap .gridjs-td { font-size: 12px; padding: 6px; }
+    .grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(odd) > .gridjs-td { background: rgba(120,120,120,0.08); }
+    .grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(even) > .gridjs-td { background: rgba(120,120,120,0.16); }
+    .row-actions { display: flex; gap: 6px; }
+    .row-input, .row-select { min-width: 140px; font-size: 12px; padding: 4px 6px; }
+    .feedback { margin-top: 10px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <h2 style="margin:0;">Template Grid Editavel</h2>
+    <button type="button" class="btn btn-primary" id="addRowBtn">Incluir novo</button>
+  </div>
+
+  <div class="grid-wrap">
+    <div id="editableGrid"></div>
+  </div>
+  <div id="feedback" class="feedback"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+  <script>
+    (function () {
+      var gridTarget = document.getElementById("editableGrid");
+      var feedback = document.getElementById("feedback");
+      var addRowBtn = document.getElementById("addRowBtn");
+      var gridInstance = null;
+
+      var statuses = ["draft", "send", "closed"];
+      var rowsState = [
+        { id: "1", code: "EQ-001", name: "UPS", status: "draft", __isNew: false },
+        { id: "2", code: "EQ-002", name: "RETIFICADOR", status: "send", __isNew: false }
+      ];
+
+      function esc(value) {
+        return String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function showFeedback(message, isError) {
+        feedback.textContent = message || "";
+        feedback.style.color = isError ? "#b42318" : "#166534";
+      }
+
+      function findRow(id) {
+        var sid = String(id || "");
+        return rowsState.find(function (r) { return String(r.id) === sid; }) || null;
+      }
+
+      function statusOptions(selected) {
+        return statuses.map(function (s) {
+          var isSel = String(selected) === s ? " selected" : "";
+          return "<option value=\"" + esc(s) + "\"" + isSel + ">" + esc(s) + "</option>";
+        }).join("");
+      }
+
+      function actionsHtml(row) {
+        var sid = esc(row.id);
+        return "<div class=\"row-actions\">"
+          + "<button class=\"btn btn-primary\" type=\"button\" data-save-row=\"" + sid + "\">" + (row.__isNew ? "Criar" : "Salvar") + "</button>"
+          + "<button class=\"btn btn-danger\" type=\"button\" data-remove-row=\"" + sid + "\">Remover</button>"
+          + "</div>";
+      }
+
+      function buildData() {
+        return rowsState.map(function (row) {
+          return {
+            id: esc(row.id),
+            code: "<input id=\"r-" + esc(row.id) + "-code\" class=\"row-input\" value=\"" + esc(row.code) + "\" />",
+            name: "<input id=\"r-" + esc(row.id) + "-name\" class=\"row-input\" value=\"" + esc(row.name) + "\" />",
+            status: "<select id=\"r-" + esc(row.id) + "-status\" class=\"row-select\">" + statusOptions(row.status) + "</select>",
+            actions: actionsHtml(row)
+          };
+        });
+      }
+
+      function renderGrid() {
+        if (gridInstance && typeof gridInstance.destroy === "function") {
+          try { gridInstance.destroy(); } catch (_err) {}
+        }
+        gridInstance = null;
+
+        gridTarget.innerHTML = "";
+        gridInstance = new window.gridjs.Grid({
+          columns: [
+            { id: "id", name: "ID", width: "80px" },
+            { id: "code", name: "Codigo", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "name", name: "Nome", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "status", name: "Status", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "actions", name: "Acoes", sort: false, formatter: function (cell) { return window.gridjs.html(cell); } }
+          ],
+          data: buildData(),
+          search: true,
+          sort: true,
+          pagination: { limit: 10, page: 0, summary: false },
+          language: {
+            search: { placeholder: "Digite uma palavra-chave..." },
+            pagination: { previous: "Anterior", next: "Proximo" },
+            noRecordsFound: "Nenhum registro encontrado."
+          }
+        }).render(gridTarget);
+      }
+
+      function syncRowFromInputs(row) {
+        var sid = String(row.id);
+        var code = document.getElementById("r-" + sid + "-code");
+        var name = document.getElementById("r-" + sid + "-name");
+        var status = document.getElementById("r-" + sid + "-status");
+        row.code = code ? String(code.value || "") : row.code;
+        row.name = name ? String(name.value || "") : row.name;
+        row.status = status ? String(status.value || "draft") : row.status;
+      }
+
+      function handleSaveRow(id) {
+        var row = findRow(id);
+        if (!row) return;
+        syncRowFromInputs(row);
+        if (!row.code.trim() || !row.name.trim()) {
+          showFeedback("Preencha Codigo e Nome antes de salvar.", true);
+          return;
+        }
+        row.__isNew = false;
+        renderGrid();
+        showFeedback("Linha salva com sucesso.", false);
+      }
+
+      function handleRemoveRow(id) {
+        rowsState = rowsState.filter(function (r) { return String(r.id) !== String(id); });
+        renderGrid();
+        showFeedback("Linha removida.", false);
+      }
+
+      function handleAddRow() {
+        var tempId = "tmp-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
+        rowsState.unshift({
+          id: tempId,
+          code: "",
+          name: "Novo Item",
+          status: "draft",
+          __isNew: true
+        });
+        renderGrid();
+        showFeedback("Nova linha criada. Edite e clique em Criar.", false);
+      }
+
+      addRowBtn.addEventListener("click", handleAddRow);
+      document.addEventListener("click", function (event) {
+        var saveBtn = event.target.closest("[data-save-row]");
+        if (saveBtn) {
+          handleSaveRow(saveBtn.getAttribute("data-save-row"));
+          return;
+        }
+        var removeBtn = event.target.closest("[data-remove-row]");
+        if (removeBtn) {
+          handleRemoveRow(removeBtn.getAttribute("data-remove-row"));
+        }
+      });
+
+      renderGrid();
+    })();
+  </script>
+</body>
+</html>

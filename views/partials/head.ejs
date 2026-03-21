@@ -13,8 +13,9 @@
         } catch (_err) {
           storedTheme = null;
         }
-        var allowedThemes = ["soft", "vextrom"];
+        var allowedThemes = ["soft", "vextrom", "xvextrom", "xvetrom"];
         var theme = allowedThemes.indexOf(storedTheme) >= 0 ? storedTheme : "vextrom";
+        if (theme === "xvetrom") theme = "xvextrom";
         document.documentElement.setAttribute("data-theme", theme);
       })();
     </script>
@@ -47,6 +48,7 @@
               <select id="themeSelector" class="form-select form-select-sm theme-select" aria-label="<%= t('head.themeLabel') %>">
                 <option value="soft"><%= t("head.themeSoft") %></option>
                 <option value="vextrom"><%= t("head.themeVextrom") %></option>
+                <option value="xvextrom"><%= t("head.themeXVextrom") %></option>
               </select>
             </div>
             <% if (isAdminAuthenticated && adminUsername) { %>

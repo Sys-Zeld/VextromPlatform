@@ -65,6 +65,7 @@ function normalizeAdminUserRow(row) {
     username: normalizeUsername(row.username),
     role: normalizeRole(row.role),
     moduleAccess: normalizeModuleAccess(row.module_access || row.moduleAccess, row.role),
+    uiFont: String(row.ui_font || row.uiFont || "").trim().toLowerCase(),
     salt: String(row.salt || ""),
     passwordHash: String(row.password_hash || row.passwordHash || ""),
     createdAt: row.created_at || row.createdAt || null,
@@ -103,6 +104,7 @@ async function ensureAdminUsersTable() {
       username TEXT NOT NULL UNIQUE,
       role TEXT NOT NULL DEFAULT 'user',
       module_access JSONB NOT NULL DEFAULT '["specflow","module-spec","report-service"]'::jsonb,
+      ui_font TEXT NOT NULL DEFAULT 'inter',
       salt TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -112,6 +114,10 @@ async function ensureAdminUsersTable() {
   await db.query(`
     ALTER TABLE admin_users
     ADD COLUMN IF NOT EXISTS module_access JSONB NOT NULL DEFAULT '["specflow","module-spec","report-service"]'::jsonb;
+  `);
+  await db.query(`
+    ALTER TABLE admin_users
+    ADD COLUMN IF NOT EXISTS ui_font TEXT NOT NULL DEFAULT 'inter';
   `);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_username_unique ON admin_users (username);`);
 }
@@ -164,10 +170,24 @@ async function ensureAdminUsersStorageReady() {
   return ensureStoragePromise;
 }
 
+async function runAdminUsersQuery(queryText, params = []) {
+  try {
+    return await db.query(queryText, params);
+  } catch (err) {
+    // 42P01 = relation does not exist
+    if (err && err.code === "42P01") {
+      ensureStoragePromise = null;
+      await ensureAdminUsersStorageReady();
+      return db.query(queryText, params);
+    }
+    throw err;
+  }
+}
+
 async function listAdminUsers() {
   await ensureAdminUsersStorageReady();
-  const result = await db.query(`
-    SELECT id, username, role, module_access, created_at, updated_at
+  const result = await runAdminUsersQuery(`
+    SELECT id, username, role, module_access, ui_font, created_at, updated_at
     FROM admin_users
     ORDER BY created_at DESC, username ASC
   `);
@@ -178,6 +198,7 @@ async function listAdminUsers() {
       username: user.username,
       role: user.role,
       moduleAccess: user.moduleAccess,
+      uiFont: user.uiFont,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     };
@@ -188,7 +209,7 @@ async function getAdminUserRoleByUsername(username) {
   await ensureAdminUsersStorageReady();
   const normalized = normalizeUsername(username);
   if (!normalized) return null;
-  const result = await db.query(
+  const result = await runAdminUsersQuery(
     `
       SELECT role
       FROM admin_users
@@ -205,9 +226,9 @@ async function getAdminUserAccessByUsername(username) {
   await ensureAdminUsersStorageReady();
   const normalized = normalizeUsername(username);
   if (!normalized) return null;
-  const result = await db.query(
+  const result = await runAdminUsersQuery(
     `
-      SELECT role, module_access
+      SELECT role, module_access, ui_font
       FROM admin_users
       WHERE username = $1
       LIMIT 1
@@ -217,7 +238,8 @@ async function getAdminUserAccessByUsername(username) {
   if (!result.rows[0]) return null;
   return {
     role: normalizeRole(result.rows[0].role),
-    moduleAccess: normalizeModuleAccess(result.rows[0].module_access, result.rows[0].role)
+    moduleAccess: normalizeModuleAccess(result.rows[0].module_access, result.rows[0].role),
+    uiFont: String(result.rows[0].ui_font || "").trim().toLowerCase()
   };
 }
 
@@ -225,7 +247,7 @@ async function verifyAdminUserCredentials(username, password) {
   await ensureAdminUsersStorageReady();
   const normalized = normalizeUsername(username);
   if (!normalized || !password) return null;
-  const result = await db.query(
+  const result = await runAdminUsersQuery(
     `
       SELECT id, username, role, module_access, salt, password_hash, created_at, updated_at
       FROM admin_users
@@ -248,6 +270,75 @@ async function verifyAdminUserCredentials(username, password) {
   };
 }
 
+async function getAdminUserByUsername(username) {
+  await ensureAdminUsersStorageReady();
+  const normalized = normalizeUsername(username);
+  if (!normalized) return null;
+  const result = await runAdminUsersQuery(
+    `
+      SELECT id, username, role, module_access, ui_font, created_at, updated_at
+      FROM admin_users
+      WHERE username = $1
+      LIMIT 1
+    `,
+    [normalized]
+  );
+  const user = normalizeAdminUserRow(result.rows[0]);
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    moduleAccess: user.moduleAccess,
+    uiFont: user.uiFont,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+  };
+}
+
+async function changeAdminUserPasswordByUsername({ username, currentPassword, newPassword }) {
+  await ensureAdminUsersStorageReady();
+  const normalizedUsername = normalizeUsername(username);
+  if (!normalizedUsername) throw new Error("Usuario invalido.");
+  if (!currentPassword) throw new Error("Informe a senha atual.");
+  if (!newPassword || String(newPassword).length < 8) {
+    throw new Error("Nova senha deve ter ao menos 8 caracteres.");
+  }
+
+  const result = await runAdminUsersQuery(
+    `
+      SELECT id, username, salt, password_hash
+      FROM admin_users
+      WHERE username = $1
+      LIMIT 1
+    `,
+    [normalizedUsername]
+  );
+  const user = normalizeAdminUserRow(result.rows[0]);
+  if (!user) {
+    throw new Error("Usuario nao encontrado na tabela admin_users.");
+  }
+
+  const currentHash = await scryptAsync(currentPassword, user.salt);
+  if (!safeTimingEqualText(currentHash, user.passwordHash)) {
+    throw new Error("Senha atual invalida.");
+  }
+  if (safeTimingEqualText(String(currentPassword), String(newPassword))) {
+    throw new Error("A nova senha deve ser diferente da atual.");
+  }
+
+  const nextSalt = crypto.randomBytes(16).toString("hex");
+  const nextHash = await scryptAsync(newPassword, nextSalt);
+  await runAdminUsersQuery(
+    `
+      UPDATE admin_users
+      SET salt = $2, password_hash = $3, updated_at = NOW()
+      WHERE username = $1
+    `,
+    [normalizedUsername, nextSalt, nextHash]
+  );
+}
+
 async function createAdminUser({ username, password, role = "user", moduleAccess = null }) {
   await ensureAdminUsersStorageReady();
   const normalized = normalizeUsername(username);
@@ -260,7 +351,7 @@ async function createAdminUser({ username, password, role = "user", moduleAccess
     throw new Error("Senha deve ter ao menos 8 caracteres.");
   }
 
-  const exists = await db.query(
+  const exists = await runAdminUsersQuery(
     `
       SELECT 1
       FROM admin_users
@@ -275,7 +366,7 @@ async function createAdminUser({ username, password, role = "user", moduleAccess
 
   const salt = crypto.randomBytes(16).toString("hex");
   const passwordHash = await scryptAsync(password, salt);
-  await db.query(
+  await runAdminUsersQuery(
     `
       INSERT INTO admin_users (id, username, role, module_access, salt, password_hash, created_at, updated_at)
       VALUES ($1, $2, $3, $4::jsonb, $5, $6, NOW(), NOW())
@@ -293,7 +384,7 @@ async function updateAdminUser({ id, username, role, password, moduleAccess = nu
   if (!normalizedId) throw new Error("Usuario invalido.");
   if (!normalizedUsername) throw new Error("Usuario invalido.");
 
-  const existingResult = await db.query(
+  const existingResult = await runAdminUsersQuery(
     `
       SELECT id, username, role, module_access, salt, password_hash, created_at, updated_at
       FROM admin_users
@@ -305,7 +396,7 @@ async function updateAdminUser({ id, username, role, password, moduleAccess = nu
   const existingUser = normalizeAdminUserRow(existingResult.rows[0]);
   if (!existingUser) throw new Error("Usuario nao encontrado.");
 
-  const duplicate = await db.query(
+  const duplicate = await runAdminUsersQuery(
     `
       SELECT 1
       FROM admin_users
@@ -328,7 +419,7 @@ async function updateAdminUser({ id, username, role, password, moduleAccess = nu
     nextPasswordHash = await scryptAsync(password, nextSalt);
   }
 
-  await db.query(
+  await runAdminUsersQuery(
     `
       UPDATE admin_users
       SET username = $2, role = $3, module_access = $4::jsonb, salt = $5, password_hash = $6, updated_at = NOW()
@@ -350,7 +441,7 @@ async function deleteAdminUser(id) {
   const normalizedId = String(id || "").trim();
   if (!normalizedId) throw new Error("Usuario invalido.");
 
-  const result = await db.query(
+  const result = await runAdminUsersQuery(
     `
       DELETE FROM admin_users
       WHERE id = $1
@@ -370,9 +461,11 @@ async function deleteAdminUser(id) {
 module.exports = {
   getAdminUserRoleByUsername,
   getAdminUserAccessByUsername,
+  getAdminUserByUsername,
   listAdminUsers,
   createAdminUser,
   updateAdminUser,
   deleteAdminUser,
+  changeAdminUserPasswordByUsername,
   verifyAdminUserCredentials
 };

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checklist Manual - Module Spec (User)</title>
+  <style>
+    body{font-family:Segoe UI,Tahoma,Arial,sans-serif;background:#f6f8fb;margin:0}
+    .wrap{max-width:1100px;margin:20px auto;padding:0 14px}
+    .head{background:#111827;color:#fff;border-radius:10px;padding:16px}
+    .head h1{margin:0 0 6px;font-size:22px}.head p{margin:0;color:#cbd5e1}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    button{border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;border-radius:8px;padding:7px 10px;cursor:pointer;font-weight:600}
+    .danger{border-color:#fecaca;background:#fff1f2;color:#991b1b}
+    .card{background:#fff;border:1px solid #dbe3ee;border-radius:10px;margin-top:12px;overflow:hidden}
+    .card h2{margin:0;padding:10px 12px;background:#f8fafc;border-bottom:1px solid #dbe3ee;font-size:16px}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{padding:8px;border-bottom:1px solid #e5e7eb;vertical-align:top;text-align:left}
+    th{background:#f8fafc}.id{width:90px;font-weight:700}.route{font-family:Consolas,monospace;color:#64748b}
+    .obs{width:100%;min-height:46px;resize:vertical;border:1px solid #cbd5e1;border-radius:6px;padding:6px}
+    .status{display:flex;gap:8px;flex-wrap:wrap;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>Checklist Manual - Module Spec (Modo User)</h1>
+      <p>Validacao manual do modulo Module Spec para usuario com acesso ao modulo.</p>
+      <div class="toolbar">
+        <button id="saveBtn" type="button">Salvar</button>
+        <button id="loadBtn" type="button">Carregar</button>
+        <button id="printBtn" type="button">Imprimir/PDF</button>
+        <button id="clearBtn" class="danger" type="button">Limpar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Metadados</h2>
+      <table><tbody>
+        <tr><td style="width:220px"><strong>URL base</strong></td><td><input id="m_url" class="obs" placeholder="http://localhost:3000"></td></tr>
+        <tr><td><strong>Usuario</strong></td><td><input id="m_user" class="obs" placeholder="qa.user"></td></tr>
+        <tr><td><strong>Data</strong></td><td><input id="m_date" class="obs" placeholder="2026-03-21"></td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Casos de teste - Module Spec</h2>
+      <table>
+        <thead><tr><th class="id">ID</th><th>Cenario</th><th>Esperado</th><th>Status</th><th>Obs</th></tr></thead>
+        <tbody>
+          <tr><td class="id">MS-01</td><td>Abrir tela<div class="route">/admin/module-spec</div></td><td>Carrega sem erro para usuario autorizado.</td><td class="st"></td><td><textarea class="obs" data-id="MS-01"></textarea></td></tr>
+          <tr><td class="id">MS-02</td><td>CRUD de familias</td><td>Criar, editar e excluir familia.</td><td class="st"></td><td><textarea class="obs" data-id="MS-02"></textarea></td></tr>
+          <tr><td class="id">MS-03</td><td>CRUD de atributos</td><td>Criar, editar e excluir definicoes.</td><td class="st"></td><td><textarea class="obs" data-id="MS-03"></textarea></td></tr>
+          <tr><td class="id">MS-04</td><td>CRUD de modelos</td><td>Criar, editar e excluir modelos.</td><td class="st"></td><td><textarea class="obs" data-id="MS-04"></textarea></td></tr>
+          <tr><td class="id">MS-05</td><td>CRUD de variantes</td><td>Criar, editar e excluir variantes.</td><td class="st"></td><td><textarea class="obs" data-id="MS-05"></textarea></td></tr>
+          <tr><td class="id">MS-06</td><td>Atribuir atributos a variante</td><td>Salvar e persistir apos reload.</td><td class="st"></td><td><textarea class="obs" data-id="MS-06"></textarea></td></tr>
+          <tr><td class="id">MS-07</td><td>Salvar mappings por perfil</td><td>Mapeamentos salvos sem erro.</td><td class="st"></td><td><textarea class="obs" data-id="MS-07"></textarea></td></tr>
+          <tr><td class="id">MS-08</td><td>Filter test por perfil</td><td>Retorno coerente com regras configuradas.</td><td class="st"></td><td><textarea class="obs" data-id="MS-08"></textarea></td></tr>
+          <tr><td class="id">MS-09</td><td>Usuario sem acesso ao modulo</td><td>Bloqueio de acesso (sem permissao).</td><td class="st"></td><td><textarea class="obs" data-id="MS-09"></textarea></td></tr>
+          <tr><td class="id">MS-10</td><td>Integracao com perfil SpecFlow</td><td>Campos/perfis existentes aparecem corretamente.</td><td class="st"></td><td><textarea class="obs" data-id="MS-10"></textarea></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const KEY="check_module_spec_user_v1"; const opts=["passou","parcial","falhou","nao_testado"];
+      document.querySelectorAll("tbody tr").forEach((tr)=>{const id=tr.querySelector(".id");const st=tr.querySelector(".st");if(!id||!st)return;
+        const row=id.textContent.trim(); const div=document.createElement("div"); div.className="status";
+        opts.forEach((o)=>{const l=document.createElement("label"); const i=document.createElement("input"); i.type="radio"; i.name="s_"+row; i.value=o; l.appendChild(i); l.append(" "+o); div.appendChild(l);});
+        st.appendChild(div);
+      });
+      function collect(){const d={meta:{url:m_url.value,user:m_user.value,date:m_date.value},rows:{}};document.querySelectorAll("tbody tr").forEach((tr)=>{const id=tr.querySelector(".id")?.textContent.trim();if(!id)return;d.rows[id]={status:tr.querySelector("input:checked")?.value||"",obs:tr.querySelector("textarea")?.value||""};});return d;}
+      function apply(d){if(!d)return;m_url.value=d.meta?.url||"";m_user.value=d.meta?.user||"";m_date.value=d.meta?.date||"";Object.keys(d.rows||{}).forEach((id)=>{const r=d.rows[id]||{};const i=document.querySelector(`input[name="s_${id}"][value="${r.status}"]`);if(i)i.checked=true;const t=document.querySelector(`textarea[data-id="${id}"]`);if(t)t.value=r.obs||"";});}
+      saveBtn.onclick=()=>{localStorage.setItem(KEY,JSON.stringify(collect()));alert("Salvo.");};
+      loadBtn.onclick=()=>{const raw=localStorage.getItem(KEY);if(!raw){alert("Sem dados salvos.");return;}apply(JSON.parse(raw));alert("Carregado.");};
+      printBtn.onclick=()=>window.print();
+      clearBtn.onclick=()=>{if(!confirm("Limpar checklist?"))return;localStorage.removeItem(KEY);document.querySelectorAll('input[type="radio"]').forEach(i=>i.checked=false);document.querySelectorAll("textarea").forEach(t=>t.value="");["m_url","m_user","m_date"].forEach(id=>document.getElementById(id).value="");};
+      const raw=localStorage.getItem(KEY); if(raw) apply(JSON.parse(raw));
+    })();
+  </script>
+</body>
+</html>
+

@@ -19,10 +19,12 @@ const { sendSubmissionEmail, sendSmtpTestEmail } = require("./services/email");
 const { getAdminSessionNotBefore } = require("./services/adminSessionState");
 const {
   getAdminUserAccessByUsername,
+  getAdminUserByUsername,
   listAdminUsers,
   createAdminUser,
   updateAdminUser,
   deleteAdminUser,
+  changeAdminUserPasswordByUsername,
   verifyAdminUserCredentials
 } = require("./services/adminUsers");
 const {
@@ -50,6 +52,19 @@ const {
   deleteEmailHtmlTemplate
 } = require("./services/emailSettings");
 const {
+  getUserSystemFontKey,
+  setUserSystemFontKey,
+  listSystemFontOptions
+} = require("./services/systemAppearance");
+const {
+  getReportServiceEmailSettings,
+  saveReportServiceSmtpSettings,
+  saveReportServiceEmailDefaultRecipients,
+  saveReportServiceEmailHtmlTemplate,
+  setDefaultReportServiceEmailHtmlTemplate,
+  deleteReportServiceEmailHtmlTemplate
+} = require("../report_service/src/services/emailSettings");
+const {
   SECTION_ORDER,
   FIELD_TYPES,
   parseBooleanInput,
@@ -71,7 +86,9 @@ const {
   updateEquipmentConfiguration,
   updateEquipmentStatus,
   deleteEquipmentById,
-  getEnabledFieldIdsForEquipment
+  getEnabledFieldIdsForEquipment,
+  normalizeEquipmentStatus,
+  EQUIPMENT_STATUS
 } = require("./services/equipments");
 const { getEquipmentSpecification, saveEquipmentSpecification } = require("./services/specifications");
 const {
@@ -248,9 +265,11 @@ app.use((req, res, next) => {
     req.adminModuleAccess = adminAccess.moduleAccess || [];
     req.lang = lang;
     req.t = createTranslator(lang);
+    const appFontKey = await getUserSystemFontKey(adminUsername);
     res.locals.lang = lang;
     res.locals.t = req.t;
     res.locals.currentPath = req.path;
+    res.locals.appFontKey = appFontKey;
     res.locals.appVersion = appVersionRaw;
     res.locals.appVersionShort = appVersionShort;
     res.locals.moduleSpecEnabled = env.moduleSpecEnabled;
@@ -540,7 +559,8 @@ async function runNodeScripts(sequence) {
 
 function canEditEquipmentSpecification(req, equipment) {
   if (!equipment) return false;
-  if (equipment.status !== "sent") return true;
+  const status = normalizeEquipmentStatus(equipment.status);
+  if (status === EQUIPMENT_STATUS.DRAFT) return true;
   return isValidAdminSessionToken(req.cookies[ADMIN_SESSION_COOKIE_NAME]);
 }
 
@@ -598,10 +618,10 @@ function getBackupDirectoryPath() {
 
 function extractBackupFileNameFromOutput(output) {
   const text = String(output || "");
-  const matches = text.match(/Backup concluido:\s*([^\r\n]+\.sql)/i);
+  const matches = text.match(/Backup(?:\s+[a-z-]+)?\s+concluido:\s*([^\r\n]+\.sql)/i);
   if (!matches || !matches[1]) return "";
   const candidate = path.basename(matches[1].trim());
-  if (!/^db-backup-.*\.sql$/i.test(candidate)) return "";
+  if (!/^(db-backup|specflow-backup|module-spec-backup|report-service-backup|db-import)-.*\.sql$/i.test(candidate)) return "";
   return candidate;
 }
 
@@ -609,6 +629,27 @@ function buildAdminBackupDownloadPath(backupId) {
   const id = Number(backupId);
   if (!Number.isInteger(id) || id <= 0) return "";
   return `/admin/backups/${id}/download`;
+}
+
+function resolveRestoreModuleFromBackupPath(backupFilePath) {
+  const fileName = path.basename(String(backupFilePath || "")).toLowerCase();
+  if (!fileName.endsWith(".sql")) return "";
+  if (fileName.startsWith("module-spec-backup-")) return "module-spec";
+  if (fileName.startsWith("report-service-backup-")) return "report-service";
+  if (fileName.startsWith("specflow-backup-") || fileName.startsWith("db-backup-") || fileName.startsWith("db-import-")) {
+    return "specflow";
+  }
+  return "";
+}
+
+function buildRestoreScriptArgs(backupFilePath) {
+  const moduleName = resolveRestoreModuleFromBackupPath(backupFilePath);
+  const args = [];
+  if (moduleName) {
+    args.push(`--module=${moduleName}`);
+  }
+  args.push(backupFilePath);
+  return { moduleName, args };
 }
 
 function sanitizeImportedBackupFileName(fileName) {
@@ -652,16 +693,12 @@ async function loadBackupsForMaintenancePage() {
 }
 
 async function renderAdminMaintenancePage(req, res, options = {}) {
-  const users = options.users || await listAdminUsers();
   const backups = options.backups || await loadBackupsForMaintenancePage();
   const emailSettings = options.emailSettings || await getEmailSettings();
 
   return res.status(options.statusCode || 200).render("admin-maintenance", {
     pageTitle: "Manutencao administrativa",
     commandResult: options.commandResult || null,
-    userCreateResult: options.userCreateResult || null,
-    userUpdateResult: options.userUpdateResult || null,
-    userDeleteResult: options.userDeleteResult || null,
     smtpUpdateResult: options.smtpUpdateResult || null,
     smtpTestResult: options.smtpTestResult || null,
     emailTemplatesUpdateResult: options.emailTemplatesUpdateResult || null,
@@ -674,12 +711,79 @@ async function renderAdminMaintenancePage(req, res, options = {}) {
       set_default_template: false
     },
     maintenanceEmailTestTo: options.maintenanceEmailTestTo || "",
-    users,
     backups,
     emailSettings,
     publicTokenMaxPerWindow: MAX_TOKENS_PER_WINDOW,
     publicTokenWindowHours: WINDOW_HOURS,
+    csrfToken: req.csrfToken()
+  });
+}
+
+async function renderSystemMaintenancePage(req, res, options = {}) {
+  const isSystemAdmin = String(req.adminRole || "").toLowerCase() === "admin";
+  const users = isSystemAdmin ? (options.users || await listAdminUsers()) : [];
+  const backups = isSystemAdmin ? (options.backups || await loadBackupsForMaintenancePage()) : [];
+  const currentSystemFont = options.currentSystemFont || await getUserSystemFontKey(req.adminUsername || "");
+  const systemFontOptions = listSystemFontOptions();
+  return res.status(options.statusCode || 200).render("admin-maintenance-system", {
+    pageTitle: "Manutencao do sistema",
+    canManageSystem: isSystemAdmin,
+    commandResult: options.commandResult || null,
+    systemFontResult: options.systemFontResult || null,
+    selfPasswordResult: options.selfPasswordResult || null,
+    userCreateResult: options.userCreateResult || null,
+    userUpdateResult: options.userUpdateResult || null,
+    userDeleteResult: options.userDeleteResult || null,
+    users,
+    backups,
+    currentSystemFont,
+    systemFontOptions,
     envAdminUser: env.admin.user,
+    maintenanceCards: [
+      {
+        title: "SpecFlow",
+        description: "Backup do banco, links publicos e configuracao/template de e-mail.",
+        href: "/admin/maintenance/specflow"
+      },
+      {
+        title: "Module Spec",
+        description: "Backup do banco dedicado do modulo.",
+        href: "/admin/maintenance/module-spec"
+      },
+      {
+        title: "Report Service",
+        description: "Backup do banco, configuracao de e-mail e templates do modulo.",
+        href: "/admin/maintenance/report-service"
+      }
+    ],
+    csrfToken: req.csrfToken()
+  });
+}
+
+function renderModuleSpecMaintenancePage(req, res, options = {}) {
+  return res.status(options.statusCode || 200).render("admin-maintenance-module-spec", {
+    pageTitle: "Manutencao Module Spec",
+    commandResult: options.commandResult || null,
+    csrfToken: req.csrfToken()
+  });
+}
+
+async function renderReportServiceMaintenancePage(req, res, options = {}) {
+  const emailSettings = options.emailSettings || await getReportServiceEmailSettings();
+  return res.status(options.statusCode || 200).render("admin-maintenance-report-service", {
+    pageTitle: "Manutencao Report Service",
+    commandResult: options.commandResult || null,
+    smtpUpdateResult: options.smtpUpdateResult || null,
+    emailTemplatesUpdateResult: options.emailTemplatesUpdateResult || null,
+    defaultRecipientsUpdateResult: options.defaultRecipientsUpdateResult || null,
+    emailTemplateEditorValues: options.emailTemplateEditorValues || {
+      template_id: "",
+      template_name: "",
+      template_subject: "",
+      template_html: "",
+      set_default_template: false
+    },
+    emailSettings,
     csrfToken: req.csrfToken()
   });
 }
@@ -1438,53 +1542,12 @@ async function renderAdminApiKeysPage(req, res, options = {}) {
 }
 
 async function renderAdminTokensPage(req, res, options = {}) {
-  const requestedPage = Number(sanitizeInput(req.query.page));
-  const pageSize = 20;
-  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
-  const search = sanitizeInput(req.query.search || "");
-  const normalizedSearch = normalizeSearchText(search);
-
-  const allRows = await listEquipments();
-  const filteredRows = normalizedSearch
-    ? allRows
-      .map((row, index) => {
-        const source = `${row.purchaser || ""} ${row.purchaserContact || ""}`;
-        return { row, index, score: smartSearchScore(source, normalizedSearch) };
-      })
-      .filter((item) => item.score >= 0.45)
-      .sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return a.index - b.index;
-      })
-      .map((item) => item.row)
-    : allRows;
-
-  const total = filteredRows.length;
-  const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
-  const safePage = Math.min(page, totalPages);
-  const start = (safePage - 1) * pageSize;
-  const rows = filteredRows.slice(start, start + pageSize);
-  const paginationQuery = new URLSearchParams();
-  if (search) paginationQuery.set("search", search);
-  const paginationQuerySuffix = paginationQuery.toString()
-    ? `&${paginationQuery.toString()}`
-    : "";
+  const rows = await listEquipments();
   res.status(options.statusCode || 200).render("admin-tokens", {
     pageTitle: req.t("admin.pageTitle"),
     rows,
-    filters: {
-      search
-    },
-    pagination: {
-      page: safePage,
-      pageSize,
-      total,
-      totalPages,
-      hasPrev: safePage > 1,
-      hasNext: safePage < totalPages,
-      querySuffix: paginationQuerySuffix
-    },
     saved: req.query.saved === "1",
+    tokenStatusSaved: req.query.token_status_saved === "1",
     deleted: req.query.deleted === "1",
     imported: req.query.imported === "1",
     importJsonResult: options.importJsonResult || null,
@@ -1520,6 +1583,7 @@ function renderAdminModuleHubPage(req, res) {
   const canAccessSpecflow = hasModuleAccess(req.adminRole, req.adminModuleAccess, "specflow");
   const canAccessModuleSpec = hasModuleAccess(req.adminRole, req.adminModuleAccess, "module-spec");
   const canAccessReportService = hasModuleAccess(req.adminRole, req.adminModuleAccess, "report-service");
+  const canAccessSystemMaintenance = Boolean(String(req.adminUsername || "").trim());
 
   const moduleCards = [
     {
@@ -1557,6 +1621,20 @@ function renderAdminModuleHubPage(req, res) {
       cta: env.reportServiceEnabled
         ? (canAccessReportService ? "Acessar" : "Sem acesso")
         : "Indisponivel"
+    },
+    {
+      key: "maintenance-system",
+      name: "Manutencao do Sistema",
+      description: "Central administrativa. Perfil user acessa apenas senha e tipografia.",
+      status: canAccessSystemMaintenance
+        ? (String(req.adminRole || "").toLowerCase() === "admin" ? "Ativo" : "Limitado")
+        : "Sem acesso",
+      statusVariant: canAccessSystemMaintenance
+        ? (String(req.adminRole || "").toLowerCase() === "admin" ? "primary" : "warning")
+        : "secondary",
+      moduleVersion: "admin",
+      href: canAccessSystemMaintenance ? "/admin/maintenance/system" : "",
+      cta: canAccessSystemMaintenance ? "Acessar" : "Sem acesso"
     }
   ];
 
@@ -1737,6 +1815,8 @@ app.use("/admin/seed-annexd", requireSpecflowEnabled, requireAdminAuth, requireS
 app.use("/admin/module-spec", requireModuleSpecEnabled, requireAdminAuth, requireModuleSpecModuleAccess);
 app.use("/admin/report-service", requireReportServiceEnabled, requireAdminAuth, requireReportServiceModuleAccess);
 app.use("/service-report", requireReportServiceEnabled, requireAdminAuth, requireReportServiceModuleAccess);
+app.use("/admin/maintenance/module-spec", requireModuleSpecEnabled, requireAdminAuth, requireModuleSpecModuleAccess);
+app.use("/admin/maintenance/report-service", requireReportServiceEnabled, requireAdminAuth, requireReportServiceModuleAccess);
 
 app.get("/admin/hub", csrfProtection, requireAdminAuth, (req, res) => {
   renderAdminModuleHubPage(req, res);
@@ -1883,8 +1963,406 @@ app.post("/admin/public-token-links/:id/delete", csrfProtection, requireAdminAut
   return res.redirect("/admin/public-token-links?deleted=1");
 }));
 
+app.get("/admin/maintenance/system", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
+  await renderSystemMaintenancePage(req, res);
+}));
+
+app.post("/admin/maintenance/system/font", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
+  const requestedFont = sanitizeInput(req.body.system_font);
+  const adminUsername = String(req.adminUsername || "").trim();
+  const adminUser = await getAdminUserByUsername(adminUsername);
+  let systemFontResult;
+  let statusCode = 200;
+
+  if (!adminUser) {
+    statusCode = 422;
+    systemFontResult = {
+      ok: false,
+      message: "Seu usuario nao esta cadastrado em admin_users. Solicite ao admin a regularizacao da conta."
+    };
+  } else {
+    try {
+      const saved = await setUserSystemFontKey(adminUsername, requestedFont);
+      systemFontResult = {
+        ok: true,
+        message: `Fonte aplicada para o usuario ${adminUsername}: ${saved}.`
+      };
+    } catch (err) {
+      statusCode = 422;
+      systemFontResult = {
+        ok: false,
+        message: sanitizeInput(err?.message || "") || "Falha ao salvar fonte do usuario."
+      };
+    }
+  }
+
+  await renderSystemMaintenancePage(req, res, {
+    statusCode,
+    systemFontResult
+  });
+}));
+
+app.post("/admin/maintenance/system/password", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
+  const adminUsername = String(req.adminUsername || "").trim();
+  const adminUser = await getAdminUserByUsername(adminUsername);
+  const currentPassword = sanitizeInput(req.body.current_password);
+  const newPassword = sanitizeInput(req.body.new_password);
+  const newPasswordConfirm = sanitizeInput(req.body.new_password_confirm);
+  let selfPasswordResult;
+  let statusCode = 200;
+
+  if (!adminUser) {
+    statusCode = 422;
+    selfPasswordResult = { ok: false, message: "Seu usuario nao esta cadastrado em admin_users para troca de senha." };
+  } else if (!currentPassword) {
+    statusCode = 422;
+    selfPasswordResult = { ok: false, message: "Informe a senha atual." };
+  } else if (!newPassword || String(newPassword).length < 8) {
+    statusCode = 422;
+    selfPasswordResult = { ok: false, message: "Nova senha deve ter ao menos 8 caracteres." };
+  } else if (!safeTimingEqual(String(newPassword), String(newPasswordConfirm))) {
+    statusCode = 422;
+    selfPasswordResult = { ok: false, message: "Confirmacao de senha nao confere." };
+  } else {
+    try {
+      await changeAdminUserPasswordByUsername({
+        username: adminUsername,
+        currentPassword,
+        newPassword
+      });
+      selfPasswordResult = { ok: true, message: "Senha atualizada com sucesso." };
+    } catch (err) {
+      statusCode = 422;
+      selfPasswordResult = {
+        ok: false,
+        message: sanitizeInput(err?.message || "") || "Falha ao atualizar senha."
+      };
+    }
+  }
+
+  await renderSystemMaintenancePage(req, res, {
+    statusCode,
+    selfPasswordResult
+  });
+}));
+
+app.post("/admin/maintenance/system/command", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const action = sanitizeInput(req.body.action);
+  const backupIdRaw = sanitizeInput(req.body.backupId);
+  const backupId = Number(backupIdRaw);
+  let label = "";
+  let execution = { ok: false, code: -1, output: "Acao invalida." };
+  let downloadPath = "";
+
+  if (action === "backup_all") {
+    label = "node scripts/backup-module-database.js all";
+    execution = await runNodeScripts([{ script: "scripts/backup-module-database.js", args: ["all"] }]);
+  } else if (action === "migrate_all") {
+    label = "npm run db:migrate + npm run db:migrate:module-spec + npm run db:migrate:report-service";
+    execution = await runNodeScripts([
+      { script: "scripts/migrate.js" },
+      { script: "module_spec/migrate.js" },
+      { script: "report_service/migrate.js" }
+    ]);
+  } else if (action === "seed_all") {
+    label = "npm run db:seed";
+    execution = await runNodeScripts([{ script: "scripts/seed.js" }]);
+  } else if (action === "admin_sessions_clear") {
+    label = "npm run admin:sessions:clear";
+    execution = await runNodeScripts([{ script: "scripts/clear-admin-sessions.js" }]);
+  } else if (action === "db_backup") {
+    label = "npm run db:backup:specflow";
+    execution = await runNodeScripts([{ script: "scripts/backup-module-database.js", args: ["specflow"] }]);
+    if (execution.ok) {
+      const outputFileName = extractBackupFileNameFromOutput(execution.output);
+      const backups = await loadBackupsForMaintenancePage();
+      const matched = backups.find((item) => item.fileName === outputFileName) || backups[0];
+      downloadPath = buildAdminBackupDownloadPath(matched ? matched.id : null);
+    }
+  } else if (action === "db_restore_selected") {
+    if (!Number.isInteger(backupId) || backupId <= 0) {
+      execution = { ok: false, code: -1, output: "Informe backupId valido." };
+      label = "npm run db:restore-database -- <arquivo.sql>";
+    } else {
+      const selectedBackup = await getBackupFileById(backupId);
+      if (!selectedBackup) {
+        execution = { ok: false, code: -1, output: "Backup nao encontrado no catalogo." };
+        label = "npm run db:restore-database -- <arquivo.sql>";
+      } else if (!selectedBackup.existsOnDisk) {
+        execution = { ok: false, code: -1, output: `Arquivo nao encontrado no disco: ${selectedBackup.filePath}` };
+        label = `npm run db:restore-database -- "${selectedBackup.filePath}"`;
+      } else {
+        const restoreCommand = buildRestoreScriptArgs(selectedBackup.filePath);
+        label = restoreCommand.moduleName
+          ? `npm run db:restore-database -- --module=${restoreCommand.moduleName} "${selectedBackup.filePath}"`
+          : `npm run db:restore-database -- "${selectedBackup.filePath}"`;
+        execution = await runNodeScripts([{ script: "scripts/restore-database.js", args: restoreCommand.args }]);
+      }
+    }
+  } else if (action === "db_delete_selected") {
+    if (!Number.isInteger(backupId) || backupId <= 0) {
+      execution = { ok: false, code: -1, output: "Informe backupId valido." };
+      label = "Excluir backup do catalogo/disco por ID";
+    } else {
+      const deleted = await deleteBackupFileById(backupId, { removeFromDisk: true });
+      if (!deleted) {
+        execution = { ok: false, code: -1, output: "Backup nao encontrado no catalogo." };
+        label = "Excluir backup do catalogo/disco por ID";
+      } else {
+        label = `Excluir backup ID ${backupId}`;
+        const diskMessage = deleted.diskStatus === "deleted"
+          ? "Arquivo removido do disco."
+          : "Arquivo ja nao existia no disco.";
+        execution = {
+          ok: true,
+          code: 0,
+          output: `Backup removido do catalogo.\n${diskMessage}\nArquivo: ${deleted.backup.filePath}`
+        };
+      }
+    }
+  } else if (action === "db_restore") {
+    const backups = await loadBackupsForMaintenancePage();
+    const latest = backups.find((item) => item.existsOnDisk);
+    if (!latest) {
+      execution = { ok: false, code: -1, output: "Nenhum backup disponivel para restore." };
+      label = "npm run db:restore-database -- <arquivo.sql>";
+    } else {
+      const restoreCommand = buildRestoreScriptArgs(latest.filePath);
+      label = restoreCommand.moduleName
+        ? `npm run db:restore-database -- --module=${restoreCommand.moduleName} "${latest.filePath}"`
+        : `npm run db:restore-database -- "${latest.filePath}"`;
+      execution = await runNodeScripts([{ script: "scripts/restore-database.js", args: restoreCommand.args }]);
+    }
+  }
+
+  await renderSystemMaintenancePage(req, res, {
+    statusCode: execution.ok ? 200 : 422,
+    commandResult: {
+      ...execution,
+      label,
+      downloadPath
+    }
+  });
+}));
+
 app.get("/admin/maintenance", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
   await renderAdminMaintenancePage(req, res);
+}));
+
+app.get("/admin/maintenance/specflow", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  await renderAdminMaintenancePage(req, res);
+}));
+
+app.get("/admin/maintenance/module-spec", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  renderModuleSpecMaintenancePage(req, res);
+}));
+
+app.post("/admin/maintenance/module-spec/command", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const action = sanitizeInput(req.body.action);
+  let label = "";
+  let execution = { ok: false, code: -1, output: "Acao invalida." };
+
+  if (action === "db_backup") {
+    label = "node scripts/backup-module-database.js module-spec";
+    execution = await runNodeScripts([{ script: "scripts/backup-module-database.js", args: ["module-spec"] }]);
+  } else if (action === "db_reset") {
+    label = "reset module-spec schema + seed";
+    execution = await runNodeScripts([
+      { script: "scripts/reset-module-db-schema.js", args: ["module-spec"] },
+      { script: "module_spec/seed.js" }
+    ]);
+  }
+
+  renderModuleSpecMaintenancePage(req, res, {
+    statusCode: execution.ok ? 200 : 422,
+    commandResult: {
+      ...execution,
+      label
+    }
+  });
+}));
+
+app.get("/admin/maintenance/report-service", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  await renderReportServiceMaintenancePage(req, res);
+}));
+
+app.post("/admin/maintenance/report-service/command", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const action = sanitizeInput(req.body.action);
+  let label = "";
+  let execution = { ok: false, code: -1, output: "Acao invalida." };
+
+  if (action === "db_backup") {
+    label = "node scripts/backup-module-database.js report-service";
+    execution = await runNodeScripts([{ script: "scripts/backup-module-database.js", args: ["report-service"] }]);
+  } else if (action === "db_reset") {
+    label = "reset report-service schema + seed";
+    execution = await runNodeScripts([
+      { script: "scripts/reset-module-db-schema.js", args: ["report-service"] },
+      { script: "report_service/seed.js" }
+    ]);
+  }
+
+  await renderReportServiceMaintenancePage(req, res, {
+    statusCode: execution.ok ? 200 : 422,
+    commandResult: {
+      ...execution,
+      label
+    }
+  });
+}));
+
+app.post("/admin/maintenance/report-service/email-templates/save", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const templateId = sanitizeInput(req.body.template_id);
+  const templateName = sanitizeInput(req.body.template_name);
+  const templateSubject = sanitizeInput(req.body.template_subject);
+  const templateHtml = String(req.body.template_html || "").slice(0, 120000);
+  const setDefaultTemplate = parseBooleanInput(req.body.set_default_template) === true;
+  const emailTemplateEditorValues = {
+    template_id: templateId,
+    template_name: templateName,
+    template_subject: templateSubject,
+    template_html: templateHtml,
+    set_default_template: setDefaultTemplate
+  };
+
+  let emailTemplatesUpdateResult;
+  try {
+    const saved = await saveReportServiceEmailHtmlTemplate({
+      templateId,
+      name: templateName,
+      subject: templateSubject,
+      html: templateHtml,
+      setAsDefault: setDefaultTemplate
+    });
+    emailTemplatesUpdateResult = {
+      ok: true,
+      message: `Modelo HTML salvo com sucesso: ${saved.name}.`
+    };
+    emailTemplateEditorValues.template_id = saved.id;
+  } catch (err) {
+    emailTemplatesUpdateResult = {
+      ok: false,
+      message: sanitizeInput(err?.message || "") || getStandardStatusMessage(req, 500)
+    };
+  }
+
+  const emailSettings = await getReportServiceEmailSettings();
+  await renderReportServiceMaintenancePage(req, res, {
+    statusCode: emailTemplatesUpdateResult.ok ? 200 : 422,
+    emailTemplatesUpdateResult,
+    emailTemplateEditorValues,
+    emailSettings
+  });
+}));
+
+app.post("/admin/maintenance/report-service/email-templates/default", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const templateId = sanitizeInput(req.body.template_id);
+  let emailTemplatesUpdateResult;
+
+  try {
+    await setDefaultReportServiceEmailHtmlTemplate(templateId);
+    emailTemplatesUpdateResult = { ok: true, message: "Modelo padrao atualizado com sucesso." };
+  } catch (err) {
+    emailTemplatesUpdateResult = {
+      ok: false,
+      message: sanitizeInput(err?.message || "") || getStandardStatusMessage(req, 500)
+    };
+  }
+
+  const emailSettings = await getReportServiceEmailSettings();
+  await renderReportServiceMaintenancePage(req, res, {
+    statusCode: emailTemplatesUpdateResult.ok ? 200 : 422,
+    emailTemplatesUpdateResult,
+    emailSettings
+  });
+}));
+
+app.post("/admin/maintenance/report-service/email-templates/:id/delete", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const templateId = sanitizeInput(req.params.id);
+  let emailTemplatesUpdateResult;
+
+  try {
+    await deleteReportServiceEmailHtmlTemplate(templateId);
+    emailTemplatesUpdateResult = { ok: true, message: "Modelo HTML removido com sucesso." };
+  } catch (err) {
+    emailTemplatesUpdateResult = {
+      ok: false,
+      message: sanitizeInput(err?.message || "") || getStandardStatusMessage(req, 500)
+    };
+  }
+
+  const emailSettings = await getReportServiceEmailSettings();
+  await renderReportServiceMaintenancePage(req, res, {
+    statusCode: emailTemplatesUpdateResult.ok ? 200 : 422,
+    emailTemplatesUpdateResult,
+    emailSettings
+  });
+}));
+
+app.post("/admin/maintenance/report-service/default-recipients", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const defaultRecipientsRaw = String(req.body.default_email_recipients || "").slice(0, 4000).trim();
+  const parsedRecipients = parseEmailListInput(defaultRecipientsRaw.replace(/\r?\n/g, ";"));
+  const invalidEmail = parsedRecipients.find((email) => !isValidEmailAddress(email));
+
+  let defaultRecipientsUpdateResult;
+  if (invalidEmail) {
+    defaultRecipientsUpdateResult = { ok: false, message: `E-mail invalido na lista de destinatarios padrao: ${invalidEmail}` };
+  } else {
+    try {
+      await saveReportServiceEmailDefaultRecipients(parsedRecipients.join("; "));
+      defaultRecipientsUpdateResult = { ok: true, message: "Destinatarios padrao atualizados com sucesso." };
+    } catch (_err) {
+      defaultRecipientsUpdateResult = { ok: false, message: getStandardStatusMessage(req, 500) };
+    }
+  }
+
+  const emailSettings = await getReportServiceEmailSettings();
+  await renderReportServiceMaintenancePage(req, res, {
+    statusCode: defaultRecipientsUpdateResult.ok ? 200 : 422,
+    defaultRecipientsUpdateResult,
+    emailSettings
+  });
+}));
+
+app.post("/admin/maintenance/report-service/smtp", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const smtpHost = sanitizeInput(req.body.smtp_host);
+  const smtpPortRaw = sanitizeInput(req.body.smtp_port);
+  const smtpSecure = parseBooleanInput(req.body.smtp_secure) === true;
+  const smtpUser = sanitizeInput(req.body.smtp_user);
+  const smtpFrom = sanitizeInput(req.body.smtp_from);
+  const smtpPass = sanitizeInput(req.body.smtp_pass);
+  const clearPassword = parseBooleanInput(req.body.smtp_pass_clear) === true;
+  const smtpPort = Number(smtpPortRaw);
+
+  let smtpUpdateResult;
+  if (!smtpHost) {
+    smtpUpdateResult = { ok: false, message: "Informe o host SMTP." };
+  } else if (!Number.isInteger(smtpPort) || smtpPort <= 0 || smtpPort > 65535) {
+    smtpUpdateResult = { ok: false, message: "Porta SMTP invalida." };
+  } else if (!smtpFrom || !isValidEmailAddress(smtpFrom)) {
+    smtpUpdateResult = { ok: false, message: "Informe um remetente valido em SMTP From." };
+  } else {
+    try {
+      await saveReportServiceSmtpSettings({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        user: smtpUser,
+        from: smtpFrom,
+        pass: smtpPass,
+        passwordProvided: Boolean(smtpPass),
+        clearPassword
+      });
+      smtpUpdateResult = { ok: true, message: "Configuracao SMTP atualizada com sucesso." };
+    } catch (_err) {
+      smtpUpdateResult = { ok: false, message: getStandardStatusMessage(req, 500) };
+    }
+  }
+
+  await renderReportServiceMaintenancePage(req, res, {
+    statusCode: smtpUpdateResult.ok ? 200 : 422,
+    smtpUpdateResult
+  });
 }));
 
 app.post("/admin/maintenance/email-templates/save", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
@@ -2160,28 +2638,12 @@ app.post("/admin/maintenance/command", csrfProtection, requireAdminAuth, require
       { script: "scripts/seed.js" },
       { script: "scripts/seed-profile-purchase.js" }
     ]);
-  } else if (action === "token_set_sent") {
-    if (!token) {
-      execution = { ok: false, code: -1, output: "Informe token valido." };
-      label = "npm run token:set-sent -- --token=<token>";
-    } else {
-      label = `npm run token:set-sent -- --token=${token}`;
-      execution = await runNodeScripts([{ script: "scripts/token-set-sent.js", args: [`--token=${token}`] }]);
-    }
-  } else if (action === "token_set_draft") {
-    if (!token) {
-      execution = { ok: false, code: -1, output: "Informe token valido." };
-      label = "npm run token:set-draft -- --token=<token>";
-    } else {
-      label = `npm run token:set-draft -- --token=${token}`;
-      execution = await runNodeScripts([{ script: "scripts/token-set-draft.js", args: [`--token=${token}`] }]);
-    }
   } else if (action === "admin_sessions_clear") {
     label = "npm run admin:sessions:clear";
     execution = await runNodeScripts([{ script: "scripts/clear-admin-sessions.js" }]);
   } else if (action === "db_backup") {
-    label = "npm run db:backup-database";
-    execution = await runNodeScripts([{ script: "scripts/backup-database.js" }]);
+    label = "npm run db:backup:specflow";
+    execution = await runNodeScripts([{ script: "scripts/backup-module-database.js", args: ["specflow"] }]);
     if (execution.ok) {
       const outputFileName = extractBackupFileNameFromOutput(execution.output);
       const backups = await loadBackupsForMaintenancePage();
@@ -2201,8 +2663,11 @@ app.post("/admin/maintenance/command", csrfProtection, requireAdminAuth, require
         execution = { ok: false, code: -1, output: `Arquivo nao encontrado no disco: ${selectedBackup.filePath}` };
         label = `npm run db:restore-database -- "${selectedBackup.filePath}"`;
       } else {
-        label = `npm run db:restore-database -- "${selectedBackup.filePath}"`;
-        execution = await runNodeScripts([{ script: "scripts/restore-database.js", args: [selectedBackup.filePath] }]);
+        const restoreCommand = buildRestoreScriptArgs(selectedBackup.filePath);
+        label = restoreCommand.moduleName
+          ? `npm run db:restore-database -- --module=${restoreCommand.moduleName} "${selectedBackup.filePath}"`
+          : `npm run db:restore-database -- "${selectedBackup.filePath}"`;
+        execution = await runNodeScripts([{ script: "scripts/restore-database.js", args: restoreCommand.args }]);
       }
     }
   } else if (action === "db_delete_selected") {
@@ -2233,8 +2698,27 @@ app.post("/admin/maintenance/command", csrfProtection, requireAdminAuth, require
       execution = { ok: false, code: -1, output: "Nenhum backup disponivel para restore." };
       label = "npm run db:restore-database -- <arquivo.sql>";
     } else {
-      label = `npm run db:restore-database -- "${latest.filePath}"`;
-      execution = await runNodeScripts([{ script: "scripts/restore-database.js", args: [latest.filePath] }]);
+      const restoreCommand = buildRestoreScriptArgs(latest.filePath);
+      label = restoreCommand.moduleName
+        ? `npm run db:restore-database -- --module=${restoreCommand.moduleName} "${latest.filePath}"`
+        : `npm run db:restore-database -- "${latest.filePath}"`;
+      execution = await runNodeScripts([{ script: "scripts/restore-database.js", args: restoreCommand.args }]);
+    }
+  } else if (action === "token_set_sent") {
+    if (!token) {
+      execution = { ok: false, code: -1, output: "Informe token valido." };
+      label = "npm run token:set-sent -- --token=<token> (status=send)";
+    } else {
+      label = `npm run token:set-sent -- --token=${token} (status=send)`;
+      execution = await runNodeScripts([{ script: "scripts/token-set-sent.js", args: [`--token=${token}`] }]);
+    }
+  } else if (action === "token_set_draft") {
+    if (!token) {
+      execution = { ok: false, code: -1, output: "Informe token valido." };
+      label = "npm run token:set-draft -- --token=<token>";
+    } else {
+      label = `npm run token:set-draft -- --token=${token}`;
+      execution = await runNodeScripts([{ script: "scripts/token-set-draft.js", args: [`--token=${token}`] }]);
     }
   }
 
@@ -2249,7 +2733,7 @@ app.post("/admin/maintenance/command", csrfProtection, requireAdminAuth, require
 }));
 
 app.post(
-  "/admin/maintenance/restore-import",
+  ["/admin/maintenance/restore-import", "/admin/maintenance/system/restore-import"],
   csrfProtection,
   requireAdminAuth,
   requireMaintenanceAdmin,
@@ -2296,7 +2780,7 @@ app.get("/admin/backups/:id/download", requireAdminAuth, requireMaintenanceAdmin
   return res.download(backup.filePath, backup.fileName || path.basename(backup.filePath));
 }));
 
-app.post("/admin/maintenance/admin-users/create", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+app.post(["/admin/maintenance/system/admin-users/create", "/admin/maintenance/admin-users/create"], csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = sanitizeInput(req.body.password);
   const passwordConfirm = sanitizeInput(req.body.passwordConfirm);
@@ -2323,13 +2807,13 @@ app.post("/admin/maintenance/admin-users/create", csrfProtection, requireAdminAu
     }
   }
 
-  await renderAdminMaintenancePage(req, res, {
+  await renderSystemMaintenancePage(req, res, {
     statusCode: userCreateResult.ok ? 200 : 422,
     userCreateResult,
   });
 }));
 
-app.post("/admin/maintenance/admin-users/:id/update", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+app.post(["/admin/maintenance/system/admin-users/:id/update", "/admin/maintenance/admin-users/:id/update"], csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
   const id = sanitizeInput(req.params.id);
   const username = sanitizeInput(req.body.username);
   const role = sanitizeInput(req.body.role).toLowerCase();
@@ -2363,13 +2847,13 @@ app.post("/admin/maintenance/admin-users/:id/update", csrfProtection, requireAdm
     }
   }
 
-  await renderAdminMaintenancePage(req, res, {
+  await renderSystemMaintenancePage(req, res, {
     statusCode: userUpdateResult.ok ? 200 : 422,
     userUpdateResult,
   });
 }));
 
-app.post("/admin/maintenance/admin-users/:id/delete", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+app.post(["/admin/maintenance/system/admin-users/:id/delete", "/admin/maintenance/admin-users/:id/delete"], csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
   const id = sanitizeInput(req.params.id);
   let userDeleteResult = null;
 
@@ -2384,7 +2868,7 @@ app.post("/admin/maintenance/admin-users/:id/delete", csrfProtection, requireAdm
     }
   }
 
-  await renderAdminMaintenancePage(req, res, {
+  await renderSystemMaintenancePage(req, res, {
     statusCode: userDeleteResult.ok ? 200 : 404,
     userDeleteResult,
   });
@@ -2397,6 +2881,29 @@ app.post("/admin/tokens/:id/delete", csrfProtection, requireAdminAuth, asyncHand
   }
   await deleteEquipmentById(id);
   return res.redirect("/admin/tokens?deleted=1");
+}));
+
+app.post("/admin/tokens/:id/status", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return sendStandardError(req, res, 400);
+  }
+
+  const equipment = await getEquipmentById(id);
+  if (!equipment) {
+    return sendStandardError(req, res, 404);
+  }
+
+  const nextStatusRaw = sanitizeInput(req.body.status).toLowerCase();
+  const isAllowedRaw = ["draft", "send", "closed", "sent"].includes(nextStatusRaw);
+  const nextStatus = normalizeEquipmentStatus(nextStatusRaw);
+  const isAllowed = isAllowedRaw && [EQUIPMENT_STATUS.DRAFT, EQUIPMENT_STATUS.SEND, EQUIPMENT_STATUS.CLOSED].includes(nextStatus);
+  if (!isAllowed) {
+    return sendStandardError(req, res, 422);
+  }
+
+  await updateEquipmentStatus(id, nextStatus);
+  return res.redirect("/admin/tokens?token_status_saved=1");
 }));
 
 app.get("/admin/tokens/:id/config", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
@@ -3452,7 +3959,7 @@ app.get("/form/:token/documents/:id/download", asyncHandler(async (req, res) => 
   const equipment = await resolveEquipmentByTokenOr404(req, res);
   if (!equipment) return;
   const isAdminAuthenticated = isValidAdminSessionToken(req.cookies[ADMIN_SESSION_COOKIE_NAME]);
-  if (equipment.status === "sent" && !isAdminAuthenticated) {
+  if (normalizeEquipmentStatus(equipment.status) !== EQUIPMENT_STATUS.DRAFT && !isAdminAuthenticated) {
     return sendStandardError(req, res, 403);
   }
 
@@ -3562,7 +4069,7 @@ app.post("/form/:token/send-email", csrfProtection, emailLimiter, asyncHandler(a
     const documents = await listEquipmentDocuments(equipment.id);
     const pdfBuffer = await generatePdfBuffer({ submission: equipment, sections, documents, lang: req.lang });
     await sendSubmissionEmail({ to, cc, submission: equipment, sections, pdfBuffer, lang: req.lang });
-    await updateEquipmentStatus(equipment.id, "sent");
+    await updateEquipmentStatus(equipment.id, EQUIPMENT_STATUS.SEND);
     return res.redirect(`/form/${equipment.token}/review?email=1`);
   } catch (err) {
     return sendStandardError(req, res, 500);
@@ -3916,7 +4423,10 @@ app.use((err, req, res, next) => {
       details: null
     });
   }
-  if (req.path.includes("/admin/maintenance/restore-import") && err.type === "entity.too.large") {
+  if (
+    (req.path.includes("/admin/maintenance/restore-import") || req.path.includes("/admin/maintenance/system/restore-import"))
+    && err.type === "entity.too.large"
+  ) {
     return res.status(413).json({
       ok: false,
       code: -1,
@@ -3933,6 +4443,7 @@ app.use((err, req, res, next) => {
       || req.path.startsWith("/api/module-spec/")
       || req.path.includes("/docs/upload")
       || req.path.includes("/admin/maintenance/restore-import")
+      || req.path.includes("/admin/maintenance/system/restore-import")
     )
   ) {
     const message = getStandardStatusMessage(req, err.statusCode);
@@ -3951,6 +4462,7 @@ app.use((err, req, res, next) => {
     || req.path.startsWith("/api/module-spec/")
     || req.path.includes("/docs/upload")
     || req.path.includes("/admin/maintenance/restore-import")
+    || req.path.includes("/admin/maintenance/system/restore-import")
   ) {
     return res.status(err.statusCode || 500).json({
       error: getStandardStatusMessage(req, err.statusCode || 500),

@@ -2,14 +2,12 @@ require("dotenv").config();
 
 const db = require("../../specflow/db");
 const { createProfile, createFieldInProfile } = require("../../specflow/services/profiles");
-
-function readNumberArg(name, fallback) {
-  const prefix = `--${name}=`;
-  const raw = process.argv.find((arg) => arg.startsWith(prefix));
-  if (!raw) return fallback;
-  const value = Number(raw.slice(prefix.length));
-  return Number.isInteger(value) && value > 0 ? value : fallback;
-}
+const {
+  readNumberArg,
+  runWorkers,
+  logWorkerOk,
+  logWorkerFail
+} = require("./stress-common");
 
 function hasFlag(name) {
   return process.argv.includes(`--${name}`);
@@ -42,29 +40,26 @@ async function runWorker(total, shared, workerId, addField) {
       }
 
       shared.ok += 1;
-      // eslint-disable-next-line no-console
-      console.log(`[worker ${workerId}] OK ${id}/${total}`);
+      logWorkerOk(workerId, id, total);
     } catch (err) {
       shared.fail += 1;
-      // eslint-disable-next-line no-console
-      console.error(`[worker ${workerId}] FAIL ${id}/${total}: ${err.message}`);
+      logWorkerFail(workerId, id, total, err);
     }
   }
 }
 
 async function main() {
-  const count = readNumberArg("count", 20);
-  const concurrency = readNumberArg("concurrency", 5);
+  const count = readNumberArg("count", 20, 1, 10000);
+  const concurrency = readNumberArg("concurrency", 5, 1, 100);
   const addField = hasFlag("with-field");
   const startedAt = Date.now();
-  const shared = { next: 0, ok: 0, fail: 0 };
 
   // eslint-disable-next-line no-console
   console.log(`Starting stress profile registrations: count=${count}, concurrency=${concurrency}, withField=${addField}`);
 
-  await Promise.all(
-    Array.from({ length: concurrency }, (_, i) => runWorker(count, shared, i + 1, addField))
-  );
+  const shared = await runWorkers(count, concurrency, (total, state, workerId) => (
+    runWorker(total, state, workerId, addField)
+  ));
 
   const durationMs = Date.now() - startedAt;
   // eslint-disable-next-line no-console

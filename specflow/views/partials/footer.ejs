@@ -29,7 +29,7 @@
       (function () {
         "use strict";
         function updateThemeQr(theme) {
-          var normalized = theme === "vextrom" ? "vextrom" : "soft";
+          var normalized = (theme === "vextrom" || theme === "xvextrom" || theme === "xvetrom") ? "vextrom" : "soft";
           var qrNodes = document.querySelectorAll("img[data-qr-soft][data-qr-vextrom]");
           qrNodes.forEach(function (img) {
             var nextSrc = normalized === "vextrom" ? img.getAttribute("data-qr-vextrom") : img.getAttribute("data-qr-soft");
@@ -51,9 +51,10 @@
         if (themeSelector) {
           themeSelector.value = currentTheme;
           themeSelector.addEventListener("change", function () {
-            var nextTheme = ["soft", "vextrom"].indexOf(themeSelector.value) >= 0
+            var nextTheme = ["soft", "vextrom", "xvextrom", "xvetrom"].indexOf(themeSelector.value) >= 0
               ? themeSelector.value
               : "soft";
+            if (nextTheme === "xvetrom") nextTheme = "xvextrom";
             document.documentElement.setAttribute("data-theme", nextTheme);
             updateThemeQr(nextTheme);
             persistThemeCookie(nextTheme);
