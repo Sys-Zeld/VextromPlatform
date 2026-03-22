@@ -1212,6 +1212,26 @@ function resolvePdfUiTheme(req) {
   return normalizePdfTheme(req.cookies.app_theme);
 }
 
+function buildTokenOpenGraph(equipment, view = "specification") {
+  const cleanBaseUrl = String(env.appBaseUrl || "http://localhost:3000").replace(/\/+$/, "");
+  const token = encodeURIComponent(String(equipment && equipment.token ? equipment.token : ""));
+  const safeView = String(view || "specification").toLowerCase() === "review" ? "review" : "specification";
+  const profileName = sanitizeInput(equipment && equipment.profileName ? equipment.profileName : "") || "SpecFlow";
+  const purchaser = sanitizeInput(equipment && equipment.purchaser ? equipment.purchaser : "");
+  const projectName = sanitizeInput(equipment && equipment.projectName ? equipment.projectName : "");
+  const descriptionParts = [
+    purchaser || "Formulario tecnico",
+    projectName || "Especificacao",
+    `Token ${sanitizeInput(equipment && equipment.token ? equipment.token : "") || "-"}`
+  ];
+  return {
+    title: `${profileName} | Vextrom`,
+    description: descriptionParts.join(" - "),
+    image: `${cleanBaseUrl}/public/img/iec-icon.png`,
+    url: `${cleanBaseUrl}/form/${token}/${safeView}`
+  };
+}
+
 function randomInt(min, max) {
   const safeMin = Number(min) || 0;
   const safeMax = Number(max) || safeMin;
@@ -4067,6 +4087,7 @@ app.get("/form/:token/specification", csrfProtection, asyncHandler(async (req, r
   const initialTheme = resolveUiTheme(req);
   res.render("section", {
     pageTitle: req.t("section.headerTitle"),
+    openGraph: buildTokenOpenGraph(equipment, "specification"),
     equipment,
     publicDraftMode: false,
     displayToken: equipment.token,
@@ -4115,6 +4136,7 @@ app.post("/form/:token/specification", csrfProtection, asyncHandler(async (req, 
     const initialTheme = resolveUiTheme(req);
     return res.status(422).render("section", {
       pageTitle: req.t("section.headerTitle"),
+      openGraph: buildTokenOpenGraph(equipment, "specification"),
       equipment,
       publicDraftMode: false,
       displayToken: equipment.token,
@@ -4264,6 +4286,7 @@ app.get("/form/:token/review", csrfProtection, asyncHandler(async (req, res) => 
   const emailError = emailErrorMap[emailErrorKey] || "";
   res.render("review", {
     pageTitle: req.t("app.reviewTitle"),
+    openGraph: buildTokenOpenGraph(equipment, "review"),
     equipment,
     sections: buildSpecificationRenderModel(specification),
     documents,

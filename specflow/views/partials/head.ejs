@@ -3,6 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <% if (typeof openGraph !== "undefined" && openGraph) { %>
+      <meta property="og:type" content="website" />
+      <% if (openGraph.title) { %><meta property="og:title" content="<%= openGraph.title %>" /><% } %>
+      <% if (openGraph.description) { %><meta property="og:description" content="<%= openGraph.description %>" /><% } %>
+      <% if (openGraph.image) { %><meta property="og:image" content="<%= openGraph.image %>" /><% } %>
+      <% if (openGraph.url) { %><meta property="og:url" content="<%= openGraph.url %>" /><% } %>
+    <% } %>
     <link rel="icon" type="image/png" sizes="32x32" href="https://vextrom.com.br/wp-content/uploads/fbrfg/favicon-32x32.png" />
     <title><%= pageTitle %> | <%= t("app.titleSuffix") %></title>
     <script>
