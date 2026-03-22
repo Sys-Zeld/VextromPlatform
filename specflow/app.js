@@ -1212,6 +1212,15 @@ function resolvePdfUiTheme(req) {
   return normalizePdfTheme(req.cookies.app_theme);
 }
 
+function escapeXml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildTokenOpenGraph(equipment, view = "specification") {
   const cleanBaseUrl = String(env.appBaseUrl || "http://localhost:3000").replace(/\/+$/, "");
   const token = encodeURIComponent(String(equipment && equipment.token ? equipment.token : ""));
@@ -1227,7 +1236,7 @@ function buildTokenOpenGraph(equipment, view = "specification") {
   return {
     title: `${profileName} | Vextrom`,
     description: descriptionParts.join(" - "),
-    image: `${cleanBaseUrl}/public/img/iec-icon.png`,
+    image: `${cleanBaseUrl}/og/token/${token}.svg`,
     url: `${cleanBaseUrl}/form/${token}/${safeView}`
   };
 }
@@ -4115,6 +4124,45 @@ app.get("/form/:token/specification", csrfProtection, asyncHandler(async (req, r
     qrDataUrlVextrom: qrByTheme.vextrom,
     csrfToken: req.csrfToken()
   });
+}));
+
+app.get("/og/token/:token.svg", asyncHandler(async (req, res) => {
+  const token = sanitizeInput(req.params.token).slice(0, 120);
+  if (!token) {
+    return sendStandardError(req, res, 404);
+  }
+  const equipment = await getEquipmentByToken(token);
+  if (!equipment) {
+    return sendStandardError(req, res, 404);
+  }
+
+  const profileName = sanitizeInput(equipment.profileName || "SpecFlow").slice(0, 80) || "SpecFlow";
+  const purchaser = sanitizeInput(equipment.purchaser || "Cliente").slice(0, 90) || "Cliente";
+  const safeToken = sanitizeInput(equipment.token || token).slice(0, 120);
+  const titleText = escapeXml(profileName);
+  const subtitleText = escapeXml(purchaser);
+  const tokenText = escapeXml(safeToken);
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Token ${tokenText}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eef5ef"/>
+      <stop offset="100%" stop-color="#d9ecd9"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1200" height="630" fill="url(#bg)"/>
+  <rect x="56" y="52" width="1088" height="526" rx="24" ry="24" fill="#f8fcf8" stroke="#b9d1b9" stroke-width="3"/>
+  <text x="92" y="150" fill="#2d7b3b" font-size="30" font-family="Inter, Segoe UI, Arial, sans-serif" font-weight="700">VEXTROM SPECFLOW</text>
+  <text x="92" y="208" fill="#1d4b2c" font-size="46" font-family="Inter, Segoe UI, Arial, sans-serif" font-weight="700">${titleText}</text>
+  <text x="92" y="258" fill="#31563c" font-size="30" font-family="Inter, Segoe UI, Arial, sans-serif">${subtitleText}</text>
+  <text x="92" y="340" fill="#1e6738" font-size="24" font-family="Inter, Segoe UI, Arial, sans-serif" font-weight="700">TOKEN GERADO</text>
+  <rect x="92" y="366" width="1016" height="138" rx="16" ry="16" fill="#e7f2e7" stroke="#95bc9b" stroke-width="2"/>
+  <text x="120" y="448" fill="#10321a" font-size="52" font-family="Consolas, Menlo, monospace" font-weight="700">${tokenText}</text>
+</svg>`;
+
+  res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  return res.send(svg);
 }));
 
 app.post("/form/:token/specification", csrfProtection, asyncHandler(async (req, res) => {
