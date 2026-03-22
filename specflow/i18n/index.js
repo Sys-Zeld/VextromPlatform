@@ -304,7 +304,7 @@ const messages = {
     "email.tableValue": "Valor",
     "email.tableUnit": "Unidade",
     "email.subject": "Submissao UPS Anexo D {token}",
-    "pdf.title": "Purchase Table - Anexo D (UPS)",
+    "pdf.title": "VEXTROM Plataform",
     "pdf.submissionToken": "Token da submissao: {token}",
     "pdf.accessLink": "Link de acesso: {link}",
     "pdf.qrHint": "Escaneie para abrir",

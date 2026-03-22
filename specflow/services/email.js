@@ -33,7 +33,8 @@ function buildTemplateVariables(submission = {}) {
     specification_link: tokenSpecificationLink,
     cliente: submission.purchaser || "",
     contato: submission.purchaserContact || "",
-    nome_perfil_formulario: submission.profileName || ""
+    nome_perfil_formulario: submission.profileName || "",
+    "perfil-formulario": submission.profileName || ""
   };
 
   return Object.keys(variables).reduce((acc, key) => {
@@ -47,7 +48,7 @@ function renderPlaceholderString(template, variables, options = {}) {
   if (!source.trim()) return "";
 
   const escapeValues = options.escapeValues !== false;
-  return source.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (match, key) => {
+  return source.replace(/\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}/g, (match, key) => {
     const normalizedKey = String(key || "").trim().toLowerCase();
     if (!Object.prototype.hasOwnProperty.call(variables, normalizedKey)) {
       return match;

@@ -52,6 +52,16 @@ const {
   deleteEmailHtmlTemplate
 } = require("./services/emailSettings");
 const {
+  SUPPORTED_PDF_THEMES,
+  normalizeTheme: normalizePdfTheme,
+  normalizePdfPalette,
+  getPdfTemplateSettings,
+  savePdfTemplate,
+  setDefaultPdfTemplateForTheme,
+  deletePdfTemplate,
+  resolvePdfTemplateForTheme
+} = require("./services/pdfTemplateSettings");
+const {
   getUserSystemFontKey,
   setUserSystemFontKey,
   listSystemFontOptions
@@ -695,6 +705,7 @@ async function loadBackupsForMaintenancePage() {
 async function renderAdminMaintenancePage(req, res, options = {}) {
   const backups = options.backups || await loadBackupsForMaintenancePage();
   const emailSettings = options.emailSettings || await getEmailSettings();
+  const pdfTemplateSettings = options.pdfTemplateSettings || await getPdfTemplateSettings();
 
   return res.status(options.statusCode || 200).render("admin-maintenance", {
     pageTitle: "Manutencao administrativa",
@@ -702,6 +713,8 @@ async function renderAdminMaintenancePage(req, res, options = {}) {
     smtpUpdateResult: options.smtpUpdateResult || null,
     smtpTestResult: options.smtpTestResult || null,
     emailTemplatesUpdateResult: options.emailTemplatesUpdateResult || null,
+    pdfTemplateUpdateResult: options.pdfTemplateUpdateResult || null,
+    pdfTemplateDefaultResult: options.pdfTemplateDefaultResult || null,
     defaultRecipientsUpdateResult: options.defaultRecipientsUpdateResult || null,
     emailTemplateEditorValues: options.emailTemplateEditorValues || {
       template_id: "",
@@ -710,9 +723,27 @@ async function renderAdminMaintenancePage(req, res, options = {}) {
       template_html: "",
       set_default_template: false
     },
+    pdfTemplateEditorValues: options.pdfTemplateEditorValues || {
+      template_id: "",
+      template_name: "",
+      template_theme: "xvextrom",
+      card_background: "",
+      border_color: "",
+      title_color: "",
+      header_color: "",
+      text_color: "",
+      row_even_background: "",
+      row_odd_background: "",
+      line_color: "",
+      badge_background: "",
+      badge_border: "",
+      badge_text: ""
+    },
     maintenanceEmailTestTo: options.maintenanceEmailTestTo || "",
     backups,
     emailSettings,
+    pdfTemplateSettings,
+    pdfTemplateThemes: SUPPORTED_PDF_THEMES,
     publicTokenMaxPerWindow: MAX_TOKENS_PER_WINDOW,
     publicTokenWindowHours: WINDOW_HOURS,
     csrfToken: req.csrfToken()
@@ -1175,6 +1206,74 @@ function isValidEmailAddress(email) {
 
 function resolveUiTheme(req) {
   return normalizeQrTheme(req.cookies.app_theme);
+}
+
+function resolvePdfUiTheme(req) {
+  return normalizePdfTheme(req.cookies.app_theme);
+}
+
+function randomInt(min, max) {
+  const safeMin = Number(min) || 0;
+  const safeMax = Number(max) || safeMin;
+  return Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
+}
+
+function buildPdfPreviewMockData(lang) {
+  const sectionNames = lang === "en"
+    ? ["General Data", "Environmental Conditions", "Electrical Characteristics"]
+    : ["Dados Gerais", "Condicoes Ambientais", "Caracteristicas Eletricas"];
+  const fieldPool = [
+    { label: "Potencia nominal requerida", unit: "kVA" },
+    { label: "Fator de potencia requerido", unit: "fp" },
+    { label: "Grau de protecao", unit: "-" },
+    { label: "Pressao minima permitida", unit: "kPa" },
+    { label: "Elevacao maxima", unit: "metros" },
+    { label: "Umidade relativa", unit: "%" },
+    { label: "Frequencia de entrada", unit: "Hz" },
+    { label: "Tensao de saida", unit: "V" },
+    { label: "Corrente nominal", unit: "A" }
+  ];
+
+  const token = `preview-${Date.now().toString().slice(-6)}`;
+  const submission = {
+    token,
+    purchaser: "Cliente Preview Template",
+    purchaserContact: "Contato Exemplo",
+    contactEmail: "preview@cliente.com",
+    contactPhone: "(11) 99999-0000",
+    projectName: "Projeto Demonstracao",
+    siteName: "Site Alfa",
+    address: "Av. Exemplo, 1000 - Sao Paulo/SP",
+    status: "draft",
+    created_at: new Date(Date.now() - 3600 * 1000).toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  const sections = sectionNames.map((sectionName, sectionIndex) => {
+    const fields = Array.from({ length: 6 }).map((_, fieldIndex) => {
+      const base = fieldPool[(sectionIndex * 3 + fieldIndex) % fieldPool.length];
+      const numericValue = randomInt(1, 120);
+      const value = base.unit === "-" ? `VAL-${randomInt(10, 99)}` : `${numericValue}`;
+      const cameFromDefault = fieldIndex % 2 === 0;
+      return {
+        label: base.label,
+        unit: base.unit,
+        displayValue: value,
+        cameFromDefault
+      };
+    });
+    return {
+      section: sectionName,
+      fields
+    };
+  });
+
+  const documents = [
+    { originalName: "diagrama-unifilar-preview.pdf" },
+    { originalName: "diagrama-trifilar-preview.pdf" }
+  ];
+
+  return { submission, sections, documents };
 }
 
 function cleanupExpiredClientCreates(now = Date.now()) {
@@ -2450,6 +2549,154 @@ app.post("/admin/maintenance/email-templates/:id/delete", csrfProtection, requir
     statusCode: emailTemplatesUpdateResult.ok ? 200 : 422,
     emailTemplatesUpdateResult,
     emailSettings
+  });
+}));
+
+app.post("/admin/maintenance/pdf-templates/save", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const templateId = sanitizeInput(req.body.template_id);
+  const templateName = sanitizeInput(req.body.template_name);
+  const templateTheme = normalizePdfTheme(sanitizeInput(req.body.template_theme));
+  const palette = normalizePdfPalette(templateTheme, {
+    cardBackground: sanitizeInput(req.body.card_background),
+    borderColor: sanitizeInput(req.body.border_color),
+    titleColor: sanitizeInput(req.body.title_color),
+    headerColor: sanitizeInput(req.body.header_color),
+    textColor: sanitizeInput(req.body.text_color),
+    rowEvenBackground: sanitizeInput(req.body.row_even_background),
+    rowOddBackground: sanitizeInput(req.body.row_odd_background),
+    lineColor: sanitizeInput(req.body.line_color),
+    badgeBackground: sanitizeInput(req.body.badge_background),
+    badgeBorder: sanitizeInput(req.body.badge_border),
+    badgeText: sanitizeInput(req.body.badge_text)
+  });
+  const pdfTemplateEditorValues = {
+    template_id: templateId,
+    template_name: templateName,
+    template_theme: templateTheme,
+    card_background: palette.cardBackground,
+    border_color: palette.borderColor,
+    title_color: palette.titleColor,
+    header_color: palette.headerColor,
+    text_color: palette.textColor,
+    row_even_background: palette.rowEvenBackground,
+    row_odd_background: palette.rowOddBackground,
+    line_color: palette.lineColor,
+    badge_background: palette.badgeBackground,
+    badge_border: palette.badgeBorder,
+    badge_text: palette.badgeText
+  };
+
+  let pdfTemplateUpdateResult;
+  try {
+    const saved = await savePdfTemplate({
+      templateId,
+      name: templateName,
+      theme: templateTheme,
+      palette
+    });
+    pdfTemplateUpdateResult = {
+      ok: true,
+      message: `Template PDF salvo com sucesso: ${saved.name}.`
+    };
+    pdfTemplateEditorValues.template_id = saved.id;
+  } catch (err) {
+    pdfTemplateUpdateResult = {
+      ok: false,
+      message: sanitizeInput(err?.message || "") || getStandardStatusMessage(req, 500)
+    };
+  }
+
+  const emailSettings = await getEmailSettings();
+  const pdfTemplateSettings = await getPdfTemplateSettings();
+  return renderAdminMaintenancePage(req, res, {
+    statusCode: pdfTemplateUpdateResult.ok ? 200 : 422,
+    pdfTemplateUpdateResult,
+    pdfTemplateEditorValues,
+    emailSettings,
+    pdfTemplateSettings
+  });
+}));
+
+app.post("/admin/maintenance/pdf-templates/preview", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const templateTheme = normalizePdfTheme(sanitizeInput(req.body.template_theme));
+  const templateName = sanitizeInput(req.body.template_name) || "Preview";
+  const palette = normalizePdfPalette(templateTheme, {
+    cardBackground: sanitizeInput(req.body.card_background),
+    borderColor: sanitizeInput(req.body.border_color),
+    titleColor: sanitizeInput(req.body.title_color),
+    headerColor: sanitizeInput(req.body.header_color),
+    textColor: sanitizeInput(req.body.text_color),
+    rowEvenBackground: sanitizeInput(req.body.row_even_background),
+    rowOddBackground: sanitizeInput(req.body.row_odd_background),
+    lineColor: sanitizeInput(req.body.line_color),
+    badgeBackground: sanitizeInput(req.body.badge_background),
+    badgeBorder: sanitizeInput(req.body.badge_border),
+    badgeText: sanitizeInput(req.body.badge_text)
+  });
+  const pdfTemplate = {
+    id: "preview",
+    name: templateName,
+    theme: templateTheme,
+    palette
+  };
+  const mock = buildPdfPreviewMockData(req.lang);
+  const pdfBuffer = await generatePdfBuffer({
+    submission: mock.submission,
+    sections: mock.sections,
+    documents: mock.documents,
+    lang: req.lang,
+    theme: templateTheme,
+    pdfTemplate
+  });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "inline; filename=preview-template-specflow.pdf");
+  res.send(pdfBuffer);
+}));
+
+app.post("/admin/maintenance/pdf-templates/default", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const templateId = sanitizeInput(req.body.template_id);
+  const theme = normalizePdfTheme(sanitizeInput(req.body.theme));
+  let pdfTemplateDefaultResult;
+  try {
+    await setDefaultPdfTemplateForTheme({ templateId, theme });
+    pdfTemplateDefaultResult = { ok: true, message: `Template padrao do tema ${theme} atualizado com sucesso.` };
+  } catch (err) {
+    pdfTemplateDefaultResult = {
+      ok: false,
+      message: sanitizeInput(err?.message || "") || getStandardStatusMessage(req, 500)
+    };
+  }
+
+  const emailSettings = await getEmailSettings();
+  const pdfTemplateSettings = await getPdfTemplateSettings();
+  return renderAdminMaintenancePage(req, res, {
+    statusCode: pdfTemplateDefaultResult.ok ? 200 : 422,
+    pdfTemplateDefaultResult,
+    emailSettings,
+    pdfTemplateSettings
+  });
+}));
+
+app.post("/admin/maintenance/pdf-templates/:id/delete", csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const templateId = sanitizeInput(req.params.id);
+  let pdfTemplateUpdateResult;
+  try {
+    await deletePdfTemplate(templateId);
+    pdfTemplateUpdateResult = { ok: true, message: "Template PDF removido com sucesso." };
+  } catch (err) {
+    pdfTemplateUpdateResult = {
+      ok: false,
+      message: sanitizeInput(err?.message || "") || getStandardStatusMessage(req, 500)
+    };
+  }
+
+  const emailSettings = await getEmailSettings();
+  const pdfTemplateSettings = await getPdfTemplateSettings();
+  return renderAdminMaintenancePage(req, res, {
+    statusCode: pdfTemplateUpdateResult.ok ? 200 : 422,
+    pdfTemplateUpdateResult,
+    emailSettings,
+    pdfTemplateSettings
   });
 }));
 
@@ -4067,7 +4314,16 @@ app.post("/form/:token/send-email", csrfProtection, emailLimiter, asyncHandler(a
   const sections = buildSpecificationRenderModel(specification);
   try {
     const documents = await listEquipmentDocuments(equipment.id);
-    const pdfBuffer = await generatePdfBuffer({ submission: equipment, sections, documents, lang: req.lang });
+    const pdfTheme = resolvePdfUiTheme(req);
+    const pdfTemplate = await resolvePdfTemplateForTheme(pdfTheme);
+    const pdfBuffer = await generatePdfBuffer({
+      submission: equipment,
+      sections,
+      documents,
+      lang: req.lang,
+      theme: pdfTheme,
+      pdfTemplate
+    });
     await sendSubmissionEmail({ to, cc, submission: equipment, sections, pdfBuffer, lang: req.lang });
     await updateEquipmentStatus(equipment.id, EQUIPMENT_STATUS.SEND);
     return res.redirect(`/form/${equipment.token}/review?email=1`);
@@ -4082,7 +4338,16 @@ app.get("/form/:token/pdf", asyncHandler(async (req, res) => {
   const specification = await getEquipmentSpecification(equipment.id, null, req.lang);
   const sections = buildSpecificationRenderModel(specification);
   const documents = await listEquipmentDocuments(equipment.id);
-  const pdfBuffer = await generatePdfBuffer({ submission: equipment, sections, documents, lang: req.lang });
+  const pdfTheme = resolvePdfUiTheme(req);
+  const pdfTemplate = await resolvePdfTemplateForTheme(pdfTheme);
+  const pdfBuffer = await generatePdfBuffer({
+    submission: equipment,
+    sections,
+    documents,
+    lang: req.lang,
+    theme: pdfTheme,
+    pdfTemplate
+  });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename=annexD-${equipment.token}.pdf`);
   res.send(pdfBuffer);

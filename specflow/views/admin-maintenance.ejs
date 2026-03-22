@@ -44,6 +44,12 @@
 <% if (emailTemplatesUpdateResult) { %>
   <div class="alert <%= emailTemplatesUpdateResult.ok ? 'alert-success' : 'alert-danger' %>"><%= emailTemplatesUpdateResult.message %></div>
 <% } %>
+<% if (pdfTemplateUpdateResult) { %>
+  <div class="alert <%= pdfTemplateUpdateResult.ok ? 'alert-success' : 'alert-danger' %>"><%= pdfTemplateUpdateResult.message %></div>
+<% } %>
+<% if (pdfTemplateDefaultResult) { %>
+  <div class="alert <%= pdfTemplateDefaultResult.ok ? 'alert-success' : 'alert-danger' %>"><%= pdfTemplateDefaultResult.message %></div>
+<% } %>
 <% if (defaultRecipientsUpdateResult) { %>
   <div class="alert <%= defaultRecipientsUpdateResult.ok ? 'alert-success' : 'alert-danger' %>"><%= defaultRecipientsUpdateResult.message %></div>
 <% } %>
@@ -53,6 +59,141 @@
     <h2 class="h6 app-card-title mb-2">Links publicos por perfil</h2>
     <p class="text-muted mb-3">Criacao e exclusao de links publicos em pagina separada.</p>
     <a class="btn btn-primary btn-sm" href="/admin/public-token-links">Abrir gestao de links publicos</a>
+  </div>
+</div>
+
+<div class="card app-card mb-4">
+  <div class="card-body">
+    <h2 class="h6 app-card-title mb-2">Templates de geracao de PDF</h2>
+    <p class="text-muted mb-3">Cadastre templates por tema e defina qual e o padrao para cada tema ativo.</p>
+
+    <form method="post" action="/admin/maintenance/pdf-templates/save" class="row g-3" id="pdf-template-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <input type="hidden" id="pdf_template_id" name="template_id" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.template_id ? pdfTemplateEditorValues.template_id : '' %>" />
+
+      <div class="col-12 col-md-5">
+        <label class="form-label" for="pdf_template_name">Nome do template</label>
+        <input id="pdf_template_name" name="template_name" type="text" class="form-control" maxlength="120" required value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.template_name ? pdfTemplateEditorValues.template_name : '' %>" />
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label" for="pdf_template_theme">Tema alvo</label>
+        <select id="pdf_template_theme" name="template_theme" class="form-select" required>
+          <% (pdfTemplateThemes || []).forEach((themeName) => { %>
+            <option value="<%= themeName %>" <%= pdfTemplateEditorValues && pdfTemplateEditorValues.template_theme === themeName ? 'selected' : '' %>><%= themeName %></option>
+          <% }) %>
+        </select>
+      </div>
+
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_card_background">Card BG</label>
+        <input id="pdf_card_background" name="card_background" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.card_background ? pdfTemplateEditorValues.card_background : '#f4f7f5' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_border_color">Borda</label>
+        <input id="pdf_border_color" name="border_color" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.border_color ? pdfTemplateEditorValues.border_color : '#b9cec0' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_title_color">Titulo</label>
+        <input id="pdf_title_color" name="title_color" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.title_color ? pdfTemplateEditorValues.title_color : '#12353f' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_header_color">Cabecalho</label>
+        <input id="pdf_header_color" name="header_color" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.header_color ? pdfTemplateEditorValues.header_color : '#1e6738' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_text_color">Texto</label>
+        <input id="pdf_text_color" name="text_color" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.text_color ? pdfTemplateEditorValues.text_color : '#0f2531' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_row_even_background">Linha par</label>
+        <input id="pdf_row_even_background" name="row_even_background" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.row_even_background ? pdfTemplateEditorValues.row_even_background : '#dde4e0' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_row_odd_background">Linha impar</label>
+        <input id="pdf_row_odd_background" name="row_odd_background" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.row_odd_background ? pdfTemplateEditorValues.row_odd_background : '#f0f3f2' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_line_color">Divisoria</label>
+        <input id="pdf_line_color" name="line_color" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.line_color ? pdfTemplateEditorValues.line_color : '#b7c8bd' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_badge_background">Badge BG</label>
+        <input id="pdf_badge_background" name="badge_background" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.badge_background ? pdfTemplateEditorValues.badge_background : '#d8e9db' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_badge_border">Badge borda</label>
+        <input id="pdf_badge_border" name="badge_border" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.badge_border ? pdfTemplateEditorValues.badge_border : '#9dbca5' %>" />
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="pdf_badge_text">Badge texto</label>
+        <input id="pdf_badge_text" name="badge_text" type="color" class="form-control form-control-color" value="<%= pdfTemplateEditorValues && pdfTemplateEditorValues.badge_text ? pdfTemplateEditorValues.badge_text : '#1f5a2a' %>" />
+      </div>
+
+      <div class="col-12">
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" type="submit">Salvar template PDF</button>
+          <button class="btn btn-outline-primary btn-sm" id="pdf-template-preview" type="button">Preview (dados aleatorios)</button>
+          <button class="btn btn-outline-secondary btn-sm" id="pdf-template-reset" type="button">Novo template</button>
+        </div>
+      </div>
+    </form>
+
+    <hr class="my-4" />
+
+    <h3 class="h6 app-card-title mb-2">Templates cadastrados</h3>
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0 app-table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tema</th>
+            <th>Atualizado em</th>
+            <th>Acoes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!pdfTemplateSettings || !pdfTemplateSettings.templates || !pdfTemplateSettings.templates.length) { %>
+            <tr><td colspan="4" class="text-muted">Nenhum template PDF cadastrado.</td></tr>
+          <% } %>
+          <% (pdfTemplateSettings && pdfTemplateSettings.templates ? pdfTemplateSettings.templates : []).forEach((template) => { %>
+            <tr>
+              <td><strong><%= template.name %></strong></td>
+              <td>
+                <code><%= template.theme %></code>
+                <% if (pdfTemplateSettings.defaultsByTheme && pdfTemplateSettings.defaultsByTheme[template.theme] === template.id) { %>
+                  <span class="badge text-bg-success ms-1">Padrao</span>
+                <% } %>
+              </td>
+              <td><%= template.updatedAt ? new Date(template.updatedAt).toLocaleString(lang === "pt" ? "pt-BR" : "en-US") : "-" %></td>
+              <td>
+                <div class="d-flex gap-2 flex-wrap">
+                  <button
+                    class="btn btn-outline-primary btn-sm pdf-template-edit-btn"
+                    type="button"
+                    data-template-id="<%= template.id %>"
+                    data-template-name="<%= template.name %>"
+                    data-template-theme="<%= template.theme %>"
+                  >
+                    Editar
+                  </button>
+                  <form method="post" action="/admin/maintenance/pdf-templates/default" class="maintenance-command-form" data-confirm="Confirma definir este template como padrao para o tema?">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <input type="hidden" name="template_id" value="<%= template.id %>" />
+                    <input type="hidden" name="theme" value="<%= template.theme %>" />
+                    <button class="btn btn-outline-success btn-sm" type="submit" <%= pdfTemplateSettings.defaultsByTheme && pdfTemplateSettings.defaultsByTheme[template.theme] === template.id ? "disabled" : "" %>>Definir padrao</button>
+                  </form>
+                  <form method="post" action="/admin/maintenance/pdf-templates/<%= template.id %>/delete" class="maintenance-command-form" data-confirm="Confirma remover este template PDF?">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                    <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                  </form>
+                </div>
+                <textarea id="pdf-template-palette-<%= template.id %>" class="d-none"><%= JSON.stringify(template.palette || {}) %></textarea>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
@@ -133,7 +274,7 @@
     <p class="text-muted mb-3">
       Placeholders disponiveis:
       <code>{{token}}</code>, <code>{{cliente}}</code>, <code>{{contato}}</code>,
-      <code>{{nome_perfil_formulario}}</code>, <code>{{token_link}}</code>,
+      <code>{{perfil-formulario}}</code>, <code>{{nome_perfil_formulario}}</code>, <code>{{token_link}}</code>,
       <code>{{review_link}}</code>, <code>{{specification_link}}</code>,
       <code>{{purchaser}}</code>, <code>{{project_name}}</code>, <code>{{site_name}}</code>, <code>{{address}}</code>.
     </p>
@@ -332,6 +473,82 @@
     var templateFileInput = document.getElementById("template_html_file");
     var templateResetBtn = document.getElementById("email-template-reset");
     var templateEditButtons = document.querySelectorAll(".email-template-edit-btn");
+    var pdfTemplateForm = document.getElementById("pdf-template-form");
+    var pdfTemplateIdInput = document.getElementById("pdf_template_id");
+    var pdfTemplateNameInput = document.getElementById("pdf_template_name");
+    var pdfTemplateThemeInput = document.getElementById("pdf_template_theme");
+    var pdfTemplateResetBtn = document.getElementById("pdf-template-reset");
+    var pdfTemplatePreviewBtn = document.getElementById("pdf-template-preview");
+    var pdfTemplateEditButtons = document.querySelectorAll(".pdf-template-edit-btn");
+    var pdfColorFieldMap = {
+      cardBackground: document.getElementById("pdf_card_background"),
+      borderColor: document.getElementById("pdf_border_color"),
+      titleColor: document.getElementById("pdf_title_color"),
+      headerColor: document.getElementById("pdf_header_color"),
+      textColor: document.getElementById("pdf_text_color"),
+      rowEvenBackground: document.getElementById("pdf_row_even_background"),
+      rowOddBackground: document.getElementById("pdf_row_odd_background"),
+      lineColor: document.getElementById("pdf_line_color"),
+      badgeBackground: document.getElementById("pdf_badge_background"),
+      badgeBorder: document.getElementById("pdf_badge_border"),
+      badgeText: document.getElementById("pdf_badge_text")
+    };
+    var pdfThemePalettes = {
+      soft: {
+        cardBackground: "#f4f7f5",
+        borderColor: "#b9cec0",
+        titleColor: "#12353f",
+        headerColor: "#1e6738",
+        textColor: "#0f2531",
+        rowEvenBackground: "#dde4e0",
+        rowOddBackground: "#f0f3f2",
+        lineColor: "#b7c8bd",
+        badgeBackground: "#d8e9db",
+        badgeBorder: "#9dbca5",
+        badgeText: "#1f5a2a"
+      },
+      vextrom: {
+        cardBackground: "#eef5ef",
+        borderColor: "#b0c8b3",
+        titleColor: "#1d4626",
+        headerColor: "#2d7b3b",
+        textColor: "#10321a",
+        rowEvenBackground: "#d5e4d7",
+        rowOddBackground: "#e6efe8",
+        lineColor: "#a7beaa",
+        badgeBackground: "#d2e8d7",
+        badgeBorder: "#8db898",
+        badgeText: "#205e2f"
+      },
+      xvextrom: {
+        cardBackground: "#f3f8f2",
+        borderColor: "#b9d1b9",
+        titleColor: "#1d4b2c",
+        headerColor: "#2d7b3b",
+        textColor: "#143526",
+        rowEvenBackground: "#dce9db",
+        rowOddBackground: "#edf4ec",
+        lineColor: "#b0c7b1",
+        badgeBackground: "#d9ecd9",
+        badgeBorder: "#95bc9b",
+        badgeText: "#205d2e"
+      }
+    };
+
+    function normalizePdfThemeName(theme) {
+      var normalized = String(theme || "").trim().toLowerCase();
+      if (normalized === "xvetrom") return "xvextrom";
+      if (normalized === "soft" || normalized === "vextrom" || normalized === "xvextrom") return normalized;
+      return "xvextrom";
+    }
+
+    function applyPdfThemePalette(theme) {
+      var palette = pdfThemePalettes[normalizePdfThemeName(theme)] || pdfThemePalettes.xvextrom;
+      Object.keys(pdfColorFieldMap).forEach(function (key) {
+        if (!pdfColorFieldMap[key] || !palette[key]) return;
+        pdfColorFieldMap[key].value = String(palette[key]);
+      });
+    }
 
     function resetTemplateEditor() {
       if (templateIdInput) templateIdInput.value = "";
@@ -388,6 +605,99 @@
         templateForm.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     });
+
+    function resetPdfTemplateEditor() {
+      if (pdfTemplateIdInput) pdfTemplateIdInput.value = "";
+      if (pdfTemplateNameInput) pdfTemplateNameInput.value = "";
+      if (pdfTemplateThemeInput) pdfTemplateThemeInput.value = "xvextrom";
+      applyPdfThemePalette("xvextrom");
+    }
+
+    if (pdfTemplateResetBtn) {
+      pdfTemplateResetBtn.addEventListener("click", function () {
+        resetPdfTemplateEditor();
+      });
+    }
+
+    if (pdfTemplateThemeInput) {
+      pdfTemplateThemeInput.addEventListener("change", function () {
+        if (pdfTemplateIdInput && String(pdfTemplateIdInput.value || "").trim()) return;
+        applyPdfThemePalette(pdfTemplateThemeInput.value);
+      });
+    }
+
+    pdfTemplateEditButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        if (!pdfTemplateForm) return;
+        var templateId = button.getAttribute("data-template-id") || "";
+        var templateName = button.getAttribute("data-template-name") || "";
+        var templateTheme = button.getAttribute("data-template-theme") || "soft";
+        var paletteRawEl = document.getElementById("pdf-template-palette-" + templateId);
+        var palette = {};
+        try {
+          palette = paletteRawEl && paletteRawEl.value ? JSON.parse(paletteRawEl.value) : {};
+        } catch (_err) {
+          palette = {};
+        }
+
+        if (pdfTemplateIdInput) pdfTemplateIdInput.value = templateId;
+        if (pdfTemplateNameInput) pdfTemplateNameInput.value = templateName;
+        if (pdfTemplateThemeInput) pdfTemplateThemeInput.value = templateTheme;
+        Object.keys(pdfColorFieldMap).forEach(function (key) {
+          if (pdfColorFieldMap[key] && palette[key]) {
+            pdfColorFieldMap[key].value = String(palette[key]);
+          }
+        });
+
+        pdfTemplateForm.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    if (pdfTemplatePreviewBtn && pdfTemplateForm) {
+      pdfTemplatePreviewBtn.addEventListener("click", async function () {
+        var popup = window.open("", "_blank");
+        try {
+          var formData = new FormData(pdfTemplateForm);
+          if (!String(formData.get("template_name") || "").trim()) {
+            formData.set("template_name", "Preview Template");
+          }
+          var payload = new URLSearchParams();
+          formData.forEach(function (value, key) {
+            payload.append(key, String(value));
+          });
+
+          var response = await fetch("/admin/maintenance/pdf-templates/preview", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+            },
+            body: payload.toString()
+          });
+
+          if (!response.ok) {
+            var errText = await response.text();
+            if (popup) popup.close();
+            window.alert(errText || "Falha ao gerar preview do template PDF.");
+            return;
+          }
+
+          var blob = await response.blob();
+          var blobUrl = URL.createObjectURL(blob);
+          if (popup) {
+            popup.location.href = blobUrl;
+          } else {
+            window.open(blobUrl, "_blank");
+          }
+          window.setTimeout(function () {
+            URL.revokeObjectURL(blobUrl);
+          }, 60000);
+        } catch (err) {
+          if (popup) popup.close();
+          window.alert((err && err.message) ? err.message : "Falha ao gerar preview do template PDF.");
+        }
+      });
+    }
   })();
 </script>
 
