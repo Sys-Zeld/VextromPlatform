@@ -121,7 +121,8 @@ const {
   ensureDocsDirectory,
   getEquipmentDocumentById,
   listEquipmentDocuments,
-  saveEquipmentDocument
+  saveEquipmentDocument,
+  deleteEquipmentDocumentById
 } = require("./services/documents");
 const {
   createApiKey,
@@ -137,6 +138,7 @@ const {
   syncBackupsFromDirectory
 } = require("./services/backups");
 const { generateProfileJsonFromDocument } = require("./services/aiProfiles");
+const { getAiPromptTemplate, setAiPromptTemplate } = require("./services/aiPromptSettings");
 const { registerReportService } = require("../report_service/src/app");
 
 let registerModuleSpec = null;
@@ -1649,6 +1651,7 @@ function renderAdminProfilesAiPage(req, res, options = {}) {
   return res.status(options.statusCode || 200).render("admin-profiles-ai", {
     pageTitle: req.t("admin.profileAiPageTitle"),
     aiProfileTemplate: options.aiProfileTemplate || buildAiProfileJsonTemplate(),
+    aiPromptTemplate: options.aiPromptTemplate || "",
     csrfToken: req.csrfToken()
   });
 }
@@ -3276,7 +3279,8 @@ app.get("/admin/profiles", csrfProtection, requireAdminAuth, asyncHandler(async 
 }));
 
 app.get("/admin/profiles/ai", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
-  return renderAdminProfilesAiPage(req, res);
+  const aiPromptTemplate = await getAiPromptTemplate();
+  return renderAdminProfilesAiPage(req, res, { aiPromptTemplate });
 }));
 
 app.post("/admin/profiles/ai/generate", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
@@ -3284,6 +3288,7 @@ app.post("/admin/profiles/ai/generate", csrfProtection, requireAdminAuth, asyncH
   const mimeType = resolveProfileAiMimeType(req.body.mimeType || "", fileName);
   const jsonModelTemplate = String(req.body.jsonModelTemplate || "");
   const userInstructions = String(req.body.userInstructions || "");
+  const promptTemplate = String(req.body.promptTemplate || "");
   const fileBase64 = String(req.body.fileBase64 || "").trim();
 
   if (!fileBase64) {
@@ -3322,7 +3327,8 @@ app.post("/admin/profiles/ai/generate", csrfProtection, requireAdminAuth, asyncH
       fileName: fileName || "documento",
       mimeType,
       jsonModelTemplate,
-      userInstructions
+      userInstructions,
+      promptTemplate
     });
     return res.status(200).json({
       ok: true,
@@ -3452,6 +3458,15 @@ app.post("/admin/profiles/:id/update", csrfProtection, requireAdminAuth, asyncHa
       errors: err.details || { generic: err.message }
     });
   }
+}));
+
+app.post("/admin/profiles/ai/prompt-template", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
+  const promptTemplate = String(req.body.promptTemplate || "");
+  const saved = await setAiPromptTemplate(promptTemplate);
+  return res.status(200).json({
+    ok: true,
+    promptTemplate: saved
+  });
 }));
 
 app.post("/admin/profiles/:id/clone", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
@@ -4297,6 +4312,41 @@ app.get("/form/:token/documents/:id/download", asyncHandler(async (req, res) => 
   }
 
   return res.download(absolutePath, document.originalName || safeStoredName);
+}));
+
+app.post("/form/:token/documents/:id/delete", csrfProtection, asyncHandler(async (req, res) => {
+  const equipment = await resolveEquipmentByTokenOr404(req, res);
+  if (!equipment) return;
+  if (!canEditEquipmentSpecification(req, equipment)) {
+    return sendStandardError(req, res, 403, { json: true, errorCode: "SPECIFICATION_LOCKED" });
+  }
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return sendStandardError(req, res, 400, { json: true });
+  }
+
+  const document = await getEquipmentDocumentById(id);
+  if (!document || Number(document.equipmentId) !== Number(equipment.id)) {
+    return sendStandardError(req, res, 404, { json: true });
+  }
+
+  const deleted = await deleteEquipmentDocumentById(id);
+  if (!deleted) {
+    return sendStandardError(req, res, 404, { json: true });
+  }
+
+  const safeStoredName = path.basename(String(document.storedName || ""));
+  const absolutePath = path.join(path.resolve(env.storage.docsDir), safeStoredName);
+  if (fs.existsSync(absolutePath)) {
+    try {
+      fs.unlinkSync(absolutePath);
+    } catch (_err) {
+      // Keep DB deletion as source of truth; file cleanup is best-effort.
+    }
+  }
+
+  return res.status(200).json({ ok: true, id });
 }));
 
 app.get("/admin/documents/:id/download", requireAdminAuth, asyncHandler(async (req, res) => {

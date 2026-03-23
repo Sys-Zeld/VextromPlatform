@@ -54,7 +54,11 @@
 
     <div class="mt-3">
       <label class="form-label" for="profileAiPromptPreview"><%= t("admin.profileAiPromptLabel") %></label>
-      <textarea class="form-control" id="profileAiPromptPreview" rows="10" readonly></textarea>
+      <textarea class="form-control" id="profileAiPromptPreview" rows="10"><%= aiPromptTemplate || "" %></textarea>
+      <div class="d-flex gap-2 mt-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" id="profileAiPromptSaveBtn"><%= t("admin.profileAiPromptSaveButton") %></button>
+        <span class="small align-self-center" id="profileAiPromptFeedback"></span>
+      </div>
     </div>
   </div>
 </div>
@@ -73,8 +77,10 @@
     const aiImportJsonInput = document.getElementById("profileAiImportJsonInput");
     const aiStatus = document.getElementById("profileAiStatus");
     const aiPromptPreview = document.getElementById("profileAiPromptPreview");
+    const aiPromptSaveBtn = document.getElementById("profileAiPromptSaveBtn");
+    const aiPromptFeedback = document.getElementById("profileAiPromptFeedback");
 
-    if (!aiForm || !aiFileInput || !aiModelInput || !aiInstructionsInput || !aiFeedback || !aiGeneratedJson || !aiGenerateBtn || !aiDownloadBtn || !aiImportForm || !aiImportJsonInput || !aiStatus || !aiPromptPreview) return;
+    if (!aiForm || !aiFileInput || !aiModelInput || !aiInstructionsInput || !aiFeedback || !aiGeneratedJson || !aiGenerateBtn || !aiDownloadBtn || !aiImportForm || !aiImportJsonInput || !aiStatus || !aiPromptPreview || !aiPromptSaveBtn || !aiPromptFeedback) return;
 
     const aiMessages = {
       generating: "<%= t('admin.profileAiGenerating') %>",
@@ -82,7 +88,9 @@
       fileRequired: "<%= t('admin.profileAiFileRequired') %>",
       fileMaxSize: "<%= t('admin.profileAiFileMaxSize', { sizeMb: 10 }) %>",
       invalidModel: "<%= t('admin.profileAiInvalidModel') %>",
-      emptyResult: "<%= t('admin.profileAiEmptyResult') %>"
+      emptyResult: "<%= t('admin.profileAiEmptyResult') %>",
+      promptSaveSuccess: "<%= t('admin.profileAiPromptSaved') %>",
+      promptSaveFailed: "<%= t('admin.profileAiPromptSaveFailed') %>"
     };
     const aiStatusMessages = {
       label: "<%= t('admin.profileAiStatusLabel') %>",
@@ -158,14 +166,31 @@
       return parts.join("\n");
     }
 
+    let autoPromptEnabled = !String(aiPromptPreview.value || "").trim();
+    let lastAutoPromptValue = "";
+
     function refreshPromptPreview() {
-      aiPromptPreview.value = buildPromptPreview();
+      const nextPrompt = buildPromptPreview();
+      lastAutoPromptValue = nextPrompt;
+      if (autoPromptEnabled || !String(aiPromptPreview.value || "").trim()) {
+        aiPromptPreview.value = nextPrompt;
+      }
     }
 
     setAiStatus(aiStatusMessages.idle, 0, "text-muted");
     refreshPromptPreview();
-    aiModelInput.addEventListener("input", refreshPromptPreview);
-    aiInstructionsInput.addEventListener("input", refreshPromptPreview);
+    aiModelInput.addEventListener("input", function () {
+      refreshPromptPreview();
+    });
+    aiInstructionsInput.addEventListener("input", function () {
+      refreshPromptPreview();
+    });
+    aiPromptPreview.addEventListener("input", function () {
+      const current = String(aiPromptPreview.value || "");
+      autoPromptEnabled = !current.trim() || current === lastAutoPromptValue;
+      aiPromptFeedback.textContent = "";
+      aiPromptFeedback.className = "small align-self-center";
+    });
 
     aiForm.addEventListener("submit", async function (event) {
       event.preventDefault();
@@ -224,7 +249,8 @@
             mimeType: file.type || "application/octet-stream",
             fileBase64: fileBase64,
             jsonModelTemplate: modelText,
-            userInstructions: instructionsText
+            userInstructions: instructionsText,
+            promptTemplate: String(aiPromptPreview.value || "")
           })
         });
         const payload = await response.json().catch(function () { return {}; });
@@ -277,6 +303,37 @@
         return;
       }
       aiImportJsonInput.value = text;
+    });
+
+    aiPromptSaveBtn.addEventListener("click", async function () {
+      aiPromptSaveBtn.disabled = true;
+      aiPromptFeedback.className = "small text-muted align-self-center";
+      aiPromptFeedback.textContent = "...";
+      try {
+        const csrfInput = aiForm.querySelector('input[name="_csrf"]');
+        const csrfToken = csrfInput ? csrfInput.value : "";
+        const response = await fetch("/admin/profiles/ai/prompt-template", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "csrf-token": csrfToken
+          },
+          body: JSON.stringify({
+            promptTemplate: String(aiPromptPreview.value || "")
+          })
+        });
+        const payload = await response.json().catch(function () { return {}; });
+        if (!response.ok || !payload.ok) {
+          throw new Error(aiMessages.promptSaveFailed);
+        }
+        aiPromptFeedback.className = "small text-success align-self-center";
+        aiPromptFeedback.textContent = aiMessages.promptSaveSuccess;
+      } catch (_err) {
+        aiPromptFeedback.className = "small text-danger align-self-center";
+        aiPromptFeedback.textContent = aiMessages.promptSaveFailed;
+      } finally {
+        aiPromptSaveBtn.disabled = false;
+      }
     });
   })();
 </script>

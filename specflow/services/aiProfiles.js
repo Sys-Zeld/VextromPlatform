@@ -43,9 +43,20 @@ function normalizeProfileJsonShape(parsed) {
   return { ...parsed, name, fields };
 }
 
-function buildProfileAiPrompt({ jsonModelTemplate, userInstructions = "" }) {
+function buildProfileAiPrompt({ jsonModelTemplate, userInstructions = "", promptTemplate = "" }) {
   const template = String(jsonModelTemplate || "").trim();
   const instructions = String(userInstructions || "").trim().slice(0, 4000);
+  const customTemplate = String(promptTemplate || "").trim();
+  if (customTemplate) {
+    const instructionsBlock = instructions
+      ? `Instrucoes adicionais do usuario:\n${instructions}`
+      : "";
+    const prompt = customTemplate
+      .replace(/\{\{\s*json_model\s*\}\}/gi, template)
+      .replace(/\{\{\s*user_instructions\s*\}\}/gi, instructionsBlock)
+      .replace(/\{\{\s*user_instructions_raw\s*\}\}/gi, instructions);
+    return String(prompt || "").trim();
+  }
   const sections = [
     "Leia o documento enviado e gere um perfil de formulario JSON.",
     "O documento pode estar em PDF, TXT ou planilha Excel.",
@@ -95,7 +106,7 @@ async function callOpenAiResponsesApi(body) {
   return payload;
 }
 
-async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType, jsonModelTemplate, userInstructions = "" }) {
+async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType, jsonModelTemplate, userInstructions = "", promptTemplate = "" }) {
   if (!env.openai.apiKey) {
     const err = new Error("OPENAI_API_KEY nao configurada no ambiente.");
     err.statusCode = 500;
@@ -115,7 +126,7 @@ async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType,
     err.statusCode = 422;
     throw err;
   }
-  const promptText = buildProfileAiPrompt({ jsonModelTemplate: template, userInstructions });
+  const promptText = buildProfileAiPrompt({ jsonModelTemplate: template, userInstructions, promptTemplate });
   const initialOutputTokens = Math.min(env.openai.maxOutputTokens, env.openai.maxOutputTokensCap);
   const maxRetries = env.openai.maxOutputRetries;
   const attemptsDebug = [];

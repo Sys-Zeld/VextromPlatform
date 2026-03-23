@@ -165,6 +165,18 @@ async function saveEquipmentDocument({ equipmentId, token, originalName, mimeTyp
   return normalizeDocumentRow(result.rows[0]);
 }
 
+async function deleteEquipmentDocumentById(id) {
+  const result = await db.query(
+    `
+      DELETE FROM equipment_documents
+      WHERE id = $1
+      RETURNING *
+    `,
+    [id]
+  );
+  return result.rows[0] ? normalizeDocumentRow(result.rows[0]) : null;
+}
+
 module.exports = {
   DOCS_DIR,
   MAX_DOCS_PER_EQUIPMENT,
@@ -173,5 +185,6 @@ module.exports = {
   ensureDocsDirectory,
   getEquipmentDocumentById,
   listEquipmentDocuments,
-  saveEquipmentDocument
+  saveEquipmentDocument,
+  deleteEquipmentDocumentById
 };
