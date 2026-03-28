@@ -112,6 +112,12 @@
   line-height: 1;
 }
 
+.ql-snow .ql-formats button.ql-insertImage::before {
+  content: "Imagem";
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
 .report-quill-editor .ql-editor table {
   width: 100%;
   border-collapse: collapse;
@@ -163,6 +169,118 @@
 
 .report-tag-chip:hover {
   background: #e8f2e9;
+}
+
+.daily-log-quill-editor {
+  margin-top: 6px;
+  margin-bottom: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.daily-log-editor-card .card-body {
+  overflow: visible;
+}
+
+.daily-log-quill-editor .ql-toolbar.ql-snow,
+.daily-log-quill-editor .ql-container.ql-snow {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.daily-log-quill-editor .ql-toolbar.ql-snow {
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.daily-log-quill-editor .ql-toolbar.ql-snow .ql-formats {
+  margin-right: 8px;
+}
+
+.daily-log-quill-editor .ql-editor {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: hidden;
+  overflow-y: visible;
+  max-height: none;
+}
+
+.daily-log-quill-editor .ql-container.ql-snow {
+  overflow: visible;
+  height: auto;
+}
+
+.daily-log-table th,
+.daily-log-table td {
+  vertical-align: middle;
+  padding-top: 0.38rem;
+  padding-bottom: 0.38rem;
+}
+
+.daily-log-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.daily-log-table th:nth-child(1),
+.daily-log-table td:nth-child(1) {
+  width: 52px;
+}
+
+.daily-log-table th:nth-child(2),
+.daily-log-table td:nth-child(2) {
+  width: 88px;
+}
+
+.daily-log-table th:nth-child(3),
+.daily-log-table td:nth-child(3) {
+  width: 180px;
+}
+
+.daily-log-table th:nth-child(4),
+.daily-log-table td:nth-child(4) {
+  width: 220px;
+}
+
+.daily-log-table th:nth-child(5),
+.daily-log-table td:nth-child(5) {
+  width: 150px;
+}
+
+.daily-log-table th:nth-child(6),
+.daily-log-table td:nth-child(6) {
+  width: 200px;
+}
+
+.daily-log-actions-cell {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.daily-log-actions-cell .d-flex {
+  flex-wrap: nowrap;
+  justify-content: center;
+}
+
+.daily-log-content-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-log-title-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-log-action-btn {
+  font-size: 0.76rem;
+  line-height: 1.1;
+  padding: 0.24rem 0.5rem;
 }
 
 @media (min-width: 1200px) {

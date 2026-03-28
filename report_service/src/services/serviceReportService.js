@@ -201,7 +201,6 @@ async function deleteEquipment(id) {
 async function ensureReportForOrder(serviceOrderId, fallbackTitle = "") {
   const existing = await repo.getReportByOrderId(serviceOrderId);
   if (existing) {
-    await repo.ensureDefaultSections(existing.id);
     return existing;
   }
   const order = await repo.getOrderById(serviceOrderId);

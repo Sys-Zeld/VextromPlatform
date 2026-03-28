@@ -4,8 +4,14 @@ const crypto = require("crypto");
 const repo = require("../repositories/serviceReportRepository");
 const service = require("../services/serviceReportService");
 const { generatePdfToFile, buildPdfBufferFromHtml } = require("../services/serviceReportPdfService");
+const { getReportConfigSettings, saveReportConfigSettings } = require("../services/reportConfigSettings");
 const { buildPreviewModel } = require("../services/reportPreviewService");
-const { renderReportPreviewHtml } = require("../services/reportTemplateService");
+const {
+  renderReportPreviewHtml,
+  getReportTemplateOptions,
+  normalizeReportTemplateKey
+} = require("../services/reportTemplateService");
+const { sanitizeReportSectionHtml } = require("../services/quillContentService");
 const { withServiceOrderDisplay } = require("../utils/serviceOrderDisplay");
 const {
   SECTION_DEFINITIONS,
@@ -19,7 +25,10 @@ const {
 
 function createReportWebController(deps) {
   const sanitizeInput = deps.sanitizeInput;
+  const sanitizeRichTextInput = deps.sanitizeRichTextInput || deps.sanitizeInput;
+  const reviseTextWithAi = deps.reviseTextWithAi;
   const hasValidRequiredFk = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
+  const buildTemplatePreviewRoute = (orderId, templateKey) => `/admin/report-service/orders/${orderId}/preview-html/template/${normalizeReportTemplateKey(templateKey)}`;
 
   async function loadOrderEditorData(orderId) {
     const order = await repo.getOrderById(orderId);
@@ -68,6 +77,12 @@ function createReportWebController(deps) {
       instruments,
       images
     };
+  }
+
+  async function resolveRenderConfig(reqTemplateKey = "", explicitConfig = null) {
+    const reportConfig = explicitConfig || await getReportConfigSettings();
+    const templateKey = normalizeReportTemplateKey(reqTemplateKey || reportConfig.templateKey);
+    return { reportConfig, templateKey };
   }
 
   return {
@@ -324,10 +339,12 @@ function createReportWebController(deps) {
       const data = await loadOrderEditorData(orderId);
       if (!data) return res.status(404).send("OS nao encontrada.");
       const orderView = withServiceOrderDisplay(data.order);
+      const reportConfig = await getReportConfigSettings();
       return res.render("report-service/order-editor", {
         pageTitle: `Service Report - ${orderView.service_order_display || orderView.service_order_code || "-"}`,
         ...data,
         order: orderView,
+        reportConfig,
         sectionDefinitions: SECTION_DEFINITIONS,
         quillSectionToolbar: QUILL_SECTION_TOOLBAR,
         quillSectionTitleToolbar: QUILL_SECTION_TITLE_TOOLBAR,
@@ -338,6 +355,25 @@ function createReportWebController(deps) {
         saved: req.query.saved === "1",
         csrfToken: req.csrfToken()
       });
+    },
+
+    async reportConfigPage(req, res) {
+      const reportConfig = await getReportConfigSettings();
+      return res.render("report-service/config", {
+        pageTitle: "Config Report - Service Report",
+        reportConfig,
+        saved: req.query.saved === "1",
+        csrfToken: req.csrfToken()
+      });
+    },
+
+    async saveReportConfig(req, res) {
+      await saveReportConfigSettings({
+        logoVextrom: sanitizeInput(req.body.logo_vextrom),
+        logoChloride: sanitizeInput(req.body.logo_chloride),
+        templateKey: sanitizeInput(req.body.template_key)
+      });
+      return res.redirect("/admin/report-service/config?saved=1");
     },
 
     async attachEquipment(req, res) {
@@ -364,15 +400,91 @@ function createReportWebController(deps) {
 
     async addDailyLog(req, res) {
       const orderId = Number(req.params.id);
-      await repo.createDailyLog({
+      const dailyLogId = Number(req.body.daily_log_id || 0);
+      const payload = {
         serviceOrderId: orderId,
         activityDate: sanitizeInput(req.body.activity_date),
         title: sanitizeInput(req.body.title),
-        content: sanitizeInput(req.body.content),
+        content: sanitizeReportSectionHtml(req.body.content),
         notes: sanitizeInput(req.body.notes),
         sortOrder: Number(req.body.sort_order || 0)
-      });
+      };
+
+      if (Number.isInteger(dailyLogId) && dailyLogId > 0) {
+        await repo.updateDailyLogByOrderAndId(orderId, dailyLogId, payload);
+      } else {
+        await repo.createDailyLog(payload);
+      }
       return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+    },
+
+    async deleteDailyLog(req, res) {
+      const orderId = Number(req.params.id);
+      const dailyLogId = Number(req.params.dailyLogId || 0);
+      if (Number.isInteger(dailyLogId) && dailyLogId > 0) {
+        await repo.deleteDailyLogByOrderAndId(orderId, dailyLogId);
+      }
+      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+    },
+
+    async reviseDailyLogText(req, res) {
+      if (typeof reviseTextWithAi !== "function") {
+        return res.status(500).json({ ok: false, message: "Servico de IA indisponivel." });
+      }
+      const text = String(req.body && req.body.text ? req.body.text : "");
+      const html = String(req.body && req.body.html ? req.body.html : "");
+      const preserveFormatting = String(req.body && req.body.preserveFormatting ? req.body.preserveFormatting : "false") === "true";
+      const prompt = sanitizeInput(req.body && req.body.prompt ? req.body.prompt : "")
+        || "Revise o texto abaixo sem mudar muitas palavras";
+      try {
+        const result = await reviseTextWithAi({
+          text,
+          html,
+          prompt,
+          preserveFormatting
+        });
+        const revisedHtml = sanitizeReportSectionHtml(result.revisedHtml || "");
+        return res.status(200).json({
+          ok: true,
+          revisedText: result.revisedText || "",
+          revisedHtml
+        });
+      } catch (err) {
+        return res.status(err.statusCode || 422).json({
+          ok: false,
+          message: err.message || "Falha ao revisar texto com IA."
+        });
+      }
+    },
+
+    async reviseSectionText(req, res) {
+      if (typeof reviseTextWithAi !== "function") {
+        return res.status(500).json({ ok: false, message: "Servico de IA indisponivel." });
+      }
+      const text = String(req.body && req.body.text ? req.body.text : "");
+      const html = String(req.body && req.body.html ? req.body.html : "");
+      const preserveFormatting = String(req.body && req.body.preserveFormatting ? req.body.preserveFormatting : "false") === "true";
+      const prompt = sanitizeInput(req.body && req.body.prompt ? req.body.prompt : "")
+        || "Revise o texto abaixo sem mudar muitas palavras";
+      try {
+        const result = await reviseTextWithAi({
+          text,
+          html,
+          prompt,
+          preserveFormatting
+        });
+        const revisedHtml = sanitizeReportSectionHtml(result.revisedHtml || "");
+        return res.status(200).json({
+          ok: true,
+          revisedText: result.revisedText || "",
+          revisedHtml
+        });
+      } catch (err) {
+        return res.status(err.statusCode || 422).json({
+          ok: false,
+          message: err.message || "Falha ao revisar texto com IA."
+        });
+      }
     },
 
     async saveSection(req, res) {
@@ -538,11 +650,52 @@ function createReportWebController(deps) {
       const report = await service.ensureReportForOrder(orderId);
       const payload = await service.buildReportAggregate(report.id);
       if (!payload) return res.status(404).send("Relatorio nao encontrado.");
+      const { reportConfig, templateKey } = await resolveRenderConfig("", null);
       return res.render("report-service/preview", {
         pageTitle: `Preview - ${payload.report.report_number}`,
-        ...buildPreviewModel(payload),
+        ...buildPreviewModel(payload, { reportConfig, templateKey }),
         csrfToken: req.csrfToken()
       });
+    },
+
+    async previewHtmlPage(req, res) {
+      const orderId = Number(req.params.id);
+      const { reportConfig, templateKey } = await resolveRenderConfig("", null);
+      return res.redirect(buildTemplatePreviewRoute(orderId, templateKey));
+    },
+
+    async previewHtmlByTemplatePage(req, res) {
+      const orderId = Number(req.params.id);
+      const report = await service.ensureReportForOrder(orderId);
+      const payload = await service.buildReportAggregate(report.id);
+      if (!payload) return res.status(404).send("Relatorio nao encontrado.");
+
+      const requestedTemplateKey = sanitizeInput(req.params.templateKey);
+      const { reportConfig, templateKey } = await resolveRenderConfig(requestedTemplateKey, null);
+      const model = buildPreviewModel(payload, { reportConfig, templateKey });
+      const bodyHtml = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
+      const cacheVersion = encodeURIComponent(String(model.generatedAt || Date.now()));
+      const availableTemplates = getReportTemplateOptions();
+      const currentTemplateName = (availableTemplates.find((item) => item.key === templateKey) || {}).name || templateKey;
+      const pageTitle = `Preview HTML (${currentTemplateName}) - ${payload.report && payload.report.report_number ? payload.report.report_number : "Service Report"}`;
+
+      const fullHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${String(pageTitle).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</title>
+  <link href="/public/css/report-preview.css" rel="stylesheet" />
+  <link href="/public/css/report-print.css" rel="stylesheet" />
+</head>
+<body>
+${bodyHtml}
+<script src="/public/js/report-pagination.js?v=${cacheVersion}"></script>
+</body>
+</html>`;
+
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(fullHtml);
     },
 
     async pdfPreview(req, res) {
@@ -550,7 +703,8 @@ function createReportWebController(deps) {
       const report = await service.ensureReportForOrder(orderId);
       const payload = await service.buildReportAggregate(report.id);
       if (!payload) return res.status(404).send("Relatorio nao encontrado.");
-      const htmlSource = await renderReportPreviewHtml(payload);
+      const { reportConfig, templateKey } = await resolveRenderConfig("", null);
+      const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
       const buffer = await buildPdfBufferFromHtml(htmlSource, payload);
       res.setHeader("Content-Type", "application/pdf");
       return res.send(buffer);
@@ -562,7 +716,8 @@ function createReportWebController(deps) {
       const payload = await service.buildReportAggregate(report.id);
       if (!payload) return res.status(404).send("Relatorio nao encontrado.");
       const outputPath = service.resolveReportPdfPath(report.id);
-      const htmlSource = await renderReportPreviewHtml(payload);
+      const { reportConfig, templateKey } = await resolveRenderConfig("", null);
+      const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
       fs.writeFileSync(service.resolveReportHtmlPath(report.id), htmlSource, "utf8");
       await generatePdfToFile(payload, outputPath, htmlSource);
       await service.updateReport(report.id, {

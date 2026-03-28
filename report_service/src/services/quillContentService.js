@@ -38,6 +38,18 @@ function sanitizeLink(url) {
   return "";
 }
 
+function sanitizeImageEmbedUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  const safe = sanitizeHtml(raw, {
+    allowedTags: [],
+    allowedAttributes: {}
+  });
+  if (/^https?:\/\//i.test(safe)) return safe;
+  if (/^data:image\//i.test(safe)) return safe;
+  return "";
+}
+
 function parseBool(value, fallback = true) {
   if (value === undefined || value === null || value === "") return fallback;
   if (Array.isArray(value)) {
@@ -75,6 +87,7 @@ function sanitizeReportSectionHtml(inputHtml) {
       "h2",
       "h3",
       "a",
+      "img",
       "span",
       "table",
       "thead",
@@ -87,6 +100,7 @@ function sanitizeReportSectionHtml(inputHtml) {
     ],
     allowedAttributes: {
       a: ["href", "target", "rel"],
+      img: ["src", "alt", "title", "width", "height", "class", "style"],
       p: ["class", "style"],
       li: ["class", "style"],
       h1: ["class", "style"],
@@ -164,18 +178,28 @@ function sanitizeReportSectionHtml(inputHtml) {
         "background-color": COLOR_REGEXES,
         color: COLOR_REGEXES,
         border: [/^[^;]{1,80}$/]
+      },
+      img: {
+        width: [/^[0-9.]+(%|px|rem|em|vw|vh)$/i],
+        height: [/^[0-9.]+(%|px|rem|em|vw|vh|auto)$/i],
+        "max-width": [/^[0-9.]+(%|px|rem|em|vw|vh)$/i],
+        "object-fit": [/^(contain|cover|fill|none|scale-down)$/i]
       }
     },
     allowedSchemes: ["http", "https", "mailto", "tel"],
+    allowedSchemesByTag: {
+      img: ["http", "https", "data"]
+    },
     allowProtocolRelative: false
   }).trim();
 }
 
 function sanitizeReportTitleHtml(inputHtml) {
   return sanitizeHtml(String(inputHtml || ""), {
-    allowedTags: ["p", "strong", "em", "u", "a", "span", "br"],
+    allowedTags: ["p", "strong", "em", "u", "a", "img", "span", "br"],
     allowedAttributes: {
       a: ["href", "target", "rel"],
+      img: ["src", "alt", "title", "width", "height", "class", "style"],
       p: ["class", "style"],
       span: ["class", "style"]
     },
@@ -200,9 +224,18 @@ function sanitizeReportTitleHtml(inputHtml) {
       span: {
         color: COLOR_REGEXES,
         "text-transform": [/^(none|uppercase|lowercase|capitalize)$/i]
+      },
+      img: {
+        width: [/^[0-9.]+(%|px|rem|em|vw|vh)$/i],
+        height: [/^[0-9.]+(%|px|rem|em|vw|vh|auto)$/i],
+        "max-width": [/^[0-9.]+(%|px|rem|em|vw|vh)$/i],
+        "object-fit": [/^(contain|cover|fill|none|scale-down)$/i]
       }
     },
     allowedSchemes: ["http", "https", "mailto", "tel"],
+    allowedSchemesByTag: {
+      img: ["http", "https", "data"]
+    },
     allowProtocolRelative: false
   }).trim();
 }
@@ -298,6 +331,15 @@ function normalizeDeltaFromInput(rawDelta) {
     if (!op || typeof op !== "object") return;
     if (op.insert === undefined || op.insert === null) return;
     if (typeof op.insert !== "string") {
+      const imageSrc = op.insert && typeof op.insert === "object"
+        ? sanitizeImageEmbedUrl(op.insert.image)
+        : "";
+      if (imageSrc) {
+        normalizedOps.push({
+          insert: { image: imageSrc }
+        });
+        return;
+      }
       const err = new Error("Delta contem operacao nao suportada.");
       err.statusCode = 422;
       throw err;
@@ -343,7 +385,12 @@ function alignClass(attrs = {}) {
 
 function renderLineInline(segments = []) {
   if (!segments.length) return "<br>";
-  return segments.map((segment) => applyInlineFormat(segment.text, segment.attrs)).join("");
+  return segments.map((segment) => {
+    if (segment && segment.type === "image") {
+      return `<img src="${escapeHtml(segment.src || "")}" alt="Imagem" />`;
+    }
+    return applyInlineFormat(segment.text, segment.attrs);
+  }).join("");
 }
 
 function deltaToLines(delta) {
@@ -359,6 +406,11 @@ function deltaToLines(delta) {
   }
 
   delta.ops.forEach((op) => {
+    if (op && op.insert && typeof op.insert === "object" && op.insert.image) {
+      const src = sanitizeImageEmbedUrl(op.insert.image);
+      if (src) segments.push({ type: "image", src });
+      return;
+    }
     const text = String(op.insert || "");
     const attrs = op.attributes || {};
     const parts = text.split("\n");

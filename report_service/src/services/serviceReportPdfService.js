@@ -117,7 +117,8 @@ function buildPdfBuffer(payload) {
 
     drawSection(doc, "Descricao do Atendimento Tecnico", "");
     (payload.dailyLogs || []).forEach((item) => {
-      drawSection(doc, `${item.activity_date} ${item.title || ""}`.trim(), item.content || item.notes || "-");
+      const dailyLogContent = item.content ? htmlToPlainText(item.content) : "";
+      drawSection(doc, `${item.activity_date} ${item.title || ""}`.trim(), dailyLogContent || item.notes || "-");
     });
 
     drawSection(doc, "Componentes", "");

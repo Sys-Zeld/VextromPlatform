@@ -29,6 +29,19 @@
     return `${day}/${month}/${year}`;
   }
 
+  function formatDateShort(value) {
+    if (!value) return "-";
+    const raw = String(value).trim();
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1].slice(-2)}`;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return "-";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  }
+
   function getSectionImageRegistry(sectionKey) {
     const list = Array.isArray(images) ? images : [];
     return list
@@ -46,6 +59,26 @@
       .filter(Boolean)
       .pop() || "";
   }
+
+  function summarizeOneSentence(htmlValue) {
+    const plain = String(htmlValue || "")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<\/p>/gi, ". ")
+      .replace(/<\/h[1-6]>/gi, ". ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!plain) return "-";
+    const sentenceMatch = plain.match(/^[^.!?]+[.!?]?/);
+    const firstSentence = sentenceMatch ? sentenceMatch[0].trim() : plain;
+    if (firstSentence.length <= 80) return firstSentence;
+    return `${firstSentence.slice(0, 77)}...`;
+  }
+
+  const todayIso = new Date().toISOString().slice(0, 10);
 %>
 
 <section class="token-console">
@@ -59,7 +92,8 @@
       <div class="token-hero-actions">
         <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
-        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>/preview" target="_blank" rel="noopener">Preview HTML</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/config">Config Report</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>/preview-html" target="_blank" rel="noopener">Preview HTML</a>
         <form method="post" action="/admin/report-service/orders/<%= order.id %>/generate-pdf">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <button class="btn btn-primary btn-sm" type="submit">Gerar PDF</button>
@@ -147,28 +181,66 @@
     </div>
 
     <div class="col-12">
-      <div class="card app-card">
+      <div class="card app-card daily-log-editor-card">
         <div class="card-body">
-          <h2 class="h6 app-card-title mb-3">Descricao diaria do atendimento</h2>
-          <form method="post" action="/admin/report-service/orders/<%= order.id %>/daily-logs" class="row g-2">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h2 class="h6 app-card-title mb-0">Descricao diaria do atendimento</h2>
+            <div class="d-flex align-items-center gap-2">
+              <button class="btn btn-outline-secondary btn-sm d-none" type="button" id="dailyLogCancelEditBtn">Cancelar edicao</button>
+              <button class="btn btn-primary btn-sm" type="submit" form="daily-log-form" id="dailyLogSubmitBtn">Adicionar log diario</button>
+            </div>
+          </div>
+          <form method="post" action="/admin/report-service/orders/<%= order.id %>/daily-logs" class="row g-2" id="daily-log-form">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-            <div class="col-12 col-md-3"><input class="form-control" type="date" name="activity_date" required /></div>
+            <input type="hidden" name="daily_log_id" value="" data-daily-log-id />
+            <div class="col-12 col-md-3"><input class="form-control" type="date" name="activity_date" value="<%= todayIso %>" data-default-today required /></div>
             <div class="col-12 col-md-5"><input class="form-control" name="title" placeholder="Titulo opcional" /></div>
             <div class="col-12 col-md-2"><input class="form-control" name="sort_order" placeholder="Ordem" /></div>
-            <div class="col-12"><textarea class="form-control" name="content" rows="3" placeholder="Descricao tecnica"></textarea></div>
-            <div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="Observacoes"></textarea></div>
-            <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit">Adicionar log diario</button></div>
+            <div class="col-12">
+              <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+                <label class="form-label mb-0 small text-muted">Descrever a atividade</label>
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="dailyLogAiReviseBtn">Revisar com IA</button>
+              </div>
+              <div class="small text-muted mb-1" id="dailyLogAiStatus"></div>
+              <input type="hidden" name="content" data-daily-log-content />
+              <div class="report-quill-editor daily-log-quill-editor" data-daily-log-quill></div>
+            </div>
           </form>
-          <div class="table-responsive mt-3">
-            <table class="table table-sm app-table mb-0">
-              <thead><tr><th>Data</th><th>Titulo</th><th>Conteudo</th></tr></thead>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Logs diarios cadastrados</h2>
+          <div class="table-responsive">
+            <table class="table table-sm app-table mb-0 daily-log-table">
+              <thead><tr><th>ID</th><th>Data</th><th>Titulo</th><th>Conteudo (resumo)</th><th>Tag para capitulo</th><th>Acoes</th></tr></thead>
               <tbody>
-                <% if (!dailyLogs.length) { %><tr><td colspan="3" class="text-center text-muted py-3">Sem logs.</td></tr><% } %>
+                <% if (!dailyLogs.length) { %><tr><td colspan="6" class="text-center text-muted py-3">Sem logs.</td></tr><% } %>
                 <% dailyLogs.forEach((item) => { %>
                   <tr>
-                    <td><%= formatClassicDateTime(item.activity_date) %></td>
-                    <td><%= item.title || "-" %></td>
-                    <td><%= item.content || "-" %></td>
+                    <td><code><%= item.id %></code></td>
+                    <td><%= formatDateShort(item.activity_date) %></td>
+                    <td class="daily-log-title-cell" title="<%= item.title || '-' %>"><%= item.title || "-" %></td>
+                    <td class="daily-log-content-cell" title="<%= summarizeOneSentence(item.content || "") %>"><%= summarizeOneSentence(item.content || "") %></td>
+                    <td><code>@descricaodia=<%= item.id %></code></td>
+                    <td class="daily-log-actions-cell">
+                      <div class="d-flex gap-1">
+                        <button
+                          class="btn btn-outline-primary btn-sm daily-log-action-btn"
+                          type="button"
+                          data-daily-log-edit-id="<%= item.id %>"
+                        >
+                          Editar
+                        </button>
+                        <form method="post" action="/admin/report-service/orders/<%= order.id %>/daily-logs/<%= item.id %>/delete" class="m-0" onsubmit="return confirm('Excluir este log diario?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <button class="btn btn-outline-danger btn-sm daily-log-action-btn" type="submit">Excluir</button>
+                        </form>
+                      </div>
+                    </td>
                   </tr>
                 <% }) %>
               </tbody>
@@ -238,9 +310,13 @@
                 </div>
                 <div class="report-quill-title-editor mb-3" data-quill-title-editor></div>
 
-                <label class="form-label mb-1 small text-muted">Conteudo do capitulo</label>
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+                  <label class="form-label mb-0 small text-muted">Conteudo do capitulo</label>
+                  <button class="btn btn-outline-secondary btn-sm" type="button" data-section-ai-revise-btn>Revisar com IA</button>
+                </div>
+                <div class="small text-muted mb-1" data-section-ai-status></div>
                 <div class="small text-muted mb-2">
-                  Use <code>@img=ID</code> para imagem, <code>@tblcmpr</code> (replaced), <code>@tblcmpq</code> (required), <code>@tblcmps</code> (spare) para tabelas de componentes, <code>@timesheet</code> para tabela de timesheet e <code>@equip=ID</code> para inserir o TAG do equipamento cadastrado.
+                  Use <code>@img=ID</code> para imagem, <code>@tblcmpr</code> (replaced), <code>@tblcmpq</code> (required), <code>@tblcmps</code> (spare) para tabelas de componentes, <code>@timesheet</code> para tabela de timesheet, <code>@equip=ID</code> para inserir o TAG do equipamento cadastrado, <code>@descricaodia=ID</code> para inserir um log especifico e <code>@descricaodia</code> para inserir todos os logs diarios em sequencia.
                 </div>
                 <div class="report-quill-editor" data-quill-editor></div>
 
@@ -523,6 +599,206 @@
         serial: item.serial_number || ""
       }))
   ) %>;
+  window.reportDailyLogTagIndex = <%- JSON.stringify(
+    (dailyLogs || [])
+      .filter((item) => Number.isInteger(Number(item && item.id)) && Number(item.id) > 0)
+      .map((item) => ({
+        id: Number(item.id),
+        activityDate: formatDateShort(item.activity_date),
+        title: item.title || ""
+      }))
+  ) %>;
+  window.dailyLogsIndex = <%- JSON.stringify(
+    (dailyLogs || []).map((item) => ({
+      id: Number(item.id || 0),
+      activityDate: item.activity_date || "",
+      title: item.title || "",
+      sortOrder: Number(item.sort_order || 0),
+      content: item.content || ""
+    }))
+  ) %>;
+</script>
+<script>
+  (function () {
+    var dailyLogForm = document.querySelector('form[action="/admin/report-service/orders/<%= order.id %>/daily-logs"]');
+    if (!dailyLogForm) return;
+
+    var dateInput = dailyLogForm.querySelector("input[data-default-today]");
+    var idInput = dailyLogForm.querySelector("input[data-daily-log-id]");
+    var titleInput = dailyLogForm.querySelector('input[name="title"]');
+    var sortOrderInput = dailyLogForm.querySelector('input[name="sort_order"]');
+    var submitBtn = document.getElementById("dailyLogSubmitBtn");
+    var cancelEditBtn = document.getElementById("dailyLogCancelEditBtn");
+    var aiReviseBtn = document.getElementById("dailyLogAiReviseBtn");
+    var aiStatus = document.getElementById("dailyLogAiStatus");
+    var csrfInput = dailyLogForm.querySelector('input[name="_csrf"]');
+    var csrfToken = csrfInput ? csrfInput.value : "";
+    if (dateInput) {
+      var now = new Date();
+      var yyyy = String(now.getFullYear());
+      var mm = String(now.getMonth() + 1).padStart(2, "0");
+      var dd = String(now.getDate()).padStart(2, "0");
+      dateInput.value = yyyy + "-" + mm + "-" + dd;
+    }
+
+    var editorEl = dailyLogForm.querySelector("[data-daily-log-quill]");
+    var contentInput = dailyLogForm.querySelector("[data-daily-log-content]");
+    if (!editorEl || !contentInput || typeof window.Quill === "undefined") return;
+
+    var dailyToolbar = [
+      [{ header: [1, 2, false] }],
+      ["bold", "italic", "underline"],
+      [{ align: [] }],
+      [{ list: "ordered" }, { list: "bullet" }],
+      ["blockquote", "link"],
+      ["clean"]
+    ];
+    var dailyFormats = ["header", "bold", "italic", "underline", "align", "list", "blockquote", "link"];
+
+    var quill = new window.Quill(editorEl, {
+      theme: "snow",
+      modules: { toolbar: dailyToolbar },
+      formats: dailyFormats,
+      placeholder: "Descreva a atividade diaria..."
+    });
+
+    function getTodayRichDateLabel() {
+      var now = new Date();
+      var months = [
+        "JANEIRO",
+        "FEVEREIRO",
+        "MARCO",
+        "ABRIL",
+        "MAIO",
+        "JUNHO",
+        "JULHO",
+        "AGOSTO",
+        "SETEMBRO",
+        "OUTUBRO",
+        "NOVEMBRO",
+        "DEZEMBRO"
+      ];
+      var day = String(now.getDate());
+      var monthLabel = months[now.getMonth()] || "";
+      return (day + " " + monthLabel).trim();
+    }
+
+    function seedEditorWithTodayDate() {
+      var label = getTodayRichDateLabel();
+      quill.setContents([
+        { insert: label, attributes: { bold: true } },
+        { insert: "\n" }
+      ]);
+      quill.setSelection(quill.getLength(), 0, "silent");
+    }
+
+    function resetFormToCreate() {
+      if (idInput) idInput.value = "";
+      if (titleInput) titleInput.value = "";
+      if (sortOrderInput) sortOrderInput.value = "";
+      if (dateInput) {
+        var now = new Date();
+        dateInput.value = String(now.getFullYear()) + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
+      }
+      seedEditorWithTodayDate();
+      if (submitBtn) submitBtn.textContent = "Adicionar log diario";
+      if (cancelEditBtn) cancelEditBtn.classList.add("d-none");
+    }
+
+    seedEditorWithTodayDate();
+
+    var logs = Array.isArray(window.dailyLogsIndex) ? window.dailyLogsIndex : [];
+    var logsById = new Map(
+      logs
+        .filter(function (item) { return Number.isInteger(Number(item && item.id)) && Number(item.id) > 0; })
+        .map(function (item) { return [Number(item.id), item]; })
+    );
+    var editButtons = Array.prototype.slice.call(document.querySelectorAll("[data-daily-log-edit-id]"));
+    editButtons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var logId = Number(btn.getAttribute("data-daily-log-edit-id") || 0);
+        var item = logsById.get(logId);
+        if (!item) return;
+        if (idInput) idInput.value = String(item.id || "");
+        if (dateInput) dateInput.value = String(item.activityDate || "").slice(0, 10);
+        if (titleInput) titleInput.value = item.title || "";
+        if (sortOrderInput) sortOrderInput.value = Number(item.sortOrder || 0) ? String(item.sortOrder) : "";
+        quill.setText("");
+        if (item.content) quill.clipboard.dangerouslyPasteHTML(item.content);
+        if (submitBtn) submitBtn.textContent = "Salvar edicao";
+        if (cancelEditBtn) cancelEditBtn.classList.remove("d-none");
+        dailyLogForm.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+
+    if (cancelEditBtn) {
+      cancelEditBtn.addEventListener("click", function () {
+        resetFormToCreate();
+      });
+    }
+
+    if (aiReviseBtn) {
+      aiReviseBtn.addEventListener("click", async function () {
+        var sourceText = quill.getText().replace(/\s+/g, " ").trim();
+        var sourceHtml = String(quill.root && quill.root.innerHTML ? quill.root.innerHTML : "").trim();
+        if (!sourceText) {
+          if (aiStatus) aiStatus.textContent = "Digite um texto no editor para revisar com IA.";
+          return;
+        }
+
+        var defaultPrompt = "Revise o texto abaixo sem mudar muitas palavras";
+        var userPrompt = window.prompt("Informe o prompt para enviar a IA:", defaultPrompt);
+        if (userPrompt === null) {
+          if (aiStatus) aiStatus.textContent = "Revisao com IA cancelada.";
+          return;
+        }
+        userPrompt = String(userPrompt || "").trim() || defaultPrompt;
+
+        aiReviseBtn.disabled = true;
+        if (aiStatus) aiStatus.textContent = "Revisando texto com IA...";
+        try {
+          var response = await fetch("/admin/report-service/orders/<%= order.id %>/daily-logs/revise-text", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": csrfToken
+            },
+            credentials: "same-origin",
+            body: JSON.stringify({
+              text: sourceText,
+              html: sourceHtml,
+              prompt: userPrompt,
+              preserveFormatting: true
+            })
+          });
+          var payload = await response.json().catch(function () { return {}; });
+          if (!response.ok || !payload || !payload.ok) {
+            throw new Error(payload && payload.message ? payload.message : "Falha ao revisar texto com IA.");
+          }
+          var revisedHtml = String(payload.revisedHtml || "").trim();
+          if (revisedHtml) {
+            quill.setText("");
+            quill.clipboard.dangerouslyPasteHTML(revisedHtml);
+            if (aiStatus) aiStatus.textContent = "Texto revisado com IA mantendo formatacao.";
+          } else {
+            var revisedText = String(payload.revisedText || "").trim();
+            if (!revisedText) throw new Error("A IA nao retornou texto revisado.");
+            quill.setText(revisedText);
+            if (aiStatus) aiStatus.textContent = "Texto revisado com IA.";
+          }
+        } catch (err) {
+          if (aiStatus) aiStatus.textContent = err && err.message ? err.message : "Falha ao revisar texto com IA.";
+        } finally {
+          aiReviseBtn.disabled = false;
+        }
+      });
+    }
+
+    dailyLogForm.addEventListener("submit", function () {
+      var plainText = quill.getText().replace(/\s+/g, " ").trim();
+      contentInput.value = plainText ? quill.root.innerHTML : "";
+    });
+  })();
 </script>
 <script>
   (function () {

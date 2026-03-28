@@ -221,7 +221,85 @@ async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType,
   throw err;
 }
 
+async function reviseTextWithAi({
+  text,
+  html = "",
+  prompt = "Revise o texto abaixo sem mudar muitas palavras",
+  preserveFormatting = false
+}) {
+  if (!env.openai.apiKey) {
+    const err = new Error("OPENAI_API_KEY nao configurada no ambiente.");
+    err.statusCode = 500;
+    throw err;
+  }
+
+  const sourceText = String(text || "").trim();
+  const sourceHtml = String(html || "").trim();
+  if (!sourceText && !sourceHtml) {
+    const err = new Error("Texto obrigatorio para revisao.");
+    err.statusCode = 422;
+    throw err;
+  }
+
+  const instruction = String(prompt || "Revise o texto abaixo sem mudar muitas palavras").trim();
+  const wantsHtml = Boolean(preserveFormatting);
+  const reviewTarget = wantsHtml && sourceHtml
+    ? `HTML:\n${sourceHtml}`
+    : `Texto:\n${sourceText}`;
+  const outputInstruction = wantsHtml
+    ? "Retorne somente HTML revisado, sem markdown, sem explicacoes e preservando a estrutura de formatacao."
+    : "Retorne somente o texto revisado, sem explicacoes.";
+  const body = {
+    model: env.openai.model,
+    temperature: 0.2,
+    max_output_tokens: Math.min(1200, env.openai.maxOutputTokensCap),
+    input: [
+      {
+        role: "system",
+        content: [
+          {
+            type: "input_text",
+            text: "Voce revisa textos tecnicos em portugues mantendo o sentido e alterando o minimo possivel."
+          }
+        ]
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: `${instruction}\n\n${reviewTarget}\n\n${outputInstruction}`
+          }
+        ]
+      }
+    ]
+  };
+
+  const payload = await callOpenAiResponsesApi(body);
+  const revised = stripJsonCodeFence(extractOutputText(payload)).trim();
+  if (!revised) {
+    const err = new Error("A IA nao retornou texto revisado.");
+    err.statusCode = 422;
+    err.debug = { openaiResponse: payload };
+    throw err;
+  }
+
+  if (wantsHtml) {
+    return {
+      revisedHtml: revised,
+      revisedText: revised,
+      debug: { openaiResponse: payload }
+    };
+  }
+
+  return {
+    revisedText: revised,
+    debug: { openaiResponse: payload }
+  };
+}
+
 module.exports = {
   generateProfileJsonFromDocument,
-  buildProfileAiPrompt
+  buildProfileAiPrompt,
+  reviseTextWithAi
 };

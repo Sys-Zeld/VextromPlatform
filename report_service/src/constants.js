@@ -36,7 +36,7 @@ const QUILL_SECTION_TOOLBAR = [
   ["blockquote"],
   [{ align: [] }],
   ["insertTable"],
-  ["link"],
+  ["link", "image"],
   ["clean"]
 ];
 
@@ -44,7 +44,7 @@ const QUILL_SECTION_TITLE_TOOLBAR = [
   [{ font: ["arial", "serif", "monospace"] }, { size: ["small", false, "large", "huge"] }],
   ["bold", "italic", "underline", { color: [] }],
   [{ align: [] }],
-  ["link"],
+  ["link", "image"],
   ["clean"]
 ];
 
@@ -63,7 +63,8 @@ const QUILL_SECTION_FORMATS = [
   "table-cell-line",
   "table-col",
   "table-row",
-  "link"
+  "link",
+  "image"
 ];
 
 const QUILL_SECTION_TITLE_FORMATS = [
@@ -74,7 +75,8 @@ const QUILL_SECTION_TITLE_FORMATS = [
   "italic",
   "underline",
   "align",
-  "link"
+  "link",
+  "image"
 ];
 
 const COMPONENT_CATEGORIES = ["replaced", "required", "spare_recommended"];

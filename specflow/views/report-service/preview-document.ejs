@@ -11,9 +11,9 @@
     const seconds = String(date.getSeconds()).padStart(2, "0");
     return `${weekDays[date.getDay()]} ${months[date.getMonth()]} ${day} ${date.getFullYear()} ${hours}:${minutes}:${seconds}`;
   }
-
 %>
-<article class="report-doc">
+
+<article class="report-doc" id="report-pages">
   <section class="report-page report-page-cover">
     <div class="topbar">
       <div class="brand-left">
@@ -40,9 +40,18 @@
 
   <section class="report-page">
     <div class="topbar">
-      <div class="brand-left"><img src="<%= brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Logo Vextrom" /></div>
-      <div class="brand-right"><% if (brandAssets?.logoChloride) { %><img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" /><% } else { %><div class="report-brand-slot">Espaco para logo Chloride</div><% } %></div>
+      <div class="brand-left">
+        <img src="<%= brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Logo Vextrom" />
+      </div>
+      <div class="brand-right">
+        <% if (brandAssets?.logoChloride) { %>
+          <img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" />
+        <% } else { %>
+          <div class="report-brand-slot">Espaco para logo Chloride</div>
+        <% } %>
+      </div>
     </div>
+
     <div class="report-section-title">METADADOS</div>
     <div class="report-meta-grid">
       <div class="report-meta-item"><strong>Executado por</strong><span><%= report?.prepared_by || "-" %></span></div>
@@ -50,9 +59,15 @@
       <div class="report-meta-item"><strong>OS</strong><span><%= order?.service_order_number || "-" %></span></div>
       <div class="report-meta-item"><strong>Atualizado em</strong><span><%= formatClassicDateTime(report?.last_modified_at || generatedAt) %></span></div>
     </div>
+
     <div class="report-section-title mt-4">SUMARIO</div>
     <ul class="report-toc">
-      <% if (!toc || !toc.length) { %><li><span>Sem capitulos.</span><span class="report-toc-page">-</span></li><% } %>
+      <% if (!toc || !toc.length) { %>
+        <li>
+          <span>Sem capitulos.</span>
+          <span class="report-toc-page">-</span>
+        </li>
+      <% } %>
       <% (toc || []).forEach((item) => { %>
         <li>
           <a class="report-toc-link report-toc-title" href="#<%= item.anchorId %>"><%= item.title %></a>
@@ -64,29 +79,35 @@
   </section>
 
   <% (orderedVisibleSections || []).forEach((section, index) => { %>
-    <section class="report-page" id="<%= section.anchor_id || ('section-' + (index + 1)) %>">
+    <section
+      class="report-page"
+      data-auto-paginate="true"
+      id="<%= section.anchor_id || ('section-' + (index + 1)) %>"
+    >
       <div class="topbar">
-        <div class="brand-left"><img src="<%= brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Logo Vextrom" /></div>
-        <div class="brand-right"><% if (brandAssets?.logoChloride) { %><img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" /><% } else { %><div class="report-brand-slot">Espaco para logo Chloride</div><% } %></div>
+        <div class="brand-left">
+          <img src="<%= brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Logo Vextrom" />
+        </div>
+        <div class="brand-right">
+          <% if (brandAssets?.logoChloride) { %>
+            <img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" />
+          <% } else { %>
+            <div class="report-brand-slot">Espaco para logo Chloride</div>
+          <% } %>
+        </div>
       </div>
-      <div class="section-title">
-        <span class="section-title-number"><%= index + 1 %>.</span>
-        <div class="report-section-title-rich"><%- section.section_title_html_preview || section.section_title_html || section.section_title || "CAPITULO" %></div>
+
+      <div class="report-page-content">
+        <div class="section-title">
+          <span class="section-title-number"><%= index + 1 %>.</span>
+          <div class="report-section-title-rich">
+            <%- section.section_title_html_preview || section.section_title_html || section.section_title || "CAPITULO" %>
+          </div>
+        </div>
+        <div class="rich-output">
+          <%- section.content_html_preview || section.content_html || "<p><br></p>" %>
+        </div>
       </div>
-      <div class="rich-output"><%- section.content_html_preview || section.content_html || "<p><br></p>" %></div>
     </section>
   <% }) %>
-
-  <section class="report-page">
-    <div class="topbar">
-      <div class="brand-left"><img src="<%= brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Logo Vextrom" /></div>
-      <div class="brand-right"><% if (brandAssets?.logoChloride) { %><img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" /><% } else { %><div class="report-brand-slot">Espaco para logo Chloride</div><% } %></div>
-    </div>
-    <div class="report-section-title">GRAFICO MTBF</div>
-    <% if (brandAssets?.chartMtbf) { %>
-      <div class="chart-image-wrap"><img src="<%= brandAssets.chartMtbf %>" alt="Grafico MTBF" /></div>
-    <% } else { %>
-      <div class="chart-image-wrap report-image-slot">Espaco para grafico MTBF</div>
-    <% } %>
-  </section>
 </article>

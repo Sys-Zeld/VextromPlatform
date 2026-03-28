@@ -223,6 +223,31 @@ function renderTimesheetInlineTable(timesheetItems) {
   `;
 }
 
+function renderDailyLogInlineItem(dailyLog, requestedId = null, context = null) {
+  if (!dailyLog) return "";
+  const contentHtml = String(dailyLog.content || "").trim();
+  if (!contentHtml) return "";
+  if (!context) return contentHtml;
+  return injectTaggedImagesInHtml(
+    contentHtml,
+    context.imageById,
+    context.componentItems,
+    context.equipmentById,
+    context.timesheetItems,
+    context.dailyLogsById,
+    context.dailyLogsOrdered,
+    { expandDailyLogTags: false }
+  );
+}
+
+function renderAllDailyLogsInlineItems(dailyLogs, context = null) {
+  const rows = Array.isArray(dailyLogs) ? dailyLogs : [];
+  const rendered = rows
+    .map((item) => renderDailyLogInlineItem(item, item && item.id, context))
+    .filter((chunk) => String(chunk || "").trim().length > 0);
+  return rendered.join("\n");
+}
+
 function wrapImageCardsIntoRows(html) {
   const figureRegex = /<figure class="report-inline-image-card">[\s\S]*?<\/figure>/gi;
   const tokenRegex = /<figure class="report-inline-image-card">[\s\S]*?<\/figure>|<br\s*\/?>/gi;
@@ -307,9 +332,12 @@ function wrapImageCardsIntoRows(html) {
   return result;
 }
 
-function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems) {
+function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems, dailyLogsById, dailyLogsOrdered, options = {}) {
   const source = String(contentHtml || "");
   if (!source) return "<p><br></p>";
+  const opts = {
+    expandDailyLogTags: options.expandDailyLogTags !== false
+  };
   const equipmentTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*equip(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi;
   const withEquipments = source.replace(equipmentTagPattern, (_match, rawId) => {
     const id = Number(rawId);
@@ -333,10 +361,32 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
   const withTables = withRequiredTable.replace(tableSparePattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "spare")));
   const timesheetTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*timesheet/gi;
   const withTimesheet = withTables.replace(timesheetTagPattern, () => renderTimesheetInlineTable(timesheetItems));
-  return wrapImageCardsIntoRows(withTimesheet);
+  if (!opts.expandDailyLogTags) return wrapImageCardsIntoRows(withTimesheet);
+
+  const nestedContext = {
+    imageById,
+    componentItems,
+    equipmentById,
+    timesheetItems,
+    dailyLogsById,
+    dailyLogsOrdered
+  };
+  const dailyLogTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi;
+  const withDailyLogs = withTimesheet.replace(dailyLogTagPattern, (_match, rawId) => {
+    const id = Number(rawId);
+    if (!Number.isInteger(id) || id <= 0) return _match;
+    return renderDailyLogInlineItem(dailyLogsById.get(id), id, nestedContext);
+  });
+  const dailyLogsTagAllPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?!((?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)))/gi;
+  const withAllDailyLogs = withDailyLogs.replace(dailyLogsTagAllPattern, () => renderAllDailyLogsInlineItems(dailyLogsOrdered, nestedContext));
+  return wrapImageCardsIntoRows(withAllDailyLogs);
 }
 
-function buildPreviewModel(payload) {
+function buildPreviewModel(payload, options = {}) {
+  const reportConfig = options && options.reportConfig && typeof options.reportConfig === "object"
+    ? options.reportConfig
+    : {};
+  const templateKey = String(options && options.templateKey ? options.templateKey : reportConfig.templateKey || "").trim().toLowerCase();
   const order = withServiceOrderDisplay(payload.order || {});
   const images = Array.isArray(payload.images) ? payload.images : [];
   const imageById = new Map(
@@ -383,6 +433,19 @@ function buildPreviewModel(payload) {
   );
   const componentItems = Array.isArray(payload.components) ? payload.components : [];
   const timesheetItems = Array.isArray(payload.timesheet) ? payload.timesheet : [];
+  const dailyLogsOrdered = (Array.isArray(payload.dailyLogs) ? payload.dailyLogs : [])
+    .filter((item) => Number.isInteger(Number(item?.id)) && Number(item.id) > 0)
+    .map((item) => ({
+      id: Number(item.id),
+      activityDate: item.activity_date || "",
+      title: item.title || "",
+      content: item.content || ""
+    }));
+  const dailyLogsById = new Map(
+    dailyLogsOrdered
+      .filter((item) => Number.isInteger(Number(item?.id)) && Number(item.id) > 0)
+      .map((item) => [Number(item.id), item])
+  );
   const visibleSections = sections
     .filter((item) => item?.is_visible !== false)
     .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id || 0) - Number(b.id || 0));
@@ -429,14 +492,18 @@ function buildPreviewModel(payload) {
           imageById,
           componentItems,
           equipmentById,
-          timesheetItems
+          timesheetItems,
+          dailyLogsById,
+          dailyLogsOrdered
         ),
         content_html_preview: injectTaggedImagesInHtml(
           section.content_html || "<p><br></p>",
           imageById,
           componentItems,
           equipmentById,
-          timesheetItems
+          timesheetItems,
+          dailyLogsById,
+          dailyLogsOrdered
         ),
         section_title_html: section.section_title_html || `<p>${section.section_title || "-"}</p>`,
         section_title_text: section.section_title_text || section.section_title || "-",
@@ -460,10 +527,11 @@ function buildPreviewModel(payload) {
     order,
     orderedVisibleSections,
     brandAssets: {
-      logoVextrom: String(process.env.SERVICE_REPORT_LOGO_VEXTROM || "/public/img/logo-vextrom.svg"),
-      logoChloride: String(process.env.SERVICE_REPORT_LOGO_CHLORIDE || "").trim(),
+      logoVextrom: String(reportConfig.logoVextrom || process.env.SERVICE_REPORT_LOGO_VEXTROM || "/public/img/logo-vextrom.svg"),
+      logoChloride: String(reportConfig.logoChloride || process.env.SERVICE_REPORT_LOGO_CHLORIDE || "").trim(),
       chartMtbf: String(process.env.SERVICE_REPORT_CHART_MTBF || "").trim()
     },
+    reportTemplateKey: templateKey || "modern",
     sectionMap,
     components,
     toc: orderedVisibleSections.map((item, index) => ({

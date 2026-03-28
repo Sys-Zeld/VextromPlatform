@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { STATUS_CODES } = require("http");
 const { spawn } = require("child_process");
 const express = require("express");
 const helmet = require("helmet");
@@ -11,7 +12,7 @@ const dayjs = require("dayjs");
 
 const env = require("./config/env");
 const { migrate } = require("./db/migrate");
-const { sanitizeInput } = require("./utils/sanitize");
+const { sanitizeInput, sanitizeRichTextInput } = require("./utils/sanitize");
 const { SUPPORTED_LANGS, DEFAULT_LANG, normalizeLang, createTranslator } = require("./i18n");
 const { buildSubmissionQrPayload, normalizeQrTheme } = require("./services/qr");
 const { generatePdfBuffer } = require("./services/pdf");
@@ -137,7 +138,7 @@ const {
   deleteBackupFileById,
   syncBackupsFromDirectory
 } = require("./services/backups");
-const { generateProfileJsonFromDocument } = require("./services/aiProfiles");
+const { generateProfileJsonFromDocument, reviseTextWithAi } = require("./services/aiProfiles");
 const { getAiPromptTemplate, setAiPromptTemplate } = require("./services/aiPromptSettings");
 const { registerReportService } = require("../report_service/src/app");
 
@@ -199,7 +200,7 @@ app.use(helmet({
   noSniff: true,
   referrerPolicy: { policy: "no-referrer" }
 }));
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: "25mb" }));
 app.use(express.json({ limit: "25mb" }));
 app.use(cookieParser());
 app.use("/public", express.static(path.join(__dirname, "public")));
@@ -465,8 +466,14 @@ function requireAdminAuth(req, res, next) {
 }
 
 function getStandardStatusMessage(req, statusCode) {
-  const fallbackStatus = Number(statusCode) >= 500 ? 500 : 400;
-  return req.t(`http.${statusCode}`) || req.t(`http.${fallbackStatus}`);
+  const parsedStatus = Number(statusCode);
+  const normalizedStatus = Number.isInteger(parsedStatus) && parsedStatus >= 100 ? parsedStatus : 500;
+  const fallbackStatus = normalizedStatus >= 500 ? 500 : 400;
+  const translator = req && typeof req.t === "function" ? req.t : null;
+  if (translator) {
+    return translator(`http.${normalizedStatus}`) || translator(`http.${fallbackStatus}`);
+  }
+  return STATUS_CODES[normalizedStatus] || STATUS_CODES[fallbackStatus] || "Unexpected error";
 }
 
 function sendStandardError(req, res, statusCode, options = {}) {
@@ -4785,6 +4792,8 @@ if (env.reportServiceEnabled) {
   registerReportService(app, {
     asyncHandler,
     sanitizeInput,
+    sanitizeRichTextInput,
+    reviseTextWithAi,
     requireApiScope,
     requireAdminAuth,
     csrfProtection

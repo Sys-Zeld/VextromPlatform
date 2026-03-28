@@ -10,6 +10,7 @@
     </div>
     <div class="d-flex gap-2">
       <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>">Voltar ao editor</a>
+      <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/config">Config Report</a>
       <form method="post" action="/admin/report-service/orders/<%= order.id %>/generate-pdf" class="m-0">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
         <button class="btn btn-primary btn-sm" type="submit">Gerar PDF</button>
@@ -19,5 +20,6 @@
 </section>
 
 <%- include("preview-document") %>
+<script src="/public/js/report-pagination.js?v=<%= encodeURIComponent(String((typeof generatedAt !== 'undefined' && generatedAt) ? generatedAt : Date.now())) %>"></script>
 
 <%- include("../partials/footer") %>

@@ -587,6 +587,46 @@ async function createDailyLog(payload) {
   return result.rows[0];
 }
 
+async function updateDailyLogByOrderAndId(serviceOrderId, dailyLogId, payload) {
+  const result = await db.query(
+    `
+      UPDATE service_report_daily_logs
+      SET
+        activity_date = $3,
+        title = $4,
+        content = $5,
+        notes = $6,
+        sort_order = $7,
+        updated_at = NOW()
+      WHERE id = $1
+        AND service_order_id = $2
+      RETURNING *
+    `,
+    [
+      dailyLogId,
+      serviceOrderId,
+      payload.activityDate,
+      payload.title || "",
+      payload.content || "",
+      payload.notes || "",
+      payload.sortOrder || 0
+    ]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteDailyLogByOrderAndId(serviceOrderId, dailyLogId) {
+  const result = await db.query(
+    `
+      DELETE FROM service_report_daily_logs
+      WHERE id = $1
+        AND service_order_id = $2
+    `,
+    [dailyLogId, serviceOrderId]
+  );
+  return result.rowCount > 0;
+}
+
 async function listReports() {
   const result = await db.query(
     `
@@ -715,7 +755,12 @@ async function updateReport(id, payload) {
 }
 
 async function ensureDefaultSections(serviceReportId) {
-  const defaultSections = SECTION_DEFINITIONS.filter((section) => section.key === "scope");
+  const defaultSections = [
+    { key: "scope", title: "ESCOPO", sortOrder: 1 },
+    { key: "technical_description", title: "DESCRICAO DO ATENDIMENTO TECNICO", sortOrder: 2 },
+    { key: "recommendations", title: "RECOMENDACOES", sortOrder: 3 },
+    { key: "conclusion", title: "CONCLUSAO", sortOrder: 4 }
+  ];
   for (const section of defaultSections) {
     // eslint-disable-next-line no-await-in-loop
     await db.query(
@@ -1289,6 +1334,8 @@ module.exports = {
   deleteTimesheetEntry,
   listDailyLogsByOrder,
   createDailyLog,
+  updateDailyLogByOrderAndId,
+  deleteDailyLogByOrderAndId,
   listReports,
   getReportById,
   getReportByOrderId,

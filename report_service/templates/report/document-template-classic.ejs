@@ -13,7 +13,7 @@
   }
 %>
 
-<article class="report-doc" id="report-pages">
+<article class="report-doc report-doc-classic" id="report-pages">
   <section class="report-page report-page-cover">
     <div class="topbar">
       <div class="brand-left">
@@ -29,7 +29,7 @@
     </div>
     <div class="cover-center">
       <img class="cover-logo-image" src="<%= brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Vextrom" />
-      <div class="cover-sub">atmosferas sob controle</div>
+      <div class="cover-sub">classic report template</div>
       <div class="cover-title"><%= report?.title || "SERVICE REPORT" %></div>
       <div class="report-cover-subtitle"><strong>Cliente:</strong> <%= customer?.name || "-" %></div>
       <div class="report-cover-subtitle"><strong>Site:</strong> <%= site?.site_name || "-" %></div>

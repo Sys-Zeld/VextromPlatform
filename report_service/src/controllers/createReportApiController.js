@@ -2,8 +2,9 @@ const fs = require("fs");
 const repo = require("../repositories/serviceReportRepository");
 const service = require("../services/serviceReportService");
 const { generatePdfToFile, buildPdfBufferFromHtml } = require("../services/serviceReportPdfService");
+const { getReportConfigSettings } = require("../services/reportConfigSettings");
 const { buildPreviewModel } = require("../services/reportPreviewService");
-const { renderReportPreviewHtml } = require("../services/reportTemplateService");
+const { renderReportPreviewHtml, normalizeReportTemplateKey } = require("../services/reportTemplateService");
 
 function ok(res, data, statusCode = 200) {
   return res.status(statusCode).json({ data });
@@ -273,7 +274,9 @@ function createReportApiController(deps) {
       const reportId = Number(req.params.id);
       const aggregate = await service.buildReportAggregate(reportId);
       if (!aggregate) return res.status(404).json({ error: "Relatorio nao encontrado.", errorCode: "REPORT_NOT_FOUND", details: null });
-      const htmlSource = await renderReportPreviewHtml(aggregate);
+      const reportConfig = await getReportConfigSettings();
+      const templateKey = normalizeReportTemplateKey(req.query.template_key || reportConfig.templateKey);
+      const htmlSource = await renderReportPreviewHtml(aggregate, { reportConfig, templateKey });
       const buffer = await buildPdfBufferFromHtml(htmlSource, aggregate);
       res.setHeader("Content-Type", "application/pdf");
       return res.send(buffer);
@@ -284,7 +287,9 @@ function createReportApiController(deps) {
       const aggregate = await service.buildReportAggregate(reportId);
       if (!aggregate) return res.status(404).json({ error: "Relatorio nao encontrado.", errorCode: "REPORT_NOT_FOUND", details: null });
       const outputPath = service.resolveReportPdfPath(reportId);
-      const htmlSource = await renderReportPreviewHtml(aggregate);
+      const reportConfig = await getReportConfigSettings();
+      const templateKey = normalizeReportTemplateKey(req.body && req.body.template_key ? req.body.template_key : reportConfig.templateKey);
+      const htmlSource = await renderReportPreviewHtml(aggregate, { reportConfig, templateKey });
       fs.writeFileSync(service.resolveReportHtmlPath(reportId), htmlSource, "utf8");
       await generatePdfToFile(aggregate, outputPath, htmlSource);
       await service.updateReport(reportId, { pdfPath: outputPath, status: "issued", issueDate: new Date().toISOString().slice(0, 10) });
@@ -310,7 +315,9 @@ function createReportApiController(deps) {
       const reportId = Number(req.params.id);
       const aggregate = await service.buildReportAggregate(reportId);
       if (!aggregate) return res.status(404).json({ error: "Relatorio nao encontrado.", errorCode: "REPORT_NOT_FOUND", details: null });
-      return ok(res, buildPreviewModel(aggregate));
+      const reportConfig = await getReportConfigSettings();
+      const templateKey = normalizeReportTemplateKey(req.query.template_key || reportConfig.templateKey);
+      return ok(res, buildPreviewModel(aggregate, { reportConfig, templateKey }));
     }
   };
 }

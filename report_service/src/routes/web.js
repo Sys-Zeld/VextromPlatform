@@ -11,9 +11,14 @@ function createReportServiceWebRouter(deps) {
   router.post("/orders", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createOrder));
   router.post("/orders/:id/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteOrder));
   router.get("/orders/:id", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.orderEditor));
+  router.get("/config", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.reportConfigPage));
+  router.post("/config", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.saveReportConfig));
   router.post("/orders/:id/equipments", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.attachEquipment));
   router.post("/orders/:id/timesheet", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.addTimesheet));
   router.post("/orders/:id/daily-logs", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.addDailyLog));
+  router.post("/orders/:id/daily-logs/:dailyLogId/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteDailyLog));
+  router.post("/orders/:id/daily-logs/revise-text", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.reviseDailyLogText));
+  router.post("/orders/:id/sections/revise-text", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.reviseSectionText));
   router.post("/orders/:id/sections", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createSection));
   router.post("/orders/:id/sections/:sectionKey", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.saveSection));
   router.post("/orders/:id/sections/:sectionKey/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteSection));
@@ -30,6 +35,8 @@ function createReportServiceWebRouter(deps) {
   );
   router.post("/orders/:id/images/:imageId/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteImage));
   router.get("/orders/:id/preview", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.previewPage));
+  router.get("/orders/:id/preview-html", deps.requireAdminAuth, asyncHandler(controller.previewHtmlPage));
+  router.get("/orders/:id/preview-html/template/:templateKey", deps.requireAdminAuth, asyncHandler(controller.previewHtmlByTemplatePage));
   router.get("/orders/:id/pdf-preview", deps.requireAdminAuth, asyncHandler(controller.pdfPreview));
   router.post("/orders/:id/generate-pdf", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.generatePdf));
   router.get("/reports/:id/editor", deps.requireAdminAuth, asyncHandler(controller.reportEditor));
