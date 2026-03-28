@@ -467,6 +467,36 @@
     return blocks;
   }
 
+  function moveExcessTitleToFlow(pageEl) {
+    var titleRich = pageEl.querySelector(".report-section-title-rich");
+    var flow = getFlow(pageEl);
+    if (!titleRich || !flow) return;
+
+    var children = toArray(titleRich.childNodes);
+    var firstRealFound = false;
+    var excess = [];
+    for (var i = 0; i < children.length; i += 1) {
+      if (!firstRealFound && !isBlankTextNode(children[i])) {
+        firstRealFound = true;
+        continue;
+      }
+      if (firstRealFound) {
+        excess.push(children[i]);
+      }
+    }
+    if (!excess.length) return;
+
+    var ref = flow.firstChild;
+    for (var j = 0; j < excess.length; j += 1) {
+      titleRich.removeChild(excess[j]);
+      if (ref) {
+        flow.insertBefore(excess[j], ref);
+      } else {
+        flow.appendChild(excess[j]);
+      }
+    }
+  }
+
   function repaginateSections(reportDoc) {
     if (!reportDoc) return;
 
@@ -477,6 +507,7 @@
     var basePages = getBaseSectionPages(reportDoc);
     basePages.forEach(function (basePage) {
       restoreSourceSnapshot(basePage);
+      moveExcessTitleToFlow(basePage);
       var sourceFlow = getFlow(basePage);
       if (!sourceFlow) return;
 

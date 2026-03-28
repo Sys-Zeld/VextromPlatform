@@ -10,11 +10,15 @@
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
 
   .app-topbar,
   .app-footer,
-  .report-preview-actions {
+  .report-preview-actions,
+  .report-print-btn {
     display: none !important;
   }
 
@@ -44,5 +48,68 @@
   .report-page:last-child {
     page-break-after: auto;
     break-after: auto;
+  }
+
+  .report-section-title {
+    background: linear-gradient(180deg, #5d8f3d 0%, #4f7d33 100%) !important;
+    color: #f2f6ef !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-meta-item {
+    border: 1px solid #d0dbd3;
+    background: #f8faf8 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-inline-components-table thead th {
+    background: #f4f6f5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-inline-components-table thead tr.report-inline-components-meta th {
+    background: #0d4f20 !important;
+    color: #eff7ef !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-inline-timesheet-table thead th {
+    background: #ececec !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-inline-timesheet-table .report-inline-timesheet-title-row th {
+    background: #e2e2e2 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-inline-daily-log-title {
+    background: #e6efe8 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .report-brand-slot {
+    border: 1px dashed #b8c3b2;
+    background: #f5f8f3 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .cover-center {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .topbar img,
+  .cover-logo-image {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }

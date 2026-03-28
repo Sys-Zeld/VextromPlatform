@@ -687,8 +687,31 @@ function createReportWebController(deps) {
   <title>${String(pageTitle).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</title>
   <link href="/public/css/report-preview.css" rel="stylesheet" />
   <link href="/public/css/report-print.css" rel="stylesheet" />
+  <style>
+    .report-print-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 9999;
+      padding: 10px 20px;
+      background: #4f7d33;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .report-print-btn:hover { background: #3d6228; }
+    @media print { .report-print-btn { display: none !important; } }
+  </style>
 </head>
 <body>
+<button class="report-print-btn" onclick="window.print()">&#128424; Imprimir</button>
 ${bodyHtml}
 <script src="/public/js/report-pagination.js?v=${cacheVersion}"></script>
 </body>

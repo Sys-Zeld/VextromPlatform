@@ -163,21 +163,41 @@ function htmlToPlainText(html) {
     .trim();
 }
 
-function buildPdfBufferFromHtml(html, fallbackPayload) {
-  const plain = htmlToPlainText(html);
-  if (!plain) return buildPdfBuffer(fallbackPayload);
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 42, size: "A4" });
-    const chunks = [];
-    doc.on("data", (chunk) => chunks.push(chunk));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
-    doc.font("Helvetica").fontSize(9.5).fillColor("#1f1f1f").text(plain, {
-      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
-      lineGap: 2
+async function buildPdfBufferFromHtml(html, fallbackPayload) {
+  const puppeteer = require("puppeteer");
+  const path = require("path");
+  const cssPreview = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-preview.css"), "utf8");
+  const cssPrint = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-print.css"), "utf8");
+  const paginationJs = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "js", "report-pagination.js"), "utf8");
+
+  const fullHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <style>${cssPreview}</style>
+  <style>${cssPrint}</style>
+</head>
+<body>
+${html}
+<script>${paginationJs}</script>
+</body>
+</html>`;
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    const page = await browser.newPage();
+    await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+    await page.waitForFunction(() => window.__reportPaginationDone === true, { timeout: 10000 }).catch(() => {});
+    const buffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 }
     });
-    doc.end();
-  });
+    return Buffer.from(buffer);
+  } finally {
+    if (browser) await browser.close();
+  }
 }
 
 async function generatePdfToFile(payload, outputPath, htmlSource = "") {
