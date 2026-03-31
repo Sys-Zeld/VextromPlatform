@@ -1,0 +1,381 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= pageTitle %></title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="/public/css/report-preview.css" rel="stylesheet" />
+  <style>
+    body { background: #f4f6f4; font-family: "Inter", "Segoe UI", sans-serif; }
+    .sign-shell { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+    .sign-header { background: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; border: 1px solid #dde8de; }
+    .sign-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .sign-brand img { height: 32px; }
+    .sign-brand-name { font-weight: 700; font-size: 1rem; color: #2d4a34; }
+    .sign-doc-title { font-size: 1.15rem; font-weight: 700; color: #1a2b1e; margin-bottom: 4px; }
+    .sign-doc-meta { font-size: 0.85rem; color: #5a6b5c; }
+    .sign-state-card { background: #fff; border-radius: 12px; padding: 32px 24px; text-align: center; border: 1px solid #dde8de; }
+    .sign-state-icon { font-size: 3rem; margin-bottom: 12px; }
+    .sign-report-wrap { background: #fff; border-radius: 12px; border: 1px solid #dde8de; overflow: hidden; margin-bottom: 20px; }
+    .sign-report-header { padding: 12px 20px; background: #f0f5f0; border-bottom: 1px solid #dde8de; font-weight: 600; font-size: 0.88rem; color: #3a5040; }
+    .sign-report-body { max-height: 480px; overflow-y: auto; overflow-x: hidden; padding: 12px; }
+    .sign-report-body .report-doc {
+      width: 100%;
+      max-width: 100%;
+      padding: 0;
+      gap: 12px;
+      background: transparent;
+      border-radius: 0;
+    }
+    .sign-report-body .report-page {
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      min-height: 0;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .sign-report-body img,
+    .sign-report-body table {
+      max-width: 100%;
+    }
+    .sign-form-card { background: #fff; border-radius: 12px; padding: 24px; border: 1px solid #dde8de; }
+    .sign-form-title { font-size: 1rem; font-weight: 700; color: #1a2b1e; margin-bottom: 16px; }
+    .sign-canvas-wrap { border: 2px solid #b0c4b1; border-radius: 8px; background: #fafcfa; position: relative; }
+    #signatureCanvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }
+    .sign-canvas-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #a0b4a2; font-size: 0.88rem; pointer-events: none; user-select: none; }
+    .sign-canvas-clear { position: absolute; top: 8px; right: 10px; font-size: 0.78rem; color: #888; background: none; border: none; cursor: pointer; padding: 2px 6px; }
+    .sign-canvas-clear:hover { color: #b02a37; }
+    .sign-signer-info { font-size: 0.9rem; color: #3a5040; background: #f0f5f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+    .sign-footer-note { font-size: 0.78rem; color: #7a8c7c; margin-top: 16px; }
+  </style>
+</head>
+<body>
+<div class="sign-shell">
+
+  <%# HEADER %>
+  <div class="sign-header">
+    <div class="sign-brand">
+      <img src="/public/img/logo-vextrom.svg" alt="Vextrom" onerror="this.style.display='none'" />
+      <span class="sign-brand-name">Vextrom Service Report</span>
+    </div>
+    <% if (signRequest) { %>
+      <div class="sign-doc-title"><%= signRequest.report_title || signRequest.order_title || 'Relatório Técnico' %></div>
+      <div class="sign-doc-meta">
+        <% if (signRequest.report_number) { %><strong>Nº</strong> <%= signRequest.report_number %>&nbsp;&nbsp;<% } %>
+        <% if (signRequest.customer_name) { %><strong>Cliente</strong> <%= signRequest.customer_name %><% } %>
+      </div>
+    <% } %>
+  </div>
+
+  <%# NOT FOUND %>
+  <% if (notFound) { %>
+    <div class="sign-state-card">
+      <div class="sign-state-icon">🔍</div>
+      <h2 class="h5 mb-2">Link não encontrado</h2>
+      <p class="text-muted">Este link de assinatura não existe ou foi removido.</p>
+    </div>
+
+  <%# ALREADY SIGNED %>
+  <% } else if (alreadySigned) { %>
+    <div class="sign-state-card">
+      <% if (justSigned) { %>
+        <div class="sign-state-icon">✅</div>
+        <h2 class="h5 mb-2 text-success">Assinatura registrada com sucesso!</h2>
+        <p class="text-muted">Obrigado, <strong><%= signRequest.signer_name %></strong>. Sua assinatura foi registrada em <%= new Date(signRequest.updated_at).toLocaleString('pt-BR') %>.</p>
+      <% } else { %>
+        <div class="sign-state-icon">✅</div>
+        <h2 class="h5 mb-2">Documento já assinado</h2>
+        <p class="text-muted">Este documento foi assinado por <strong><%= signRequest.signer_name %></strong> em <%= new Date(signRequest.signed_at).toLocaleString('pt-BR') %>.</p>
+      <% } %>
+      <div class="d-flex justify-content-center gap-2 mt-3">
+        <a class="btn btn-outline-secondary btn-sm" href="/r/sign/<%= signRequest.token %>/report" target="_blank" rel="noopener">Expandir relatorio</a>
+        <button type="button" class="btn btn-outline-primary btn-sm" onclick="printSignedReport()">Imprimir relatorio</button>
+      </div>
+    </div>
+    <% if (reportHtml) { %>
+      <div class="sign-report-wrap mt-3">
+        <div class="sign-report-header">Relatorio assinado</div>
+        <div class="sign-report-body" id="signedReportBody">
+          <%- reportHtml %>
+        </div>
+      </div>
+    <% } %>
+    <% if (emailSent) { %>
+      <div class="alert alert-success mt-3 mb-0">Relatorio assinado enviado por e-mail com sucesso.</div>
+    <% } %>
+    <% if (emailError) { %>
+      <div class="alert alert-danger mt-3 mb-0"><%= emailError %></div>
+    <% } %>
+    <div class="sign-form-card mt-3">
+      <div class="sign-form-title">Enviar por e-mail</div>
+      <form method="post" action="/r/sign/<%= signRequest.token %>/send-email" class="row g-2">
+        <div class="col-12 col-md-6">
+          <label class="form-label small fw-semibold mb-1">Para <span class="text-danger">*</span></label>
+          <input class="form-control" name="to" type="text" placeholder="email@empresa.com; outro@empresa.com" required />
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label small fw-semibold mb-1">CC (opcional)</label>
+          <input class="form-control" name="cc" type="text" placeholder="cc@empresa.com" />
+        </div>
+        <div class="col-12">
+          <label class="form-label small fw-semibold mb-1">Mensagem (opcional)</label>
+          <textarea class="form-control" name="message" rows="3" placeholder="Mensagem para o destinatario"></textarea>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-outline-primary btn-sm" type="submit">Enviar e-mail + PDF assinado</button>
+        </div>
+      </form>
+    </div>
+
+  <%# EXPIRED %>
+  <% } else if (expired) { %>
+    <div class="sign-state-card">
+      <div class="sign-state-icon">⏰</div>
+      <h2 class="h5 mb-2">Link expirado</h2>
+      <p class="text-muted">Este link de assinatura expirou. Solicite um novo link ao responsável.</p>
+    </div>
+
+  <%# CANCELLED %>
+  <% } else if (cancelled) { %>
+    <div class="sign-state-card">
+      <% if (emailMismatch) { %>
+        <div class="sign-state-icon">⚠️</div>
+        <h2 class="h5 mb-2">Documento não assinado</h2>
+        <p class="text-muted">O e-mail informado não confere com o e-mail cadastrado para esta assinatura. O link foi cancelado.</p>
+      <% } else if (refused) { %>
+        <div class="sign-state-icon">📄</div>
+        <h2 class="h5 mb-2">Documento não assinado</h2>
+        <p class="text-muted">A assinatura foi recusada com observação. A OS foi enviada para revisão.</p>
+      <% } else { %>
+        <div class="sign-state-icon">🚫</div>
+        <h2 class="h5 mb-2">Link cancelado</h2>
+        <p class="text-muted">Este link de assinatura foi cancelado. Solicite um novo link ao responsável.</p>
+      <% } %>
+    </div>
+  <%# ACTIVE - show email validation or report + signature form %>
+  <% } else { %>
+
+    <% if (requireEmail) { %>
+      <div class="sign-form-card">
+        <div class="sign-form-title">Validar e-mail para assinatura</div>
+        <p class="text-muted mb-3">Informe o e-mail cadastrado para liberar a visualização do documento e a assinatura.</p>
+        <form method="post" action="/r/sign/<%= signRequest.token %>/verify-email">
+          <label class="form-label small fw-semibold mb-1" for="signerEmail">E-mail cadastrado</label>
+          <input class="form-control mb-3" id="signerEmail" name="signer_email" type="email" autocomplete="email" required />
+          <button class="btn btn-success" type="submit">Validar e-mail</button>
+        </form>
+      </div>
+    <% } else { %>
+
+      <%# Report preview %>
+      <% if (reportHtml) { %>
+        <div class="d-flex justify-content-end mb-2">
+          <a class="btn btn-outline-secondary btn-sm" href="/r/sign/<%= signRequest.token %>/report" target="_blank" rel="noopener">Expandir relatorio</a>
+        </div>
+        <div class="sign-report-wrap">
+          <div class="sign-report-header">Conteúdo do relatório - leia antes de assinar</div>
+          <div class="sign-report-body">
+            <%- reportHtml %>
+          </div>
+        </div>
+      <% } %>
+
+      <%# Error feedback %>
+      <% if (signError === 'nosig') { %>
+        <div class="alert alert-danger mb-3">Por favor, desenhe sua assinatura antes de enviar.</div>
+      <% } %>
+      <% if (signError === 'signer_required') { %>
+        <div class="alert alert-danger mb-3">Informe o nome do signatário antes de assinar.</div>
+      <% } %>
+      <% if (signError === 'refusal_note') { %>
+        <div class="alert alert-danger mb-3">Informe uma observação para recusar a assinatura.</div>
+      <% } %>
+
+      <%# Signature form %>
+      <div class="sign-form-card">
+        <div class="sign-form-title">Assinar documento</div>
+
+        <div class="sign-signer-info">
+          Signatário: <strong><%= signRequest.signer_name %></strong>
+          <% if (signRequest.signer_role) { %> &mdash; <%= signRequest.signer_role %><% } %>
+          <% if (signRequest.signer_company) { %> &mdash; <%= signRequest.signer_company %><% } %>
+        </div>
+
+        <form method="post" action="/r/sign/<%= signRequest.token %>" id="signForm">
+          <input type="hidden" name="signature_data" id="signatureDataInput" />
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-md-5">
+              <label class="form-label small fw-semibold mb-1" for="signerNameInput">Signatário</label>
+              <input class="form-control" id="signerNameInput" name="signer_name" value="<%= signRequest.signer_name || '' %>" required />
+            </div>
+            <div class="col-12 col-md-4">
+              <label class="form-label small fw-semibold mb-1" for="signerRoleInput">Cargo / Função</label>
+              <input class="form-control" id="signerRoleInput" name="signer_role" value="<%= signRequest.signer_role || '' %>" />
+            </div>
+            <div class="col-12 col-md-3">
+              <label class="form-label small fw-semibold mb-1" for="signerCompanyInput">Empresa</label>
+              <input class="form-control" id="signerCompanyInput" name="signer_company" value="<%= signRequest.signer_company || '' %>" />
+            </div>
+          </div>
+
+          <label class="form-label small fw-semibold mb-1">Desenhe sua assinatura abaixo:</label>
+          <div class="sign-canvas-wrap mb-3" style="height:160px;">
+            <canvas id="signatureCanvas" height="160"></canvas>
+            <span class="sign-canvas-hint" id="canvasHint">Assine aqui</span>
+            <button type="button" class="sign-canvas-clear" id="clearCanvas">Limpar</button>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="confirmRead" required />
+            <label class="form-check-label" for="confirmRead">
+              Li e concordo com o conteúdo deste relatório técnico.
+            </label>
+          </div>
+
+          <button class="btn btn-success" type="submit" id="submitBtn">Confirmar assinatura</button>
+          <p class="sign-footer-note">Ao assinar, você confirma ter lido e aprovado o conteúdo deste relatório. A assinatura será registrada com data, hora e IP de acesso.</p>
+        </form>
+      </div>
+
+      <%# Refusal form %>
+      <div class="sign-form-card mt-3">
+        <div class="sign-form-title">Recusar assinatura</div>
+        <p class="text-muted mb-3">Se não concordar com o documento, descreva o motivo da recusa. A OS será enviada para revisão.</p>
+        <form method="post" action="/r/sign/<%= signRequest.token %>/refuse">
+          <label class="form-label small fw-semibold mb-1" for="refusalNote">Observação da recusa</label>
+          <textarea class="form-control mb-3" id="refusalNote" name="refusal_note" rows="4" maxlength="2000" required></textarea>
+          <button class="btn btn-outline-danger" type="submit">Recusar assinatura</button>
+        </form>
+      </div>
+
+    <% } %>
+  <% } %>
+
+</div>
+
+<script>
+function printSignedReport() {
+  var reportBody = document.getElementById("signedReportBody");
+  if (!reportBody) return;
+
+  var printWindow = window.open("", "_blank", "width=1200,height=900");
+  if (!printWindow) return;
+
+  var html = "<!DOCTYPE html>"
+    + "<html lang='pt-BR'>"
+    + "<head>"
+    + "<meta charset='UTF-8' />"
+    + "<meta name='viewport' content='width=device-width, initial-scale=1.0' />"
+    + "<title>Relatorio assinado</title>"
+    + "<link href='/public/css/report-preview.css' rel='stylesheet' />"
+    + "<link href='/public/css/report-print.css' rel='stylesheet' />"
+    + "<style>"
+    + "body{margin:0;background:#fff;}"
+    + ".report-doc{max-width:none;margin:0 auto;}"
+    + ".report-page{box-shadow:none !important;}"
+    + "</style>"
+    + "</head>"
+    + "<body>"
+    + reportBody.innerHTML
+    + "<script>window.onload=function(){setTimeout(function(){window.print();},120);};<\/script>"
+    + "</body>"
+    + "</html>";
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+(function () {
+  var canvas = document.getElementById("signatureCanvas");
+  if (!canvas) return;
+
+  var ctx = canvas.getContext("2d");
+  var hint = document.getElementById("canvasHint");
+  var clearBtn = document.getElementById("clearCanvas");
+  var form = document.getElementById("signForm");
+  var dataInput = document.getElementById("signatureDataInput");
+  var drawing = false;
+  var hasDrawn = false;
+
+  function resizeCanvas() {
+    var rect = canvas.parentElement.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = 160 * dpr;
+    canvas.style.width = rect.width + "px";
+    canvas.style.height = "160px";
+    ctx.scale(dpr, dpr);
+    ctx.strokeStyle = "#1a2b1e";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }
+
+  function getPos(e) {
+    var rect = canvas.getBoundingClientRect();
+    var src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+  }
+
+  function startDraw(e) {
+    e.preventDefault();
+    drawing = true;
+    var pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    if (hint) hint.style.display = "none";
+    hasDrawn = true;
+  }
+
+  function draw(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    var pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }
+
+  function endDraw(e) {
+    if (!drawing) return;
+    e.preventDefault();
+    drawing = false;
+    ctx.closePath();
+  }
+
+  canvas.addEventListener("mousedown", startDraw);
+  canvas.addEventListener("mousemove", draw);
+  canvas.addEventListener("mouseup", endDraw);
+  canvas.addEventListener("mouseleave", endDraw);
+  canvas.addEventListener("touchstart", startDraw, { passive: false });
+  canvas.addEventListener("touchmove", draw, { passive: false });
+  canvas.addEventListener("touchend", endDraw);
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", function () {
+      var dpr = window.devicePixelRatio || 1;
+      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      hasDrawn = false;
+      if (hint) hint.style.display = "";
+    });
+  }
+
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      if (!hasDrawn) {
+        e.preventDefault();
+        alert("Por favor, desenhe sua assinatura antes de enviar.");
+        return;
+      }
+      dataInput.value = canvas.toDataURL("image/png");
+    });
+  }
+
+  resizeCanvas();
+  window.addEventListener("resize", resizeCanvas);
+})();
+</script>
+</body>
+</html>

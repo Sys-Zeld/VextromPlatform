@@ -1,0 +1,149 @@
+<%- include("../partials/head", { pageTitle }) %>
+<link href="/public/css/report-editor.css" rel="stylesheet" />
+
+<section class="token-console">
+  <div class="card app-card token-hero-card">
+    <div class="card-body token-hero-body">
+      <div class="token-hero-copy">
+        <span class="token-hero-eyebrow">ASSINATURA VEXTROM</span>
+        <h1 class="h4 app-card-title mb-1"><%= order.service_order_display || "-" %></h1>
+        <p class="text-muted mb-0"><%= order.title %> - <%= order.customer_name %></p>
+      </div>
+      <div class="token-hero-actions">
+        <span class="badge text-bg-secondary">Status: <%= order.status || "draft" %></span>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>">Voltar OS</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>/report-editor">Editar Relatorio</a>
+      </div>
+    </div>
+  </div>
+
+  <% if (signed) { %><div class="alert alert-success mb-0">Relatorio assinado com sucesso.</div><% } %>
+  <% if (signError) { %><div class="alert alert-danger mb-0">Desenhe a assinatura antes de confirmar.</div><% } %>
+
+  <div class="row g-3">
+    <div class="col-12 col-xl-7">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Assinar relatorio (Tecnico Vextrom)</h2>
+          <form method="post" action="/admin/report-service/orders/<%= order.id %>/sign-report" class="row g-2">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <div class="col-12 col-md-6"><input class="form-control" name="signer_name" placeholder="Nome do tecnico" required /></div>
+            <div class="col-12 col-md-6"><input class="form-control" name="signer_role" placeholder="Cargo / Funcao" /></div>
+            <div class="col-12"><input class="form-control" name="signer_company" value="Vextrom" placeholder="Empresa" /></div>
+            <div class="col-12">
+              <label class="form-label">Assinatura (canvas)</label>
+              <canvas id="signatureCanvas" width="680" height="180" class="w-100 border rounded bg-white"></canvas>
+              <input type="hidden" name="signature_data" id="signatureDataInput" />
+              <div class="d-flex gap-2 mt-2">
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="signatureClearBtn">Limpar assinatura</button>
+                <button class="btn btn-outline-primary btn-sm" type="button" id="signatureUseBtn">Usar assinatura</button>
+              </div>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button class="btn btn-success btn-sm" type="submit">Confirmar assinatura</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-5">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Assinaturas Vextrom registradas</h2>
+          <div class="table-responsive">
+            <table class="table table-sm app-table mb-0">
+              <thead><tr><th>Nome</th><th>Cargo</th><th>Data</th><th></th></tr></thead>
+              <tbody>
+                <% if (!signatures.length) { %><tr><td colspan="4" class="text-center text-muted py-3">Sem assinaturas.</td></tr><% } %>
+                <% signatures.forEach((item) => { %>
+                  <tr>
+                    <td><%= item.signer_name || "-" %></td>
+                    <td><%= item.signer_role || "-" %></td>
+                    <td><%= item.signed_at ? new Date(item.signed_at).toLocaleString('pt-BR') : "-" %></td>
+                    <td>
+                      <form method="post" action="/admin/report-service/orders/<%= order.id %>/signatures/<%= item.id %>/delete" class="m-0" onsubmit="return confirm('Excluir esta assinatura?');">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                        <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                      </form>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  (function () {
+    var canvas = document.getElementById("signatureCanvas");
+    var outputInput = document.getElementById("signatureDataInput");
+    var clearBtn = document.getElementById("signatureClearBtn");
+    var useBtn = document.getElementById("signatureUseBtn");
+    if (!canvas || !outputInput || !clearBtn || !useBtn) return;
+
+    var ctx = canvas.getContext("2d");
+    var drawing = false;
+
+    function getPosition(event) {
+      var rect = canvas.getBoundingClientRect();
+      if (event.touches && event.touches[0]) {
+        return {
+          x: event.touches[0].clientX - rect.left,
+          y: event.touches[0].clientY - rect.top
+        };
+      }
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+    }
+
+    function startDraw(event) {
+      drawing = true;
+      var point = getPosition(event);
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y);
+      event.preventDefault();
+    }
+
+    function draw(event) {
+      if (!drawing) return;
+      var point = getPosition(event);
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "#1a1a1a";
+      ctx.lineTo(point.x, point.y);
+      ctx.stroke();
+      event.preventDefault();
+    }
+
+    function endDraw(event) {
+      drawing = false;
+      event.preventDefault();
+    }
+
+    canvas.addEventListener("mousedown", startDraw);
+    canvas.addEventListener("mousemove", draw);
+    canvas.addEventListener("mouseup", endDraw);
+    canvas.addEventListener("mouseleave", endDraw);
+    canvas.addEventListener("touchstart", startDraw, { passive: false });
+    canvas.addEventListener("touchmove", draw, { passive: false });
+    canvas.addEventListener("touchend", endDraw, { passive: false });
+
+    clearBtn.addEventListener("click", function () {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      outputInput.value = "";
+    });
+
+    useBtn.addEventListener("click", function () {
+      outputInput.value = canvas.toDataURL("image/png");
+    });
+  })();
+</script>
+
+<%- include("../partials/footer") %>

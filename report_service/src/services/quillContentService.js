@@ -47,6 +47,7 @@ function sanitizeImageEmbedUrl(url) {
   });
   if (/^https?:\/\//i.test(safe)) return safe;
   if (/^data:image\//i.test(safe)) return safe;
+  if (/^\/docs\/report\/img\/[^/]+$/.test(safe)) return safe;
   return "";
 }
 
@@ -118,11 +119,11 @@ function sanitizeReportSectionHtml(inputHtml) {
       col: ["class", "style", "span", "width"]
     },
     allowedClasses: {
-      p: ["ql-align-center", "ql-align-right", "ql-align-justify"],
-      li: ["ql-align-center", "ql-align-right", "ql-align-justify"],
-      h1: ["ql-align-center", "ql-align-right", "ql-align-justify"],
-      h2: ["ql-align-center", "ql-align-right", "ql-align-justify"],
-      h3: ["ql-align-center", "ql-align-right", "ql-align-justify"],
+      p: ["ql-align-center", "ql-align-right", "ql-align-justify", "ql-indent-1", "ql-indent-2", "ql-indent-3", "ql-indent-4", "ql-indent-5", "ql-indent-6", "ql-indent-7", "ql-indent-8"],
+      li: ["ql-align-center", "ql-align-right", "ql-align-justify", "ql-indent-1", "ql-indent-2", "ql-indent-3", "ql-indent-4", "ql-indent-5", "ql-indent-6", "ql-indent-7", "ql-indent-8"],
+      h1: ["ql-align-center", "ql-align-right", "ql-align-justify", "ql-indent-1", "ql-indent-2", "ql-indent-3"],
+      h2: ["ql-align-center", "ql-align-right", "ql-align-justify", "ql-indent-1", "ql-indent-2", "ql-indent-3"],
+      h3: ["ql-align-center", "ql-align-right", "ql-align-justify", "ql-indent-1", "ql-indent-2", "ql-indent-3"],
       blockquote: ["ql-align-center", "ql-align-right", "ql-align-justify"],
       span: [
         "ql-align-center",
@@ -188,7 +189,7 @@ function sanitizeReportSectionHtml(inputHtml) {
     },
     allowedSchemes: ["http", "https", "mailto", "tel"],
     allowedSchemesByTag: {
-      img: ["http", "https", "data"]
+      img: ["http", "https", "data", ""]
     },
     allowProtocolRelative: false
   }).trim();
@@ -234,7 +235,7 @@ function sanitizeReportTitleHtml(inputHtml) {
     },
     allowedSchemes: ["http", "https", "mailto", "tel"],
     allowedSchemesByTag: {
-      img: ["http", "https", "data"]
+      img: ["http", "https", "data", ""]
     },
     allowProtocolRelative: false
   }).trim();

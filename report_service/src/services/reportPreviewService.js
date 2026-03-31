@@ -223,6 +223,37 @@ function renderTimesheetInlineTable(timesheetItems) {
   `;
 }
 
+function renderTechTeamInlineTable(technicianItems) {
+  const rows = Array.isArray(technicianItems) ? technicianItems : [];
+  const bodyRows = rows.length
+    ? rows.map((item) => `
+      <tr>
+        <td>${escapeHtml(item.name || "-")}</td>
+        <td>${escapeHtml(item.role || "-")}</td>
+        <td>${escapeHtml(item.company || "-")}</td>
+      </tr>
+    `).join("")
+    : `<tr><td colspan="3" class="report-inline-techteam-empty">Sem tecnicos cadastrados.</td></tr>`;
+
+  return `
+    <div class="report-inline-techteam-wrap">
+      <table class="report-inline-techteam-table">
+        <thead>
+          <tr class="report-inline-techteam-title-row">
+            <th colspan="3">EQUIPE TECNICA</th>
+          </tr>
+          <tr>
+            <th>Nome</th>
+            <th>Funcao</th>
+            <th>Empresa</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderDailyLogInlineItem(dailyLog, requestedId = null, context = null) {
   if (!dailyLog) return "";
   const contentHtml = String(dailyLog.content || "").trim();
@@ -236,7 +267,8 @@ function renderDailyLogInlineItem(dailyLog, requestedId = null, context = null) 
     context.timesheetItems,
     context.dailyLogsById,
     context.dailyLogsOrdered,
-    { expandDailyLogTags: false }
+    { expandDailyLogTags: false },
+    context.technicianItems || []
   );
 }
 
@@ -332,7 +364,7 @@ function wrapImageCardsIntoRows(html) {
   return result;
 }
 
-function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems, dailyLogsById, dailyLogsOrdered, options = {}) {
+function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems, dailyLogsById, dailyLogsOrdered, options = {}, technicianItems = []) {
   const source = String(contentHtml || "");
   if (!source) return "<p><br></p>";
   const opts = {
@@ -361,7 +393,9 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
   const withTables = withRequiredTable.replace(tableSparePattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "spare")));
   const timesheetTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*timesheet/gi;
   const withTimesheet = withTables.replace(timesheetTagPattern, () => renderTimesheetInlineTable(timesheetItems));
-  if (!opts.expandDailyLogTags) return wrapImageCardsIntoRows(withTimesheet);
+  const techTeamTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*equipetecnica/gi;
+  const withTechTeam = withTimesheet.replace(techTeamTagPattern, () => renderTechTeamInlineTable(technicianItems));
+  if (!opts.expandDailyLogTags) return wrapImageCardsIntoRows(withTechTeam);
 
   const nestedContext = {
     imageById,
@@ -369,17 +403,24 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
     equipmentById,
     timesheetItems,
     dailyLogsById,
-    dailyLogsOrdered
+    dailyLogsOrdered,
+    technicianItems
   };
   const dailyLogTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi;
-  const withDailyLogs = withTimesheet.replace(dailyLogTagPattern, (_match, rawId) => {
+  const withDailyLogs = withTechTeam.replace(dailyLogTagPattern, (_match, rawId) => {
     const id = Number(rawId);
     if (!Number.isInteger(id) || id <= 0) return _match;
     return renderDailyLogInlineItem(dailyLogsById.get(id), id, nestedContext);
   });
   const dailyLogsTagAllPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?!((?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)))/gi;
-  const withAllDailyLogs = withDailyLogs.replace(dailyLogsTagAllPattern, () => renderAllDailyLogsInlineItems(dailyLogsOrdered, nestedContext));
-  return wrapImageCardsIntoRows(withAllDailyLogs);
+  const dailyLogsForAll = dailyLogsOrdered.filter((l) => String(l.notes || "").trim() !== "conclusaogeral");
+  const withAllDailyLogs = withDailyLogs.replace(dailyLogsTagAllPattern, () => renderAllDailyLogsInlineItems(dailyLogsForAll, nestedContext));
+  const conclusaoGeralLog = dailyLogsOrdered.find((l) => String(l.notes || "").trim() === "conclusaogeral");
+  const conclusaoGeralTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*conclusaogeral/gi;
+  const withConclusaoGeral = withAllDailyLogs.replace(conclusaoGeralTagPattern, () =>
+    conclusaoGeralLog ? renderDailyLogInlineItem(conclusaoGeralLog, conclusaoGeralLog.id, nestedContext) : ""
+  );
+  return wrapImageCardsIntoRows(withConclusaoGeral);
 }
 
 function buildPreviewModel(payload, options = {}) {
@@ -433,18 +474,21 @@ function buildPreviewModel(payload, options = {}) {
   );
   const componentItems = Array.isArray(payload.components) ? payload.components : [];
   const timesheetItems = Array.isArray(payload.timesheet) ? payload.timesheet : [];
+  const technicianItems = Array.isArray(payload.technicians) ? payload.technicians : [];
   const dailyLogsOrdered = (Array.isArray(payload.dailyLogs) ? payload.dailyLogs : [])
     .filter((item) => Number.isInteger(Number(item?.id)) && Number(item.id) > 0)
     .map((item) => ({
       id: Number(item.id),
+      orderSeq: Number(item.order_seq || item.id),
       activityDate: item.activity_date || "",
       title: item.title || "",
-      content: item.content || ""
+      content: item.content || "",
+      notes: item.notes || ""
     }));
   const dailyLogsById = new Map(
     dailyLogsOrdered
-      .filter((item) => Number.isInteger(Number(item?.id)) && Number(item.id) > 0)
-      .map((item) => [Number(item.id), item])
+      .filter((item) => Number.isInteger(item.orderSeq) && item.orderSeq > 0)
+      .map((item) => [item.orderSeq, item])
   );
   const visibleSections = sections
     .filter((item) => item?.is_visible !== false)
@@ -494,7 +538,9 @@ function buildPreviewModel(payload, options = {}) {
           equipmentById,
           timesheetItems,
           dailyLogsById,
-          dailyLogsOrdered
+          dailyLogsOrdered,
+          {},
+          technicianItems
         ),
         content_html_preview: injectTaggedImagesInHtml(
           section.content_html || "<p><br></p>",
@@ -503,7 +549,9 @@ function buildPreviewModel(payload, options = {}) {
           equipmentById,
           timesheetItems,
           dailyLogsById,
-          dailyLogsOrdered
+          dailyLogsOrdered,
+          {},
+          technicianItems
         ),
         section_title_html: section.section_title_html || `<p>${section.section_title || "-"}</p>`,
         section_title_text: section.section_title_text || section.section_title || "-",

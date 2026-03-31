@@ -130,6 +130,8 @@
     title.classList.add("section-title-continued");
     var numberEl = title.querySelector(".section-title-number");
     if (numberEl) numberEl.textContent = pageIndexLabel;
+    var richTitleEl = title.querySelector(".report-section-title-rich");
+    if (richTitleEl) richTitleEl.textContent = "(continuação...)";
 
     var flow = document.createElement("div");
     flow.className = "rich-output";

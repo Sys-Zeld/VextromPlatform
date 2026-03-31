@@ -1,0 +1,404 @@
+<%- include("../partials/head", { pageTitle }) %>
+<style>
+  @import url("https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css");
+
+  .spare-parts-grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .spare-parts-grid-wrap .gridjs-wrapper {
+    border: 0;
+    box-shadow: none;
+  }
+
+  .spare-parts-grid-wrap .gridjs-th,
+  .spare-parts-grid-wrap .gridjs-td {
+    border-color: color-mix(in srgb, var(--border) 58%, transparent);
+    vertical-align: middle !important;
+    padding: 0.3rem 0.5rem !important;
+    line-height: 1.15 !important;
+    font-size: 0.8rem !important;
+  }
+
+  .spare-parts-grid-wrap .gridjs-th {
+    text-align: center !important;
+    font-size: 0.82rem !important;
+    font-weight: 600;
+  }
+
+  .spare-parts-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(odd) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 78%, transparent) !important;
+  }
+
+  .spare-parts-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(even) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 92%, transparent) !important;
+  }
+</style>
+<%
+  const errorMessages = {
+    equipment_invalid: "Equipamento invalido para associacao.",
+    equipment_not_found: "Equipamento nao encontrado.",
+    spare_part_invalid: "Spare-part invalido para associacao.",
+    spare_part_not_found: "Spare-part nao encontrado.",
+    quantity_invalid: "Quantidade invalida. Informe um valor maior que zero.",
+    family_empty: "O equipamento selecionado nao possui Model Family preenchido."
+  };
+  const errorMessage = error && errorMessages[error] ? errorMessages[error] : "";
+%>
+
+<section class="token-console">
+  <div class="card app-card token-hero-card">
+    <div class="card-body token-hero-body">
+      <div class="token-hero-copy">
+        <span class="token-hero-eyebrow">SERVICE REPORT</span>
+        <h1 class="h4 app-card-title mb-1">Controle de Spare-Parts</h1>
+        <p class="text-muted mb-0">Cadastro da base de spare-parts e associacao com equipamentos do sistema.</p>
+      </div>
+      <div class="token-hero-actions">
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/equipments">Equipamentos</a>
+      </div>
+    </div>
+  </div>
+
+  <% if (created) { %><div class="alert alert-success mb-0">Spare-part criado com sucesso.</div><% } %>
+  <% if (saved) { %><div class="alert alert-success mb-0">Spare-part atualizado com sucesso.</div><% } %>
+  <% if (deleted) { %><div class="alert alert-success mb-0">Spare-part excluido com sucesso.</div><% } %>
+  <% if (linked) { %><div class="alert alert-success mb-0">Spare-part associado ao equipamento.</div><% } %>
+  <% if (unlinked) { %><div class="alert alert-success mb-0">Spare-part desassociado do equipamento.</div><% } %>
+  <% if (quantitySaved) { %><div class="alert alert-success mb-0">Quantidade atualizada com sucesso.</div><% } %>
+  <% if (autoLinkedCount > 0) { %><div class="alert alert-success mb-0"><%= autoLinkedCount %> spare-part(s) associado(s) por familia/modelo.</div><% } %>
+  <% if (autoFamilyNoMatch) { %><div class="alert alert-warning mb-0">Nenhum spare-part com Modelo equipamento compativel com o Model Family deste equipamento.</div><% } %>
+  <% if (errorMessage) { %><div class="alert alert-danger mb-0"><%= errorMessage %></div><% } %>
+
+  <div class="row g-3">
+    <div class="col-12">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Base de spare-parts</h2>
+          <form method="post" action="/admin/report-service/spare-parts" class="row g-2 mb-3">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+            <div class="col-12 col-md-6">
+              <input class="form-control" name="description" placeholder="Descricao" required />
+            </div>
+            <div class="col-12 col-md-3">
+              <input class="form-control" name="manufacturer" placeholder="Fabricante" />
+            </div>
+            <div class="col-12 col-md-3">
+              <input class="form-control" name="equipment_model" placeholder="Modelo equipamento" />
+            </div>
+            <div class="col-12 col-md-3">
+              <input class="form-control" name="part_number" placeholder="PN" />
+            </div>
+            <div class="col-12 col-md-3">
+              <input class="form-control" name="lead_time" placeholder="Prazo de entrega" />
+            </div>
+            <div class="col-12 col-md-3">
+              <input class="form-control" name="replaced_by_part_number" placeholder="Substituido por (novo numero)" />
+            </div>
+            <div class="col-12 col-md-4">
+              <input class="form-control" name="equipment_family" placeholder="Familia equipamentos" />
+            </div>
+            <div class="col-12 col-md-2 d-flex align-items-center">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="newSpareObsolete" name="is_obsolete" />
+                <label class="form-check-label" for="newSpareObsolete">Obsoleto?</label>
+              </div>
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+              <button class="btn btn-primary btn-sm" type="submit">Cadastrar spare-part</button>
+            </div>
+          </form>
+
+          <div class="spare-parts-grid-wrap">
+            <div id="sparePartsGrid"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Associar spare-part ao equipamento</h2>
+
+          <form method="get" action="/admin/report-service/spare-parts" class="row g-2 mb-3" id="sparePartFilterForm">
+            <div class="col-12 col-md-4">
+              <select class="form-select" name="customer_id" id="sparePartFilterCustomer">
+                <option value="">Todos os clientes</option>
+                <% (customers || []).forEach((customer) => { %>
+                  <option value="<%= customer.id %>" <%= Number(selectedCustomerId) === Number(customer.id) ? 'selected' : '' %>>
+                    <%= customer.name || '-' %>
+                  </option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-12 col-md-5">
+              <select class="form-select" name="equipment_id" id="sparePartFilterEquipment">
+                <option value=""><%= Number(selectedCustomerId) > 0 ? 'Selecione equipamento do cliente' : 'Selecione equipamento' %></option>
+                <% (equipments || []).forEach((equipment) => { %>
+                  <option value="<%= equipment.id %>" <%= Number(selectedEquipmentId) === Number(equipment.id) ? 'selected' : '' %>>
+                    #<%= equipment.id %> - <%= equipment.type || '-' %> (Cliente: <%= equipment.customer_name || '-' %> / Site: <%= equipment.site_name || '-' %>)
+                  </option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-12 col-md-3 d-flex justify-content-end">
+              <button class="btn btn-outline-secondary btn-sm" type="submit">Carregar associacoes</button>
+            </div>
+          </form>
+
+          <% if (selectedEquipment) { %>
+            <div class="alert alert-light border mb-3">
+              <strong>Equipamento selecionado:</strong>
+              #<%= selectedEquipment.id %> - <%= selectedEquipment.type || '-' %> (Serial: <%= selectedEquipment.serial_number || '-' %>)
+              <br />
+              <strong>Model Family:</strong> <%= selectedEquipment.model_family || '-' %>
+            </div>
+
+            <form method="post" action="/admin/report-service/spare-parts/equipment-links/auto-family" class="mb-3 d-flex justify-content-end">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="equipment_id" value="<%= selectedEquipment.id %>" />
+              <button class="btn btn-outline-primary btn-sm" type="submit">Associar por familia</button>
+            </form>
+
+            <form method="post" action="/admin/report-service/spare-parts/equipment-links" class="row g-2 mb-3">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="equipment_id" value="<%= selectedEquipment.id %>" />
+              <div class="col-12 col-md-7">
+                <select class="form-select" name="spare_part_id" required>
+                  <option value="">Selecione spare-part para associar</option>
+                  <% (availableSpareParts || []).forEach((item) => { %>
+                    <option value="<%= item.id %>">
+                      #<%= item.id %> - <%= item.description || '-' %> (PN: <%= item.part_number || '-' %>)
+                    </option>
+                  <% }) %>
+                  <% if (!(availableSpareParts || []).length) { %>
+                    <option value="" disabled>Nenhum spare-part disponivel para associar</option>
+                  <% } %>
+                </select>
+              </div>
+              <div class="col-12 col-md-2">
+                <input class="form-control" type="number" min="1" step="1" name="quantity" value="1" required />
+              </div>
+              <div class="col-12 col-md-3 d-flex justify-content-end">
+                <button class="btn btn-primary btn-sm" type="submit">Associar</button>
+              </div>
+            </form>
+
+            <div class="table-responsive">
+              <table class="table table-sm app-table mb-0">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Descricao</th>
+                    <th>PN</th>
+                    <th>Fabricante</th>
+                    <th>Quantidade</th>
+                    <th>Obsoleto</th>
+                    <th>Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% if (!(linkedSpareParts || []).length) { %>
+                    <tr><td colspan="7" class="text-center text-muted py-3">Sem spare-parts associados a este equipamento.</td></tr>
+                  <% } %>
+                  <% (linkedSpareParts || []).forEach((item) => { %>
+                    <tr>
+                      <td><%= item.id %></td>
+                      <td><%= item.description || '-' %></td>
+                      <td><%= item.part_number || '-' %></td>
+                      <td><%= item.manufacturer || '-' %></td>
+                      <td style="min-width: 130px;">
+                        <form method="post" action="/admin/report-service/spare-parts/equipment-links/<%= selectedEquipment.id %>/<%= item.id %>/quantity" class="d-flex align-items-center gap-1">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <input class="form-control form-control-sm" type="number" min="1" step="1" name="quantity" value="<%= item.quantity || 1 %>" required />
+                          <button class="btn btn-outline-primary btn-sm" type="submit">Salvar</button>
+                        </form>
+                      </td>
+                      <td><%= item.is_obsolete ? 'Sim' : 'Nao' %></td>
+                      <td>
+                        <form method="post" action="/admin/report-service/spare-parts/equipment-links/<%= selectedEquipment.id %>/<%= item.id %>/delete" onsubmit="return confirm('Desassociar este spare-part do equipamento?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <button class="btn btn-outline-danger btn-sm" type="submit">Desassociar</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } else { %>
+            <div class="text-muted">Selecione um equipamento para gerenciar as associacoes de spare-parts.</div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="modal fade" id="editSparePartModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <form method="post" id="editSparePartForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar spare-part</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="row g-2">
+            <div class="col-12 col-md-6"><input class="form-control" name="description" id="editSpDescription" placeholder="Descricao" required /></div>
+            <div class="col-12 col-md-3"><input class="form-control" name="manufacturer" id="editSpManufacturer" placeholder="Fabricante" /></div>
+            <div class="col-12 col-md-3"><input class="form-control" name="equipment_model" id="editSpEquipmentModel" placeholder="Modelo equipamento" /></div>
+            <div class="col-12 col-md-3"><input class="form-control" name="part_number" id="editSpPartNumber" placeholder="PN" /></div>
+            <div class="col-12 col-md-3"><input class="form-control" name="lead_time" id="editSpLeadTime" placeholder="Prazo de entrega" /></div>
+            <div class="col-12 col-md-3"><input class="form-control" name="replaced_by_part_number" id="editSpReplacedBy" placeholder="Substituido por (novo numero)" /></div>
+            <div class="col-12 col-md-4"><input class="form-control" name="equipment_family" id="editSpFamily" placeholder="Familia equipamentos" /></div>
+            <div class="col-12 col-md-2 d-flex align-items-center">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="editSpObsolete" name="is_obsolete" />
+                <label class="form-check-label" for="editSpObsolete">Obsoleto?</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-primary btn-sm" type="submit">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<form method="post" id="deleteSparePartForm" class="d-none">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+</form>
+
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+<script>
+  (function () {
+    var spareParts = <%- JSON.stringify(spareParts || []).replace(/</g, "\\u003c") %>;
+    var gridTarget = document.getElementById("sparePartsGrid");
+    var editModalEl = document.getElementById("editSparePartModal");
+    var editForm = document.getElementById("editSparePartForm");
+    var deleteForm = document.getElementById("deleteSparePartForm");
+    if (!gridTarget || !window.gridjs || !window.gridjs.Grid || !editForm || !deleteForm) return;
+
+    function esc(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function actionButtons(row) {
+      var id = Number(row.id || 0);
+      return ""
+        + "<div class=\"d-flex gap-1\">"
+        + "<button class=\"btn btn-outline-primary btn-sm\" type=\"button\" data-edit-spare-part=\"" + id + "\">Editar</button>"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"button\" data-delete-spare-part=\"" + id + "\">Excluir</button>"
+        + "</div>";
+    }
+
+    var data = (spareParts || []).map(function (row) {
+      return {
+        id: Number(row.id || 0),
+        description: esc(row.description || "-"),
+        manufacturer: esc(row.manufacturer || "-"),
+        equipmentModel: esc(row.equipment_model || "-"),
+        partNumber: esc(row.part_number || "-"),
+        leadTime: esc(row.lead_time || "-"),
+        obsolete: row.is_obsolete ? "Sim" : "Nao",
+        replacedBy: esc(row.replaced_by_part_number || "-"),
+        family: esc(row.equipment_family || "-"),
+        actions: actionButtons(row)
+      };
+    });
+
+    if (!data.length) {
+      gridTarget.innerHTML = "<div class=\"text-center text-muted py-4\">Sem spare-parts cadastrados.</div>";
+      return;
+    }
+
+    new window.gridjs.Grid({
+      columns: [
+        { id: "id", name: "ID", width: "80px" },
+        { id: "description", name: "Descricao", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "manufacturer", name: "Fabricante", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "equipmentModel", name: "Modelo equipamento", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "partNumber", name: "PN", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "leadTime", name: "Prazo", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "obsolete", name: "Obsoleto" },
+        { id: "replacedBy", name: "Substituido por", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "family", name: "Familia", formatter: function (cell) { return window.gridjs.html(cell); } },
+        { id: "actions", name: "Acoes", sort: false, formatter: function (cell) { return window.gridjs.html(cell); } }
+      ],
+      data: data,
+      search: true,
+      sort: true,
+      pagination: { limit: 15, summary: false },
+      language: {
+        search: { placeholder: "Digite uma palavra-chave..." },
+        loading: "Carregando...",
+        noRecordsFound: "Nenhum registro encontrado.",
+        error: "Falha ao carregar dados."
+      }
+    }).render(gridTarget);
+
+    function openEditModal(item) {
+      editForm.action = "/admin/report-service/spare-parts/" + encodeURIComponent(String(item.id)) + "/update";
+      document.getElementById("editSpDescription").value = item.description || "";
+      document.getElementById("editSpManufacturer").value = item.manufacturer || "";
+      document.getElementById("editSpEquipmentModel").value = item.equipment_model || "";
+      document.getElementById("editSpPartNumber").value = item.part_number || "";
+      document.getElementById("editSpLeadTime").value = item.lead_time || "";
+      document.getElementById("editSpReplacedBy").value = item.replaced_by_part_number || "";
+      document.getElementById("editSpFamily").value = item.equipment_family || "";
+      document.getElementById("editSpObsolete").checked = Boolean(item.is_obsolete);
+      if (window.bootstrap && editModalEl) {
+        window.bootstrap.Modal.getOrCreateInstance(editModalEl).show();
+      }
+    }
+
+    document.addEventListener("click", function (event) {
+      var editBtn = event.target.closest("[data-edit-spare-part]");
+      if (editBtn) {
+        var editId = Number(editBtn.getAttribute("data-edit-spare-part") || 0);
+        var item = (spareParts || []).find(function (it) { return Number(it.id) === editId; });
+        if (item) openEditModal(item);
+        return;
+      }
+
+      var deleteBtn = event.target.closest("[data-delete-spare-part]");
+      if (!deleteBtn) return;
+      var deleteId = Number(deleteBtn.getAttribute("data-delete-spare-part") || 0);
+      if (!deleteId) return;
+      if (!window.confirm("Excluir este spare-part?")) return;
+      deleteForm.action = "/admin/report-service/spare-parts/" + encodeURIComponent(String(deleteId)) + "/delete";
+      deleteForm.submit();
+    });
+  })();
+</script>
+<script>
+  (function () {
+    var filterForm = document.getElementById("sparePartFilterForm");
+    var customerSelect = document.getElementById("sparePartFilterCustomer");
+    var equipmentSelect = document.getElementById("sparePartFilterEquipment");
+    if (!filterForm || !customerSelect || !equipmentSelect) return;
+
+    customerSelect.addEventListener("change", function () {
+      equipmentSelect.value = "";
+      filterForm.submit();
+    });
+  })();
+</script>
+
+<%- include("../partials/footer") %>

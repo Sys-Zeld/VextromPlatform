@@ -1,4 +1,46 @@
 <%- include("../partials/head", { pageTitle }) %>
+<style>
+  @import url("https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css");
+
+  .customers-grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+  .customers-grid-wrap .gridjs-wrapper { border: 0; box-shadow: none; }
+  .customers-grid-wrap .gridjs-table { width: 100%; border-collapse: collapse !important; table-layout: auto; }
+  .customers-grid-wrap .gridjs-container { min-width: max-content; }
+  .customers-grid-wrap .gridjs-th,
+  .customers-grid-wrap .gridjs-td {
+    border-color: color-mix(in srgb, var(--border) 58%, transparent);
+    vertical-align: middle !important;
+    padding: 0.34rem 0.74rem !important;
+    line-height: 1.15 !important;
+    font-size: 0.88rem !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .customers-grid-wrap .gridjs-th { text-align: center !important; font-size: 0.9rem !important; font-weight: 600; }
+  .customers-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(odd) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 78%, transparent) !important;
+  }
+  .customers-grid-wrap .gridjs-table .gridjs-tbody > .gridjs-tr:nth-of-type(even) > .gridjs-td {
+    background-color: color-mix(in srgb, var(--surface-2) 92%, transparent) !important;
+  }
+  .customers-grid-wrap .gridjs-tr { height: auto !important; }
+  .customers-grid-wrap .gridjs-search .gridjs-input {
+    max-width: 260px;
+    padding: 0.41rem 0.56rem !important;
+    font-size: 0.88rem !important;
+  }
+  .customers-grid-wrap .grid-actions { display: flex; gap: 6px; flex-wrap: nowrap; }
+  .customers-grid-wrap .grid-actions .btn {
+    padding: 0.23rem 0.5rem !important;
+    font-size: 0.76rem !important;
+    line-height: 1.12 !important;
+    white-space: nowrap;
+  }
+</style>
 
 <section class="token-console">
   <div class="card app-card token-hero-card">
@@ -16,6 +58,78 @@
   </div>
 
   <% if (created) { %><div class="alert alert-success mb-0">Cadastro salvo com sucesso.</div><% } %>
+  <% if (saved) { %><div class="alert alert-success mb-0">Registro atualizado com sucesso.</div><% } %>
+  <% if (deleted) { %><div class="alert alert-success mb-0">Registro excluido com sucesso.</div><% } %>
+
+  <!-- Modal editar cliente -->
+  <div class="modal fade" id="editCustomerModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="post" id="editCustomerForm" class="modal-form">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="modal-header">
+            <h5 class="modal-title">Editar cliente</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body row g-2">
+            <div class="col-12"><input class="form-control" name="name" id="editCustomerName" placeholder="Nome do cliente" required /></div>
+            <div class="col-12">
+              <select class="form-select" name="customer_type" id="editCustomerType">
+                <% ["offshore","onshore","others"].forEach((type) => { %>
+                  <option value="<%= type %>"><%= type %></option>
+                <% }) %>
+              </select>
+            </div>
+            <div class="col-12"><textarea class="form-control" name="notes" id="editCustomerNotes" rows="2" placeholder="Observacoes"></textarea></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal editar site -->
+  <div class="modal fade" id="editSiteModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <form method="post" id="editSiteForm" class="modal-form">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="modal-header">
+            <h5 class="modal-title">Editar site</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body row g-2">
+            <div class="col-12"><input class="form-control" name="site_name" id="editSiteName" placeholder="Nome do site" required /></div>
+            <div class="col-12 col-md-6"><input class="form-control" name="site_code" id="editSiteCode" placeholder="Codigo do site" /></div>
+            <div class="col-12">
+              <div class="d-flex gap-2">
+                <input class="form-control" name="location" id="editSiteLocation" placeholder="Descricao da localizacao" />
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="editOpenMapsBtn" style="white-space:nowrap">Ver no Maps</button>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <label class="form-label mb-0 small text-muted">Coordenadas (opcional)</label>
+                <span class="form-text text-muted mb-0">— Clique com botao direito no Maps e copie as coordenadas.</span>
+              </div>
+              <div class="d-flex gap-2">
+                <input class="form-control form-control-sm" name="latitude" id="editSiteLatitude" placeholder="Latitude" />
+                <input class="form-control form-control-sm" name="longitude" id="editSiteLongitude" placeholder="Longitude" />
+              </div>
+            </div>
+            <div class="col-12"><textarea class="form-control" name="notes" id="editSiteNotes" rows="2" placeholder="Observacoes"></textarea></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <div class="row g-3">
     <div class="col-12 col-xl-6">
@@ -53,7 +167,22 @@
             </div>
             <div class="col-12"><input class="form-control" name="site_name" placeholder="Nome do site" required /></div>
             <div class="col-12"><input class="form-control" name="site_code" placeholder="Codigo do site" /></div>
-            <div class="col-12"><input class="form-control" name="location" placeholder="Localizacao" /></div>
+            <div class="col-12">
+              <div class="d-flex gap-2">
+                <input class="form-control" name="location" id="siteLocation" placeholder="Descricao da localizacao (ex: Rio de Janeiro, RJ)" autocomplete="off" />
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="openGoogleMapsBtn" style="white-space:nowrap">Ver no Maps</button>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <label class="form-label mb-0 small text-muted">Coordenadas (opcional)</label>
+                <span class="form-text text-muted mb-0">— No Google Maps, clique com o botao direito no local e copie as coordenadas.</span>
+              </div>
+              <div class="d-flex gap-2">
+                <input class="form-control form-control-sm" name="latitude" id="siteLatitude" placeholder="Latitude (ex: -22.9068)" />
+                <input class="form-control form-control-sm" name="longitude" id="siteLongitude" placeholder="Longitude (ex: -43.1729)" />
+              </div>
+            </div>
             <div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="Observacoes"></textarea></div>
             <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit">Salvar site</button></div>
           </form>
@@ -65,43 +194,218 @@
   <div class="card app-card">
     <div class="card-body">
       <h2 class="h6 app-card-title mb-3">Clientes cadastrados</h2>
-      <div class="table-responsive mb-4">
-        <table class="table table-sm app-table mb-0">
-          <thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Notas</th></tr></thead>
-          <tbody>
-            <% if (!customers.length) { %><tr><td colspan="4" class="text-center text-muted py-4">Sem clientes.</td></tr><% } %>
-            <% customers.forEach((customer) => { %>
-              <tr>
-                <td><%= customer.id %></td>
-                <td><%= customer.name %></td>
-                <td><%= customer.customer_type %></td>
-                <td><%= customer.notes || "-" %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+      <div class="customers-grid-wrap mb-4">
+        <div id="customersGrid"></div>
       </div>
 
       <h2 class="h6 app-card-title mb-3">Sites cadastrados</h2>
-      <div class="table-responsive">
-        <table class="table table-sm app-table mb-0">
-          <thead><tr><th>ID</th><th>Cliente</th><th>Site</th><th>Codigo</th><th>Local</th></tr></thead>
-          <tbody>
-            <% if (!sites.length) { %><tr><td colspan="5" class="text-center text-muted py-4">Sem sites.</td></tr><% } %>
-            <% sites.forEach((site) => { %>
-              <tr>
-                <td><%= site.id %></td>
-                <td><%= site.customer_name %></td>
-                <td><%= site.site_name %></td>
-                <td><%= site.site_code || "-" %></td>
-                <td><%= site.location || "-" %></td>
-              </tr>
-            <% }) %>
-          </tbody>
-        </table>
+      <div class="customers-grid-wrap">
+        <div id="sitesGrid"></div>
       </div>
     </div>
   </div>
+
 </section>
+
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+<script>
+  (function () {
+    var csrfToken = <%- JSON.stringify(csrfToken || "") %>;
+
+    var customers = <%- JSON.stringify((customers || []).map(function(c) {
+      return { id: c.id, name: c.name, type: c.customer_type, notes: c.notes || "" };
+    })).replace(/</g, "\\u003c") %>;
+
+    var sites = <%- JSON.stringify((sites || []).map(function(s) {
+      return { id: s.id, customer: s.customer_name, name: s.site_name, code: s.site_code || "", location: s.location || "", lat: s.latitude != null ? s.latitude : null, lng: s.longitude != null ? s.longitude : null, notes: s.notes || "" };
+    })).replace(/</g, "\\u003c") %>;
+
+    function escHtml(v) {
+      return String(v || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+
+    function escAttr(v) {
+      return String(v || "").replace(/&/g,"&amp;").replace(/"/g,"&quot;");
+    }
+
+    function customerActions(c) {
+      var editBtn = "<button type=\"button\" class=\"btn btn-outline-primary btn-sm\""
+        + " data-edit-customer"
+        + " data-id=\"" + c.id + "\""
+        + " data-name=\"" + escAttr(c.name) + "\""
+        + " data-type=\"" + escAttr(c.type) + "\""
+        + " data-notes=\"" + escAttr(c.notes) + "\""
+        + ">Editar</button>";
+      var delForm = "<form method=\"post\" action=\"/admin/report-service/customers/" + c.id + "/delete\" class=\"m-0\" onsubmit=\"return confirm('Excluir cliente?')\">"
+        + "<input type=\"hidden\" name=\"_csrf\" value=\"" + escHtml(csrfToken) + "\" />"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">Excluir</button>"
+        + "</form>";
+      return "<div style=\"display:flex;gap:4px\">" + editBtn + delForm + "</div>";
+    }
+
+    function siteActions(s) {
+      var editBtn = "<button type=\"button\" class=\"btn btn-outline-primary btn-sm\""
+        + " data-edit-site"
+        + " data-id=\"" + s.id + "\""
+        + " data-name=\"" + escAttr(s.name) + "\""
+        + " data-code=\"" + escAttr(s.code) + "\""
+        + " data-location=\"" + escAttr(s.location) + "\""
+        + " data-lat=\"" + (s.lat != null ? s.lat : "") + "\""
+        + " data-lng=\"" + (s.lng != null ? s.lng : "") + "\""
+        + " data-notes=\"" + escAttr(s.notes) + "\""
+        + ">Editar</button>";
+      var delForm = "<form method=\"post\" action=\"/admin/report-service/sites/" + s.id + "/delete\" class=\"m-0\" onsubmit=\"return confirm('Excluir site?')\">"
+        + "<input type=\"hidden\" name=\"_csrf\" value=\"" + escHtml(csrfToken) + "\" />"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">Excluir</button>"
+        + "</form>";
+      return "<div style=\"display:flex;gap:4px\">" + editBtn + delForm + "</div>";
+    }
+
+    var gridLang = {
+      search: { placeholder: "Buscar..." },
+      sort: { sortAsc: "Crescente", sortDesc: "Decrescente" },
+      pagination: {
+        previous: "Anterior", next: "Proximo",
+        navigate: function(p, t) { return "Pagina " + p + " de " + t; },
+        page: function(p) { return "Pagina " + p; },
+        showing: "Mostrando", of: "de", to: "a", results: "resultados"
+      },
+      loading: "Carregando...",
+      noRecordsFound: "Nenhum registro encontrado.",
+      error: "Falha ao carregar dados."
+    };
+
+    // Grid clientes
+    var customersTarget = document.getElementById("customersGrid");
+    if (customersTarget && window.gridjs) {
+      if (!customers.length) {
+        customersTarget.innerHTML = "<div class=\"text-center text-muted py-4\">Sem clientes cadastrados.</div>";
+      } else {
+        new window.gridjs.Grid({
+          columns: [
+            { id: "id", name: "ID", width: "60px" },
+            { id: "name", name: "Nome" },
+            { id: "type", name: "Tipo" },
+            { id: "notes", name: "Notas" },
+            { id: "actions", name: "Acoes", sort: false, formatter: function(cell) { return window.gridjs.html(cell); } }
+          ],
+          data: customers.map(function(c) {
+            return { id: c.id, name: escHtml(c.name), type: escHtml(c.type), notes: escHtml(c.notes) || "-", actions: customerActions(c) };
+          }),
+          search: true, sort: true,
+          pagination: { limit: 15, summary: false },
+          language: gridLang
+        }).render(customersTarget);
+      }
+    }
+
+    // Grid sites
+    var sitesTarget = document.getElementById("sitesGrid");
+    if (sitesTarget && window.gridjs) {
+      if (!sites.length) {
+        sitesTarget.innerHTML = "<div class=\"text-center text-muted py-4\">Sem sites cadastrados.</div>";
+      } else {
+        new window.gridjs.Grid({
+          columns: [
+            { id: "id", name: "ID", width: "60px" },
+            { id: "customer", name: "Cliente" },
+            { id: "name", name: "Site" },
+            { id: "code", name: "Codigo" },
+            { id: "location", name: "Local" },
+            { id: "coords", name: "Coordenadas", sort: false, formatter: function(cell) { return window.gridjs.html(cell); } },
+            { id: "actions", name: "Acoes", sort: false, formatter: function(cell) { return window.gridjs.html(cell); } }
+          ],
+          data: sites.map(function(s) {
+            var coords = "-";
+            if (s.lat != null && s.lng != null) {
+              var mapsUrl = "https://www.google.com/maps?q=" + s.lat + "," + s.lng;
+              coords = "<a href=\"" + mapsUrl + "\" target=\"_blank\" rel=\"noopener\" class=\"small\">" + Number(s.lat).toFixed(5) + ", " + Number(s.lng).toFixed(5) + "</a>";
+            }
+            return { id: s.id, customer: escHtml(s.customer), name: escHtml(s.name), code: escHtml(s.code) || "-", location: escHtml(s.location) || "-", coords: coords, actions: siteActions(s) };
+          }),
+          search: true, sort: true,
+          pagination: { limit: 15, summary: false },
+          language: gridLang
+        }).render(sitesTarget);
+      }
+    }
+  })();
+</script>
+
+<script>
+  // --- Modais de edição ---
+  (function () {
+    // Editar cliente
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-edit-customer]");
+      if (!btn) return;
+      document.getElementById("editCustomerForm").action = "/admin/report-service/customers/" + btn.dataset.id + "/update";
+      document.getElementById("editCustomerName").value = btn.dataset.name || "";
+      document.getElementById("editCustomerType").value = btn.dataset.type || "others";
+      document.getElementById("editCustomerNotes").value = btn.dataset.notes || "";
+      var modal = new bootstrap.Modal(document.getElementById("editCustomerModal"));
+      modal.show();
+    });
+
+    // Editar site
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-edit-site]");
+      if (!btn) return;
+      document.getElementById("editSiteForm").action = "/admin/report-service/sites/" + btn.dataset.id + "/update";
+      document.getElementById("editSiteName").value = btn.dataset.name || "";
+      document.getElementById("editSiteCode").value = btn.dataset.code || "";
+      document.getElementById("editSiteLocation").value = btn.dataset.location || "";
+      document.getElementById("editSiteLatitude").value = btn.dataset.lat || "";
+      document.getElementById("editSiteLongitude").value = btn.dataset.lng || "";
+      document.getElementById("editSiteNotes").value = btn.dataset.notes || "";
+      var modal = new bootstrap.Modal(document.getElementById("editSiteModal"));
+      modal.show();
+    });
+
+    // Botão Ver no Maps do modal de edição
+    var editMapsBtn = document.getElementById("editOpenMapsBtn");
+    if (editMapsBtn) {
+      editMapsBtn.addEventListener("click", function () {
+        var lat = parseFloat(document.getElementById("editSiteLatitude").value);
+        var lng = parseFloat(document.getElementById("editSiteLongitude").value);
+        var loc = document.getElementById("editSiteLocation").value.trim();
+        var url;
+        if (!isNaN(lat) && !isNaN(lng)) {
+          url = "https://www.google.com/maps?q=" + lat + "," + lng;
+        } else if (loc) {
+          url = "https://www.google.com/maps/search/" + encodeURIComponent(loc);
+        } else {
+          url = "https://www.google.com/maps";
+        }
+        window.open(url, "_blank", "noopener");
+      });
+    }
+  })();
+</script>
+
+<script>
+  (function () {
+    var mapsBtn = document.getElementById("openGoogleMapsBtn");
+    var locationInput = document.getElementById("siteLocation");
+    var latInput = document.getElementById("siteLatitude");
+    var lngInput = document.getElementById("siteLongitude");
+    if (!mapsBtn) return;
+
+    mapsBtn.addEventListener("click", function () {
+      var lat = parseFloat(latInput.value);
+      var lng = parseFloat(lngInput.value);
+      var query = locationInput.value.trim();
+      var url;
+      if (!isNaN(lat) && !isNaN(lng)) {
+        url = "https://www.google.com/maps?q=" + lat + "," + lng;
+      } else if (query) {
+        url = "https://www.google.com/maps/search/" + encodeURIComponent(query);
+      } else {
+        url = "https://www.google.com/maps";
+      }
+      window.open(url, "_blank", "noopener");
+    });
+  })();
+</script>
 
 <%- include("../partials/footer") %>

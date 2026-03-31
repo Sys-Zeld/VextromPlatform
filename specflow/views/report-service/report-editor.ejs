@@ -1,0 +1,628 @@
+﻿<%- include("../partials/head", { pageTitle }) %>
+<link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.css" rel="stylesheet" />
+<link href="/public/css/report-editor.css" rel="stylesheet" />
+<%
+  function extractImageFileName(filePath) {
+    return String(filePath || "")
+      .split(/[\\/]/)
+      .filter(Boolean)
+      .pop() || "";
+  }
+
+  function getSectionImageRegistry(sectionKey) {
+    const list = Array.isArray(images) ? images : [];
+    return list
+      .filter((item) => String(item.section_key || "") === String(sectionKey || ""))
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id || 0) - Number(b.id || 0));
+  }
+
+  function getTagImageRegistry() {
+    return getSectionImageRegistry("__tag__");
+  }
+
+  function formatDateShort(value) {
+    if (!value) return "-";
+    const raw = String(value).trim();
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1].slice(-2)}`;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return "-";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear()).slice(-2);
+    return `${day}/${month}/${year}`;
+  }
+%>
+
+<section class="token-console">
+  <div class="card app-card token-hero-card">
+    <div class="card-body token-hero-body">
+      <div class="token-hero-copy">
+        <span class="token-hero-eyebrow">EDITAR RELATÓRIO</span>
+        <h1 class="h4 app-card-title mb-1"><%= order.service_order_display || "-" %></h1>
+        <p class="text-muted mb-0"><%= order.title %> - <%= order.customer_name %></p>
+      </div>
+      <div class="token-hero-actions">
+        <span class="badge text-bg-secondary">Status: <%= order.status || "draft" %></span>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>">Editar OS</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>/preview-html" target="_blank" rel="noopener">Preview HTML</a>
+        <% if (String(order.status || "").toLowerCase() === "valid") { %>
+          <a class="btn btn-outline-success btn-sm" href="/admin/report-service/orders/<%= order.id %>/sign-report">Assinar Relatorio</a>
+        <% } %>
+        <form method="post" action="/admin/report-service/orders/<%= order.id %>/validate-os">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <button class="btn btn-success btn-sm" type="submit">Validar OS</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <% if (saved) { %><div class="alert alert-success mb-0">Capitulo salvo com sucesso.</div><% } %>
+  <% if (editLocked) { %><div class="alert alert-warning mb-0">OS aprovada. Edicao bloqueada. Revalide a OS com senha na tela da OS para liberar.</div><% } %>
+  <% if (revalidated) { %><div class="alert alert-success mb-0">OS revalidada com sucesso. Status atualizado para <strong>valid</strong>.</div><% } %>
+  <% if (revalidateError === 'invalid_password') { %><div class="alert alert-danger mb-0">Senha de revalidacao invalida.</div><% } %>
+  <% if (revalidateError === 'not_configured') { %><div class="alert alert-danger mb-0">Senha de revalidacao nao configurada no servidor.</div><% } %>
+  <% if (revalidateError === 'invalid_state') { %><div class="alert alert-warning mb-0">A OS precisa estar com status <strong>approved</strong> para revalidar.</div><% } %>
+  <% if (signRequestUpdated) { %><div class="alert alert-success mb-0">Dados do signatario atualizados com sucesso.</div><% } %>
+  <% if (signRequestEditBlocked) { %><div class="alert alert-warning mb-0">Nao e permitido editar links que ja foram assinados/cancelados.</div><% } %>
+  <% if (emailSent) { %><div class="alert alert-success mb-0">Relatorio assinado enviado por e-mail com sucesso.</div><% } %>
+  <% if (emailError) { %><div class="alert alert-danger mb-0"><%= emailError %></div><% } %>
+  <% if (signLocked) { %><div class="alert alert-warning mb-0">Assinatura do relatorio liberada apenas para OS com status <strong>valid</strong>.</div><% } %>
+  <% if (validationSuccess) { %><div class="alert alert-success mb-0">OS validada com sucesso. Status atualizado para <strong>valid</strong>.</div><% } %>
+  <% if (validationError && osValidation && !osValidation.valid) { %>
+    <div class="alert alert-danger mb-0">
+      <div class="fw-semibold mb-1">Nao foi possivel validar a OS. Pendencias:</div>
+      <ul class="mb-0">
+        <% (osValidation.missing || []).forEach((item) => { %>
+          <li><%= item %></li>
+        <% }) %>
+      </ul>
+    </div>
+  <% } %>
+
+  <div class="row g-3">
+
+    <%# ===== CAPITULOS ===== %>
+    <div class="col-12">
+      <div class="card app-card">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h2 class="h6 app-card-title mb-0">Capitulos editaveis do relatorio</h2>
+            <form method="post" action="/admin/report-service/orders/<%= order.id %>/sections" class="d-flex gap-2 align-items-center">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input class="form-control form-control-sm" name="section_title" placeholder="Titulo do novo capitulo" required />
+              <button class="btn btn-outline-primary btn-sm" type="submit">Adicionar capitulo</button>
+            </form>
+          </div>
+          <div class="report-section-cards">
+            <% sections.forEach((section, index) => { %>
+              <form
+                method="post"
+                action="/admin/report-service/orders/<%= order.id %>/sections/<%= section.section_key %>"
+                class="report-section-card"
+                data-report-section-form
+                data-section-key="<%= section.section_key %>"
+              >
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <input type="hidden" name="section_title" value="<%= section.section_title || '' %>" data-section-title-text />
+                <input type="hidden" name="section_title_delta_json" value='<%= JSON.stringify(section?.section_title_delta_json || { ops: [{ insert: "\\n" }] }) %>' data-section-title-delta />
+                <input type="hidden" name="section_title_html" value="<%= section ? section.section_title_html : '' %>" data-section-title-html />
+                <input type="hidden" name="section_title_text" value="<%= section ? section.section_title_text : '' %>" data-section-title-plain />
+
+                <input type="hidden" name="content_delta_json" value='<%= JSON.stringify(section?.content_delta_json || { ops: [{ insert: "\\n" }] }) %>' data-section-delta />
+                <input type="hidden" name="content_html" value="<%= section ? section.content_html : '' %>" data-section-html />
+                <input type="hidden" name="content_text" value="<%= section ? section.content_text : '' %>" data-section-text />
+
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                  <div>
+                    <span class="badge bg-secondary-subtle text-secondary-emphasis border">Capitulo <%= index + 1 %></span>
+                    <code class="small ms-2"><%= section.section_key %></code>
+                  </div>
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="form-check form-switch m-0">
+                      <input type="hidden" name="is_visible" value="false" />
+                      <input class="form-check-input" type="checkbox" name="is_visible" value="true" <%= section?.is_visible === false ? "" : "checked" %> />
+                      <label class="form-check-label">Exibir secao</label>
+                    </div>
+                    <button
+                      class="btn btn-outline-danger btn-sm"
+                      type="submit"
+                      formaction="/admin/report-service/orders/<%= order.id %>/sections/<%= section.section_key %>/delete"
+                      formnovalidate
+                      onclick="return confirm('Excluir este capitulo?');"
+                    >
+                      Excluir capitulo
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" type="submit">Salvar capitulo</button>
+                  </div>
+                </div>
+
+                <label class="form-label mb-1 small text-muted">Titulo do capitulo (rich text)</label>
+                <div class="small text-muted mb-2">
+                  Use este campo somente para o titulo do capitulo (primeira linha). O conteudo do relatorio deve ser escrito no campo abaixo.
+                </div>
+                <div class="report-quill-title-editor mb-3" data-quill-title-editor></div>
+
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+                  <label class="form-label mb-0 small text-muted">Conteudo do capitulo</label>
+                  <button class="btn btn-outline-secondary btn-sm" type="button" data-section-ai-revise-btn>Revisar com IA</button>
+                </div>
+                <div class="small text-muted mb-1" data-section-ai-status></div>
+                <details class="mb-2">
+                  <summary class="small text-muted" style="cursor:pointer;user-select:none;">Ver tags disponíveis</summary>
+                  <div class="table-responsive mt-2">
+                    <table class="table table-sm table-bordered mb-0" style="font-size:0.8rem;">
+                      <thead class="table-light">
+                        <tr>
+                          <th style="white-space:nowrap;">Tag</th>
+                          <th>Descrição</th>
+                          <th>Exemplo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><code>@img=ID</code></td>
+                          <td>Renderiza uma imagem inline do banco de imagens pelo ID</td>
+                          <td><code>@img=3</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@equip=ID</code></td>
+                          <td>Exibe a TAG ou tipo do equipamento pelo ID</td>
+                          <td><code>@equip=1</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@descricaodia=ID</code></td>
+                          <td>Exibe o conteúdo de um log diário específico pelo ID de sequência</td>
+                          <td><code>@descricaodia=2</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@descricaodia</code></td>
+                          <td>Exibe todos os logs diários em sequência (exceto conclusão geral)</td>
+                          <td><code>@descricaodia</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@conclusaogeral</code></td>
+                          <td>Exibe a conclusão geral gerada por IA (log marcado como conclusaogeral)</td>
+                          <td><code>@conclusaogeral</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@tblcmpr</code></td>
+                          <td>Tabela de componentes substituídos (categoria: replaced)</td>
+                          <td><code>@tblcmpr</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@tblcmpq</code></td>
+                          <td>Tabela de componentes necessários (categoria: required)</td>
+                          <td><code>@tblcmpq</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@tblcmps</code></td>
+                          <td>Tabela de componentes sobressalentes (categoria: spare)</td>
+                          <td><code>@tblcmps</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@timesheet</code></td>
+                          <td>Tabela de timesheet com datas e horários de entrada/saída</td>
+                          <td><code>@timesheet</code></td>
+                        </tr>
+                        <tr>
+                          <td><code>@equipetecnica</code></td>
+                          <td>Tabela da equipe técnica com nome, função e empresa</td>
+                          <td><code>@equipetecnica</code></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+                <div class="report-quill-editor" data-quill-editor></div>
+
+              </form>
+            <% }) %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%# ===== BANCO DE IMAGENS ===== %>
+    <div class="col-12">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Banco de imagens para tags (@img=ID)</h2>
+          <div class="border rounded p-3 mt-1 bg-light">
+            <div class="fw-semibold mb-2">Importar imagem para docs/report/img</div>
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-md-6">
+                <label class="form-label mb-1">Arquivo de imagem</label>
+                <input type="file" class="form-control" id="tagImageFileInput" accept="image/png,image/jpeg,image/webp,image/gif" />
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label mb-1">Legenda (opcional)</label>
+                <input class="form-control" id="tagImageCaptionInput" placeholder="Imagem importada" />
+              </div>
+              <div class="col-12 col-md-2">
+                <button class="btn btn-outline-primary w-100" type="button" id="tagImageImportBtn">Importar</button>
+              </div>
+            </div>
+            <div class="small text-muted mt-2" id="tagImageImportStatus">Selecione um arquivo para importar.</div>
+          </div>
+
+          <div class="small text-muted mt-2">
+            Use no texto do capitulo: <code>@img=ID</code> para renderizar a imagem no preview no ponto da tag.
+          </div>
+
+          <div class="table-responsive mt-3">
+            <table class="table table-sm app-table mb-0">
+              <thead><tr><th>ID</th><th>Arquivo</th><th>Legenda</th><th>Acoes</th></tr></thead>
+              <tbody>
+                <% const tagImageRegistry = getTagImageRegistry(); %>
+                <% if (!tagImageRegistry.length) { %><tr><td colspan="4" class="text-center text-muted py-3">Sem imagens cadastradas para tags.</td></tr><% } %>
+                <% tagImageRegistry.forEach((item) => { %>
+                  <tr>
+                    <td><code><%= item.ref_id || item.id %></code></td>
+                    <td><code><%= extractImageFileName(item.file_path) %></code></td>
+                    <td><%= item.caption || "-" %></td>
+                    <td>
+                      <form method="post" action="/admin/report-service/orders/<%= order.id %>/images/<%= (item.ref_id || item.id) %>/delete" class="m-0" onsubmit="return confirm('Excluir esta imagem do banco de tags?');">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                        <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                      </form>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%# ===== ASSINATURA ELETRÔNICA ===== %>
+    <div class="col-12">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Assinatura eletrônica</h2>
+
+          <% if (signedLinkCreated) { %>
+            <div class="alert alert-success mb-3">Link de assinatura gerado com sucesso.</div>
+          <% } %>
+          <% if (signLinkBlocked && signRequestGuard && !signRequestGuard.allowed) { %>
+            <div class="alert alert-warning mb-3">
+              <div class="fw-semibold mb-1">Não foi possível gerar o link de assinatura eletrônica.</div>
+              <ul class="mb-0">
+                <% (signRequestGuard.reasons || []).forEach(function(reason) { %>
+                  <li><%= reason %></li>
+                <% }); %>
+              </ul>
+            </div>
+          <% } %>
+
+          <%# Lista de links gerados %>
+          <% const activeRequests = (signRequests || []).filter(r => r.status === 'pending' || r.status === 'signed'); %>
+          <% if (activeRequests.length > 0) { %>
+            <div class="table-responsive mb-4">
+              <table class="table table-sm app-table mb-0">
+                <thead>
+                  <tr>
+                    <th>Destinatario</th>
+                    <th>Empresa</th>
+                    <th>E-mail</th>
+                    <th>Status</th>
+                    <th>Expiracao</th>
+                    <th>Link</th>
+                    <th>Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% activeRequests.forEach(function(sr) { %>
+                    <%
+                      var srStatus = sr.status;
+                      var srBadge = srStatus === 'signed' ? 'bg-success' : 'bg-warning text-dark';
+                      var srLabel = srStatus === 'signed' ? 'Assinado' : 'Aguardando';
+                      var expDate = sr.expires_at ? new Date(sr.expires_at).toLocaleDateString('pt-BR') : '-';
+                      var signLink = '/r/sign/' + sr.token;
+                    %>
+                    <tr>
+                      <td><%= sr.signer_name || '-' %><% if (sr.signer_role) { %><br><small class="text-muted"><%= sr.signer_role %></small><% } %></td>
+                      <td><%= sr.signer_company || '-' %></td>
+                      <td><%= sr.signer_email || '-' %></td>
+                      <td><span class="badge <%= srBadge %>"><%= srLabel %></span></td>
+                      <td><%= expDate %></td>
+                      <td>
+                        <% if (srStatus === 'pending') { %>
+                          <input type="text" class="form-control form-control-sm" style="min-width:260px;font-size:0.78rem;" readonly data-sign-path="<%= signLink %>" onclick="if(!this.value)this.value=window.location.origin+this.dataset.signPath; this.select()" onfocus="if(!this.value)this.value=window.location.origin+this.dataset.signPath; this.select()" />
+                        <% } else { %>
+                          <span class="text-muted small">-</span>
+                        <% } %>
+                      </td>
+                      <td>
+                        <div class="d-flex gap-1 flex-wrap">
+                          <% if (srStatus === 'pending') { %>
+                            <details>
+                              <summary class="btn btn-outline-secondary btn-sm">Editar</summary>
+                              <form method="post" action="/admin/report-service/orders/<%= order.id %>/sign-requests/<%= sr.id %>/update" class="border rounded p-2 mt-2 bg-light" style="min-width:280px;">
+                                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                                <div class="mb-2">
+                                  <label class="form-label mb-1 small">Nome signatario</label>
+                                  <input class="form-control form-control-sm" name="signer_name" value="<%= sr.signer_name || '' %>" required />
+                                </div>
+                                <div class="mb-2">
+                                  <label class="form-label mb-1 small">Cargo / Funcao</label>
+                                  <input class="form-control form-control-sm" name="signer_role" value="<%= sr.signer_role || '' %>" />
+                                </div>
+                                <div class="mb-2">
+                                  <label class="form-label mb-1 small">Empresa</label>
+                                  <input class="form-control form-control-sm" name="signer_company" value="<%= sr.signer_company || '' %>" />
+                                </div>
+                                <div class="mb-2">
+                                  <label class="form-label mb-1 small">E-mail</label>
+                                  <input class="form-control form-control-sm" name="signer_email" type="email" value="<%= sr.signer_email || '' %>" />
+                                </div>
+                                <div class="mb-2">
+                                  <label class="form-label mb-1 small">Observacoes</label>
+                                  <input class="form-control form-control-sm" name="notes" value="<%= sr.notes || '' %>" />
+                                </div>
+                                <button class="btn btn-outline-primary btn-sm" type="submit">Salvar</button>
+                              </form>
+                            </details>
+                            <form method="post" action="/admin/report-service/orders/<%= order.id %>/sign-requests/<%= sr.id %>/cancel" class="m-0" onsubmit="return confirm('Cancelar este link de assinatura?');">
+                              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                              <button class="btn btn-outline-warning btn-sm" type="submit">Cancelar</button>
+                            </form>
+                          <% } %>
+                          <form method="post" action="/admin/report-service/orders/<%= order.id %>/sign-requests/<%= sr.id %>/delete" class="m-0" onsubmit="return confirm('Excluir esta assinatura eletronica?');">
+                            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                            <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% } else { %>
+            <p class="text-muted small mb-3">Nenhum link de assinatura ativo. Gere um link para enviar ao responsável do cliente.</p>
+          <% } %>
+
+          <% const refusedRequests = (signRequests || []).filter((r) => String(r.status || '').toLowerCase() === 'cancelled' && String(r.notes || '').toUpperCase().startsWith('RECUSA:')); %>
+          <% if (refusedRequests.length > 0) { %>
+            <h3 class="h6 mb-2">Assinaturas recusadas</h3>
+            <div class="table-responsive mb-4">
+              <table class="table table-sm app-table mb-0">
+                <thead>
+                  <tr>
+                    <th>Destinatario</th>
+                    <th>Empresa</th>
+                    <th>Data</th>
+                    <th>Motivo da recusa</th>
+                    <th>Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% refusedRequests.forEach(function(sr) { %>
+                    <tr>
+                      <td><%= sr.signer_name || '-' %><% if (sr.signer_role) { %><br><small class="text-muted"><%= sr.signer_role %></small><% } %></td>
+                      <td><%= sr.signer_company || '-' %></td>
+                      <td><%= sr.updated_at ? new Date(sr.updated_at).toLocaleString('pt-BR') : '-' %></td>
+                      <td style="min-width:280px;">
+                        <details>
+                          <summary class="btn btn-outline-secondary btn-sm">Abrir motivo</summary>
+                          <div class="border rounded bg-light p-2 mt-2 small">
+                            <%= String(sr.notes || '').replace(/^RECUSA:\s*/i, '') || '-' %>
+                          </div>
+                        </details>
+                      </td>
+                      <td>
+                        <form method="post" action="/admin/report-service/orders/<%= order.id %>/sign-requests/<%= sr.id %>/delete" class="m-0" onsubmit="return confirm('Excluir esta recusa de assinatura?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <button class="btn btn-outline-danger btn-sm" type="submit">Excluir recusa</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+
+          <% if (canSendSignedReport) { %>
+            <details class="border rounded p-3 bg-light mb-4">
+              <summary class="fw-semibold" style="cursor:pointer;">Enviar relatorio assinado por e-mail</summary>
+              <form method="post" action="/admin/report-service/orders/<%= order.id %>/send-signed-email" class="row g-2 mt-2">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <div class="col-12 col-md-6">
+                  <label class="form-label mb-1 small">Para <span class="text-danger">*</span></label>
+                  <input class="form-control form-control-sm" name="to" type="text" placeholder="email@empresa.com; outro@empresa.com" required />
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label mb-1 small">CC (opcional)</label>
+                  <input class="form-control form-control-sm" name="cc" type="text" placeholder="cc@empresa.com" />
+                </div>
+                <div class="col-12">
+                  <label class="form-label mb-1 small">Mensagem (opcional)</label>
+                  <textarea class="form-control form-control-sm" name="message" rows="3" placeholder="Mensagem para o destinatario"></textarea>
+                </div>
+                <div class="col-12">
+                  <button class="btn btn-outline-primary btn-sm" type="submit">Enviar e-mail + PDF assinado</button>
+                </div>
+              </form>
+            </details>
+          <% } %>
+
+          <%# Assinaturas registradas %>
+          <% const registeredSignatures = Array.isArray(signatures) ? signatures : []; %>
+          <% if (registeredSignatures.length > 0) { %>
+            <h3 class="h6 mb-2">Assinaturas registradas</h3>
+            <div class="table-responsive mb-4">
+              <table class="table table-sm app-table mb-0">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Cargo</th>
+                    <th>Empresa</th>
+                    <th>Data</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% registeredSignatures.forEach(function(sig) { %>
+                    <tr>
+                      <td><%= sig.signer_name || '-' %></td>
+                      <td><%= sig.signer_role || '-' %></td>
+                      <td><%= sig.signer_company || '-' %></td>
+                      <td><%= sig.signed_at ? new Date(sig.signed_at).toLocaleString('pt-BR') : '-' %></td>
+                      <td>
+                        <form method="post" action="/admin/report-service/orders/<%= order.id %>/signatures/<%= sig.id %>/delete" class="m-0" onsubmit="return confirm('Excluir esta assinatura eletrônica?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }); %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+          <%# Formulário para gerar novo link %>
+          <% if (signRequestGuard && signRequestGuard.allowed) { %>
+            <details class="border rounded p-3 bg-light">
+              <summary class="fw-semibold" style="cursor:pointer;">Gerar novo link de assinatura</summary>
+              <form method="post" action="/admin/report-service/orders/<%= order.id %>/sign-requests" class="row g-2 mt-2">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <div class="col-12 col-md-4">
+                  <label class="form-label mb-1 small">Nome do signatário <span class="text-danger">*</span></label>
+                  <input class="form-control form-control-sm" name="signer_name" placeholder="Ex: João Silva" required />
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label mb-1 small">Cargo / Função</label>
+                  <input class="form-control form-control-sm" name="signer_role" placeholder="Ex: Gerente de Manutenção" />
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label mb-1 small">Empresa</label>
+                  <input class="form-control form-control-sm" name="signer_company" placeholder="Ex: Empresa Ltda." />
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label mb-1 small">E-mail (opcional)</label>
+                  <input class="form-control form-control-sm" name="signer_email" type="email" placeholder="email@empresa.com" />
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label mb-1 small">Observações</label>
+                  <input class="form-control form-control-sm" name="notes" placeholder="Opcional" />
+                </div>
+                <div class="col-12">
+                  <button class="btn btn-primary btn-sm" type="submit">Gerar link de assinatura</button>
+                  <span class="text-muted small ms-2">O link expira em 30 dias.</span>
+                </div>
+              </form>
+            </details>
+          <% } else { %>
+            <div class="alert alert-light border mb-0 small">
+              Para gerar o link de assinatura eletrônica, cumpra os pré-requisitos:
+              <ul class="mb-0 mt-1">
+                <li>OS com status <strong>valid</strong></li>
+                <li>Pelo menos uma assinatura do técnico Vextrom</li>
+              </ul>
+            </div>
+          <% } %>
+
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.min.js"></script>
+<script>
+  window.reportSectionToolbar = <%- JSON.stringify(quillSectionToolbar) %>;
+  window.reportSectionTitleToolbar = <%- JSON.stringify(quillSectionTitleToolbar) %>;
+  window.reportSectionFormats = <%- JSON.stringify(quillSectionFormats) %>;
+  window.reportSectionTitleFormats = <%- JSON.stringify(quillSectionTitleFormats) %>;
+  window.reportTagImageIndex = <%- JSON.stringify(
+    (getTagImageRegistry() || []).map((item) => ({
+      id: Number(item.ref_id || item.id),
+      caption: item.caption || "",
+      filePath: extractImageFileName(item.file_path)
+    }))
+  ) %>;
+  window.reportEquipmentTagIndex = <%- JSON.stringify(
+    (orderEquipments || [])
+      .filter((item) => Number.isInteger(Number(item && (item.ref_id || item.equipment_id))))
+      .map((item) => ({
+        id: Number(item.ref_id || item.equipment_id),
+        tag: item.tag_number || "",
+        type: item.type || "",
+        serial: item.serial_number || ""
+      }))
+  ) %>;
+  window.reportDailyLogTagIndex = <%- JSON.stringify(
+    (dailyLogs || [])
+      .filter((item) => Number.isInteger(Number(item && item.id)) && Number(item.id) > 0 && item.notes !== 'conclusaogeral')
+      .map((item) => ({
+        id: Number(item.order_seq || item.id),
+        activityDate: formatDateShort(item.activity_date),
+        title: item.title || ""
+      }))
+  ) %>;
+  window.dailyLogsIndex = <%- JSON.stringify(
+    (dailyLogs || []).map((item) => ({
+      id: Number(item.id || 0),
+      orderSeq: Number(item.order_seq || item.id || 0),
+      activityDate: item.activity_date || "",
+      title: item.title || "",
+      sortOrder: Number(item.sort_order || 0),
+      content: item.content || ""
+    }))
+  ) %>;
+</script>
+<script>
+  (function () {
+    var input = document.getElementById("tagImageFileInput");
+    var captionInput = document.getElementById("tagImageCaptionInput");
+    var button = document.getElementById("tagImageImportBtn");
+    var status = document.getElementById("tagImageImportStatus");
+    if (!input || !captionInput || !button || !status) return;
+
+    var csrfInput = document.querySelector('input[name="_csrf"]');
+    var csrfToken = csrfInput ? csrfInput.value : "";
+    var endpoint = "/admin/report-service/orders/<%= order.id %>/images/import";
+
+    button.addEventListener("click", async function () {
+      var file = input.files && input.files[0];
+      if (!file) {
+        status.textContent = "Selecione um arquivo de imagem.";
+        return;
+      }
+      button.disabled = true;
+      status.textContent = "Importando imagem...";
+      try {
+        var buffer = await file.arrayBuffer();
+        var response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+            "X-CSRF-Token": csrfToken,
+            "X-File-Name": encodeURIComponent(file.name || "imagem"),
+            "X-Caption": captionInput.value || ""
+          },
+          body: buffer
+        });
+        if (!response.ok) throw new Error("Falha no upload.");
+        status.textContent = "Imagem importada com sucesso. Recarregando lista...";
+        setTimeout(function () { window.location.reload(); }, 400);
+      } catch (_err) {
+        status.textContent = "Falha ao importar imagem.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  })();
+</script>
+<script src="/public/js/report-section-editor.js"></script>
+
+<%- include("../partials/footer") %>
+
+

@@ -1,5 +1,6 @@
 const ORDER_STATUSES = [
   "draft",
+  "valid",
   "in_progress",
   "waiting_review",
   "approved",
@@ -20,12 +21,12 @@ const REPORT_STATUSES = [
 
 const SECTION_DEFINITIONS = [
   { key: "scope", title: "ESCOPO", sortOrder: 1 },
-  { key: "technical_description", title: "DESCRICAO DO ATENDIMENTO TECNICO", sortOrder: 2 },
+  { key: "technical_description", title: "DESCRIÇÃO TECNICA", sortOrder: 2 },
   { key: "replaced_components", title: "COMPONENTES SUBSTITUIDOS NA CORRETIVA", sortOrder: 3 },
   { key: "required_components", title: "COMPONENTES NECESSARIOS PARA CORRETIVA", sortOrder: 4 },
   { key: "recommended_spare", title: "COMPONENTES RECOMENDADOS PARA SPARE", sortOrder: 5 },
-  { key: "recommendations", title: "RECOMENDACOES", sortOrder: 6 },
-  { key: "conclusion", title: "CONCLUSAO", sortOrder: 7 }
+  { key: "recommendations", title: "RECOMENDAÇÕES", sortOrder: 6 },
+  { key: "conclusion", title: "CONCLUSÃO", sortOrder: 7 }
 ];
 
 const QUILL_SECTION_TOOLBAR = [

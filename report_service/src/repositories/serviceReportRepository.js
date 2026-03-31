@@ -31,15 +31,71 @@ function toBool(value, fallback = false) {
 }
 
 async function getOrderCodeSequence(year) {
+  const normalizedYear = Number(year);
+  const yearForSequence = Number.isInteger(normalizedYear) ? normalizedYear : new Date().getFullYear();
+  const seed = await getOrderCodeSeed(yearForSequence);
   const result = await db.query(
     `
       SELECT COUNT(*)::int AS total
       FROM service_report_orders
       WHERE year = $1
     `,
-    [year]
+    [yearForSequence]
   );
-  return Number(result.rows[0]?.total || 0) + 1;
+  const byCount = Number(result.rows[0]?.total || 0) + 1;
+  return Math.max(byCount, seed || 0);
+}
+
+async function getAppSetting(key) {
+  const result = await db.query(
+    `
+      SELECT value
+      FROM service_report_app_settings
+      WHERE key = $1
+      LIMIT 1
+    `,
+    [String(key || "")]
+  );
+  return result.rows[0]?.value || null;
+}
+
+async function upsertAppSetting(key, value) {
+  await db.query(
+    `
+      INSERT INTO service_report_app_settings (key, value, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key)
+      DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `,
+    [String(key || ""), String(value || "")]
+  );
+}
+
+function buildOrderSeedKey(year) {
+  return `order.code.seed.${Number(year)}`;
+}
+
+async function getOrderCodeSeed(year) {
+  const raw = await getAppSetting(buildOrderSeedKey(year));
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) return 0;
+  return parsed;
+}
+
+async function setOrderCodeSeed(year, sequence) {
+  const numericYear = Number(year);
+  const numericSequence = Number(sequence);
+  if (!Number.isInteger(numericYear) || numericYear < 2000 || numericYear > 9999) {
+    const err = new Error("Ano invalido para seed de OS.");
+    err.statusCode = 422;
+    throw err;
+  }
+  if (!Number.isInteger(numericSequence) || numericSequence <= 0) {
+    const err = new Error("Sequencia invalida para seed de OS.");
+    err.statusCode = 422;
+    throw err;
+  }
+  await upsertAppSetting(buildOrderSeedKey(numericYear), String(numericSequence));
 }
 
 async function listOrders() {
@@ -182,6 +238,14 @@ async function createCustomer(payload) {
   return result.rows[0];
 }
 
+async function deleteCustomer(id) {
+  const result = await db.query(
+    `DELETE FROM service_report_customers WHERE id = $1`,
+    [id]
+  );
+  return result.rowCount > 0;
+}
+
 async function updateCustomer(id, payload) {
   const result = await db.query(
     `
@@ -243,11 +307,13 @@ async function createSite(payload) {
         site_name,
         site_code,
         location,
+        latitude,
+        longitude,
         notes,
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),NOW())
       RETURNING *
     `,
     [
@@ -255,10 +321,38 @@ async function createSite(payload) {
       payload.siteName,
       payload.siteCode || "",
       payload.location || "",
+      payload.latitude != null ? Number(payload.latitude) : null,
+      payload.longitude != null ? Number(payload.longitude) : null,
       payload.notes || ""
     ]
   );
   return result.rows[0];
+}
+
+async function updateSite(id, payload) {
+  const result = await db.query(
+    `UPDATE service_report_customer_sites
+     SET site_name=$2, site_code=$3, location=$4, latitude=$5, longitude=$6, notes=$7, updated_at=NOW()
+     WHERE id=$1 RETURNING *`,
+    [
+      id,
+      payload.siteName,
+      payload.siteCode || "",
+      payload.location || "",
+      payload.latitude != null ? Number(payload.latitude) : null,
+      payload.longitude != null ? Number(payload.longitude) : null,
+      payload.notes || ""
+    ]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteSite(id) {
+  const result = await db.query(
+    `DELETE FROM service_report_customer_sites WHERE id = $1`,
+    [id]
+  );
+  return result.rowCount > 0;
 }
 
 async function listEquipments() {
@@ -403,6 +497,199 @@ async function deleteEquipment(id) {
   return result.rowCount > 0;
 }
 
+async function listSpareParts() {
+  const result = await db.query(
+    `
+      SELECT *
+      FROM service_report_spare_parts
+      ORDER BY created_at DESC, id DESC
+    `
+  );
+  return result.rows;
+}
+
+async function getSparePartById(id) {
+  const result = await db.query(
+    `
+      SELECT *
+      FROM service_report_spare_parts
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id]
+  );
+  return result.rows[0] || null;
+}
+
+async function createSparePart(payload) {
+  const result = await db.query(
+    `
+      INSERT INTO service_report_spare_parts (
+        description,
+        manufacturer,
+        equipment_model,
+        part_number,
+        lead_time,
+        is_obsolete,
+        replaced_by_part_number,
+        equipment_family,
+        created_at,
+        updated_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+      RETURNING *
+    `,
+    [
+      payload.description,
+      payload.manufacturer || "",
+      payload.equipmentModel || "",
+      payload.partNumber || "",
+      payload.leadTime || "",
+      Boolean(payload.isObsolete),
+      payload.replacedByPartNumber || "",
+      payload.equipmentFamily || ""
+    ]
+  );
+  return result.rows[0];
+}
+
+async function updateSparePart(id, payload) {
+  const result = await db.query(
+    `
+      UPDATE service_report_spare_parts
+      SET
+        description = $2,
+        manufacturer = $3,
+        equipment_model = $4,
+        part_number = $5,
+        lead_time = $6,
+        is_obsolete = $7,
+        replaced_by_part_number = $8,
+        equipment_family = $9,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `,
+    [
+      id,
+      payload.description,
+      payload.manufacturer || "",
+      payload.equipmentModel || "",
+      payload.partNumber || "",
+      payload.leadTime || "",
+      Boolean(payload.isObsolete),
+      payload.replacedByPartNumber || "",
+      payload.equipmentFamily || ""
+    ]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteSparePart(id) {
+  const result = await db.query(
+    `DELETE FROM service_report_spare_parts WHERE id = $1`,
+    [id]
+  );
+  return result.rowCount > 0;
+}
+
+async function listSparePartsByEquipment(equipmentId) {
+  const result = await db.query(
+    `
+      SELECT
+        sp.*,
+        link.quantity,
+        link.created_at AS linked_at
+      FROM service_report_equipment_spare_parts link
+      INNER JOIN service_report_spare_parts sp ON sp.id = link.spare_part_id
+      WHERE link.equipment_id = $1
+      ORDER BY sp.description ASC, sp.id ASC
+    `,
+    [equipmentId]
+  );
+  return result.rows;
+}
+
+async function listSparePartsByEquipmentIds(equipmentIds = []) {
+  const normalizedIds = (Array.isArray(equipmentIds) ? equipmentIds : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  if (!normalizedIds.length) return [];
+
+  const result = await db.query(
+    `
+      SELECT
+        link.equipment_id,
+        sp.*,
+        link.quantity,
+        link.created_at AS linked_at
+      FROM service_report_equipment_spare_parts link
+      INNER JOIN service_report_spare_parts sp ON sp.id = link.spare_part_id
+      WHERE link.equipment_id = ANY($1::bigint[])
+      ORDER BY link.equipment_id ASC, sp.description ASC, sp.id ASC
+    `,
+    [normalizedIds]
+  );
+  return result.rows;
+}
+
+async function linkSparePartToEquipment(equipmentId, sparePartId, quantity = 1) {
+  const normalizedQuantity = Number.isInteger(Number(quantity)) && Number(quantity) > 0
+    ? Number(quantity)
+    : 1;
+  await db.query(
+    `
+      INSERT INTO service_report_equipment_spare_parts (equipment_id, spare_part_id, quantity, created_at)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (equipment_id, spare_part_id)
+      DO UPDATE SET quantity = EXCLUDED.quantity
+    `,
+    [equipmentId, sparePartId, normalizedQuantity]
+  );
+}
+
+async function linkSparePartToEquipmentIfMissing(equipmentId, sparePartId, quantity = 1) {
+  const normalizedQuantity = Number.isInteger(Number(quantity)) && Number(quantity) > 0
+    ? Number(quantity)
+    : 1;
+  await db.query(
+    `
+      INSERT INTO service_report_equipment_spare_parts (equipment_id, spare_part_id, quantity, created_at)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (equipment_id, spare_part_id)
+      DO NOTHING
+    `,
+    [equipmentId, sparePartId, normalizedQuantity]
+  );
+}
+
+async function unlinkSparePartFromEquipment(equipmentId, sparePartId) {
+  const result = await db.query(
+    `
+      DELETE FROM service_report_equipment_spare_parts
+      WHERE equipment_id = $1 AND spare_part_id = $2
+    `,
+    [equipmentId, sparePartId]
+  );
+  return result.rowCount > 0;
+}
+
+async function updateSparePartQuantityByEquipment(equipmentId, sparePartId, quantity) {
+  const normalizedQuantity = Number.isInteger(Number(quantity)) && Number(quantity) > 0
+    ? Number(quantity)
+    : 1;
+  const result = await db.query(
+    `
+      UPDATE service_report_equipment_spare_parts
+      SET quantity = $3
+      WHERE equipment_id = $1 AND spare_part_id = $2
+      RETURNING *
+    `,
+    [equipmentId, sparePartId, normalizedQuantity]
+  );
+  return result.rows[0] || null;
+}
+
 async function attachEquipmentToOrder(serviceOrderId, equipmentId, notes = "") {
   const result = await db.query(
     `
@@ -457,6 +744,17 @@ async function listOrderEquipments(serviceOrderId) {
     [serviceOrderId]
   );
   return result.rows;
+}
+
+async function detachEquipmentFromOrder(serviceOrderId, equipmentId) {
+  const result = await db.query(
+    `
+      DELETE FROM service_report_order_equipments
+      WHERE service_order_id = $1 AND equipment_id = $2
+    `,
+    [serviceOrderId, equipmentId]
+  );
+  return result.rowCount > 0;
 }
 
 async function listTimesheetByOrder(serviceOrderId) {
@@ -549,7 +847,11 @@ async function deleteTimesheetEntry(id) {
 async function listDailyLogsByOrder(serviceOrderId) {
   const result = await db.query(
     `
-      SELECT *
+      SELECT *,
+        ROW_NUMBER() OVER (
+          PARTITION BY service_order_id
+          ORDER BY activity_date ASC, sort_order ASC, id ASC
+        ) AS order_seq
       FROM service_report_daily_logs
       WHERE service_order_id = $1
       ORDER BY activity_date ASC, sort_order ASC, id ASC
@@ -585,6 +887,18 @@ async function createDailyLog(payload) {
     ]
   );
   return result.rows[0];
+}
+
+async function getDailyLogByTagForOrder(serviceOrderId, tag) {
+  const result = await db.query(
+    `
+      SELECT * FROM service_report_daily_logs
+      WHERE service_order_id = $1 AND notes = $2
+      ORDER BY id DESC LIMIT 1
+    `,
+    [serviceOrderId, tag]
+  );
+  return result.rows[0] || null;
 }
 
 async function updateDailyLogByOrderAndId(serviceOrderId, dailyLogId, payload) {
@@ -757,9 +1071,9 @@ async function updateReport(id, payload) {
 async function ensureDefaultSections(serviceReportId) {
   const defaultSections = [
     { key: "scope", title: "ESCOPO", sortOrder: 1 },
-    { key: "technical_description", title: "DESCRICAO DO ATENDIMENTO TECNICO", sortOrder: 2 },
-    { key: "recommendations", title: "RECOMENDACOES", sortOrder: 3 },
-    { key: "conclusion", title: "CONCLUSAO", sortOrder: 4 }
+    { key: "technical_description", title: "DESCRIÇÃO TECNICA", sortOrder: 2 },
+    { key: "recommendations", title: "RECOMENDAÇÕES", sortOrder: 3 },
+    { key: "conclusion", title: "CONCLUSÃO", sortOrder: 4 }
   ];
   for (const section of defaultSections) {
     // eslint-disable-next-line no-await-in-loop
@@ -1109,6 +1423,227 @@ async function createSignature(payload) {
   return result.rows[0];
 }
 
+async function deleteSignature(id, serviceReportId = null) {
+  const values = [id];
+  let query = "DELETE FROM service_report_signatures WHERE id = $1";
+  if (Number.isInteger(Number(serviceReportId)) && Number(serviceReportId) > 0) {
+    values.push(Number(serviceReportId));
+    query += " AND service_report_id = $2";
+  }
+  const result = await db.query(query, values);
+  return result.rowCount > 0;
+}
+
+// ---- Sign Requests ----
+
+async function createSignRequest(payload) {
+  const result = await db.query(
+    `
+      INSERT INTO service_report_sign_requests (
+        service_report_id, token, status,
+        signer_name, signer_email, signer_role, signer_company,
+        notes, expires_at, created_at, updated_at
+      )
+      VALUES ($1, $2, 'pending', $3, $4, $5, $6, $7, NOW() + INTERVAL '30 days', NOW(), NOW())
+      RETURNING *
+    `,
+    [
+      payload.serviceReportId,
+      payload.token,
+      payload.signerName || "",
+      payload.signerEmail || "",
+      payload.signerRole || "",
+      payload.signerCompany || "",
+      payload.notes || ""
+    ]
+  );
+  return result.rows[0];
+}
+
+async function getSignRequestByToken(token) {
+  const result = await db.query(
+    `
+      SELECT sr.*,
+        rep.report_number, rep.title AS report_title, rep.status AS report_status,
+        o.service_order_code, o.title AS order_title, o.id AS order_id,
+        c.name AS customer_name
+      FROM service_report_sign_requests sr
+      JOIN service_report_reports rep ON rep.id = sr.service_report_id
+      JOIN service_report_orders o ON o.id = rep.service_order_id
+      JOIN service_report_customers c ON c.id = o.customer_id
+      WHERE sr.token = $1
+    `,
+    [token]
+  );
+  return result.rows[0] || null;
+}
+
+async function listSignRequestsByReportId(serviceReportId) {
+  const result = await db.query(
+    `SELECT * FROM service_report_sign_requests WHERE service_report_id = $1 ORDER BY id DESC`,
+    [serviceReportId]
+  );
+  return result.rows;
+}
+
+async function updateSignRequest(id, payload) {
+  const fields = [];
+  const values = [id];
+  let idx = 2;
+
+  if (payload.signerName !== undefined) { fields.push(`signer_name = $${idx++}`); values.push(payload.signerName); }
+  if (payload.signerEmail !== undefined) { fields.push(`signer_email = $${idx++}`); values.push(payload.signerEmail); }
+  if (payload.signerRole !== undefined) { fields.push(`signer_role = $${idx++}`); values.push(payload.signerRole); }
+  if (payload.signerCompany !== undefined) { fields.push(`signer_company = $${idx++}`); values.push(payload.signerCompany); }
+  if (payload.status !== undefined) { fields.push(`status = $${idx++}`); values.push(payload.status); }
+  if (payload.signatureData !== undefined) { fields.push(`signature_data = $${idx++}`); values.push(payload.signatureData); }
+  if (payload.signedAt !== undefined) { fields.push(`signed_at = $${idx++}`); values.push(payload.signedAt); }
+  if (payload.ipAddress !== undefined) { fields.push(`ip_address = $${idx++}`); values.push(payload.ipAddress); }
+  if (payload.notes !== undefined) { fields.push(`notes = $${idx++}`); values.push(payload.notes); }
+
+  if (!fields.length) return null;
+  fields.push(`updated_at = NOW()`);
+
+  const result = await db.query(
+    `UPDATE service_report_sign_requests SET ${fields.join(", ")} WHERE id = $1 RETURNING *`,
+    values
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteSignRequest(id, serviceReportId = null) {
+  const values = [id];
+  let query = "DELETE FROM service_report_sign_requests WHERE id = $1";
+  if (Number.isInteger(Number(serviceReportId)) && Number(serviceReportId) > 0) {
+    values.push(Number(serviceReportId));
+    query += " AND service_report_id = $2";
+  }
+  const result = await db.query(query, values);
+  return result.rowCount > 0;
+}
+
+// ---- Global Technicians ----
+
+async function listGlobalTechnicians() {
+  const result = await db.query(
+    `SELECT * FROM service_report_global_technicians ORDER BY name ASC, id ASC`
+  );
+  return result.rows;
+}
+
+async function createGlobalTechnician(payload) {
+  const result = await db.query(
+    `INSERT INTO service_report_global_technicians (name, role, company, email, phone, is_lead, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,NOW(),NOW()) RETURNING *`,
+    [payload.name, payload.role || "", payload.company || "", payload.email || "", payload.phone || "", Boolean(payload.isLead)]
+  );
+  return result.rows[0];
+}
+
+async function updateGlobalTechnician(id, payload) {
+  const result = await db.query(
+    `UPDATE service_report_global_technicians
+     SET name=$2, role=$3, company=$4, email=$5, phone=$6, is_lead=$7, updated_at=NOW()
+     WHERE id=$1 RETURNING *`,
+    [id, payload.name, payload.role || "", payload.company || "", payload.email || "", payload.phone || "", Boolean(payload.isLead)]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteGlobalTechnician(id) {
+  const result = await db.query(
+    `DELETE FROM service_report_global_technicians WHERE id=$1`, [id]
+  );
+  return result.rowCount > 0;
+}
+
+// ---- Global Instruments ----
+
+async function listGlobalInstruments() {
+  const result = await db.query(
+    `SELECT * FROM service_report_global_instruments ORDER BY name ASC, id ASC`
+  );
+  return result.rows;
+}
+
+async function createGlobalInstrument(payload) {
+  const result = await db.query(
+    `INSERT INTO service_report_global_instruments (name, model, serial_number, calibration_due_date, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,NOW(),NOW()) RETURNING *`,
+    [payload.name, payload.model || "", payload.serialNumber || "", payload.calibrationDueDate || null, payload.notes || ""]
+  );
+  return result.rows[0];
+}
+
+async function updateGlobalInstrument(id, payload) {
+  const result = await db.query(
+    `UPDATE service_report_global_instruments
+     SET name=$2, model=$3, serial_number=$4, calibration_due_date=$5, notes=$6, updated_at=NOW()
+     WHERE id=$1 RETURNING *`,
+    [id, payload.name, payload.model || "", payload.serialNumber || "", payload.calibrationDueDate || null, payload.notes || ""]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteGlobalInstrument(id) {
+  const result = await db.query(
+    `DELETE FROM service_report_global_instruments WHERE id=$1`, [id]
+  );
+  return result.rowCount > 0;
+}
+
+// ---- Order <-> Technician / Instrument links ----
+
+async function listTechniciansByOrder(orderId) {
+  const result = await db.query(
+    `SELECT t.* FROM service_report_global_technicians t
+     JOIN service_report_order_technicians ot ON ot.technician_id = t.id
+     WHERE ot.order_id = $1 ORDER BY t.name ASC`,
+    [orderId]
+  );
+  return result.rows;
+}
+
+async function linkTechnicianToOrder(orderId, technicianId) {
+  await db.query(
+    `INSERT INTO service_report_order_technicians (order_id, technician_id)
+     VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+    [orderId, technicianId]
+  );
+}
+
+async function unlinkTechnicianFromOrder(orderId, technicianId) {
+  await db.query(
+    `DELETE FROM service_report_order_technicians WHERE order_id=$1 AND technician_id=$2`,
+    [orderId, technicianId]
+  );
+}
+
+async function listInstrumentsByOrder(orderId) {
+  const result = await db.query(
+    `SELECT i.* FROM service_report_global_instruments i
+     JOIN service_report_order_instruments oi ON oi.instrument_id = i.id
+     WHERE oi.order_id = $1 ORDER BY i.name ASC`,
+    [orderId]
+  );
+  return result.rows;
+}
+
+async function linkInstrumentToOrder(orderId, instrumentId) {
+  await db.query(
+    `INSERT INTO service_report_order_instruments (order_id, instrument_id)
+     VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+    [orderId, instrumentId]
+  );
+}
+
+async function unlinkInstrumentFromOrder(orderId, instrumentId) {
+  await db.query(
+    `DELETE FROM service_report_order_instruments WHERE order_id=$1 AND instrument_id=$2`,
+    [orderId, instrumentId]
+  );
+}
+
 async function listInstruments(serviceReportId) {
   const result = await db.query(
     `
@@ -1191,6 +1726,56 @@ async function createTechnician(payload) {
     ]
   );
   return result.rows[0];
+}
+
+async function updateTechnician(id, serviceReportId, payload) {
+  const result = await db.query(
+    `
+      UPDATE service_report_technicians
+      SET name = $3, role = $4, company = $5, email = $6, phone = $7, is_lead = $8, updated_at = NOW()
+      WHERE id = $1 AND service_report_id = $2
+      RETURNING *
+    `,
+    [
+      id, serviceReportId,
+      payload.name, payload.role || "", payload.company || "",
+      payload.email || "", payload.phone || "", Boolean(payload.isLead)
+    ]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteTechnician(id, serviceReportId) {
+  const result = await db.query(
+    `DELETE FROM service_report_technicians WHERE id = $1 AND service_report_id = $2`,
+    [id, serviceReportId]
+  );
+  return result.rowCount > 0;
+}
+
+async function updateInstrument(id, serviceReportId, payload) {
+  const result = await db.query(
+    `
+      UPDATE service_report_instruments
+      SET name = $3, model = $4, serial_number = $5, calibration_due_date = $6, notes = $7, updated_at = NOW()
+      WHERE id = $1 AND service_report_id = $2
+      RETURNING *
+    `,
+    [
+      id, serviceReportId,
+      payload.name, payload.model || "", payload.serialNumber || "",
+      payload.calibrationDueDate || null, payload.notes || ""
+    ]
+  );
+  return result.rows[0] || null;
+}
+
+async function deleteInstrument(id, serviceReportId) {
+  const result = await db.query(
+    `DELETE FROM service_report_instruments WHERE id = $1 AND service_report_id = $2`,
+    [id, serviceReportId]
+  );
+  return result.rowCount > 0;
 }
 
 async function listImages(serviceReportId) {
@@ -1308,6 +1893,10 @@ async function replaceSectionImages(serviceReportId, sectionKey, items = []) {
 
 module.exports = {
   toInt,
+  getAppSetting,
+  upsertAppSetting,
+  getOrderCodeSeed,
+  setOrderCodeSeed,
   getOrderCodeSequence,
   listOrders,
   getOrderById,
@@ -1318,21 +1907,37 @@ module.exports = {
   getCustomerById,
   createCustomer,
   updateCustomer,
+  deleteCustomer,
   listSites,
   getSiteById,
   createSite,
+  updateSite,
+  deleteSite,
   listEquipments,
   getEquipmentById,
   createEquipment,
   updateEquipment,
   deleteEquipment,
+  listSpareParts,
+  getSparePartById,
+  createSparePart,
+  updateSparePart,
+  deleteSparePart,
+  listSparePartsByEquipment,
+  listSparePartsByEquipmentIds,
+  linkSparePartToEquipment,
+  linkSparePartToEquipmentIfMissing,
+  unlinkSparePartFromEquipment,
+  updateSparePartQuantityByEquipment,
   attachEquipmentToOrder,
   listOrderEquipments,
+  detachEquipmentFromOrder,
   listTimesheetByOrder,
   createTimesheetEntry,
   updateTimesheetEntry,
   deleteTimesheetEntry,
   listDailyLogsByOrder,
+  getDailyLogByTagForOrder,
   createDailyLog,
   updateDailyLogByOrderAndId,
   deleteDailyLogByOrderAndId,
@@ -1353,13 +1958,37 @@ module.exports = {
   deleteComponent,
   listSignatures,
   createSignature,
+  deleteSignature,
+  listGlobalTechnicians,
+  createGlobalTechnician,
+  updateGlobalTechnician,
+  deleteGlobalTechnician,
+  listGlobalInstruments,
+  createGlobalInstrument,
+  updateGlobalInstrument,
+  deleteGlobalInstrument,
+  listTechniciansByOrder,
+  linkTechnicianToOrder,
+  unlinkTechnicianFromOrder,
+  listInstrumentsByOrder,
+  linkInstrumentToOrder,
+  unlinkInstrumentFromOrder,
   listInstruments,
   createInstrument,
+  updateInstrument,
+  deleteInstrument,
   listTechnicians,
   createTechnician,
+  updateTechnician,
+  deleteTechnician,
   listImages,
   createImage,
   deleteImageByRefId,
   deleteImagesBySection,
-  replaceSectionImages
+  replaceSectionImages,
+  createSignRequest,
+  getSignRequestByToken,
+  listSignRequestsByReportId,
+  updateSignRequest,
+  deleteSignRequest
 };

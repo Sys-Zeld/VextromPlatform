@@ -46,6 +46,9 @@ async function migrateServiceReport() {
     );
   `);
 
+  await db.query(`ALTER TABLE service_report_customer_sites ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;`);
+  await db.query(`ALTER TABLE service_report_customer_sites ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;`);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS service_report_equipments (
       id BIGSERIAL PRIMARY KEY,
@@ -72,6 +75,41 @@ async function migrateServiceReport() {
   `);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_equipments_customer_id ON service_report_equipments (customer_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_equipments_site_id ON service_report_equipments (site_id);`);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_spare_parts (
+      id BIGSERIAL PRIMARY KEY,
+      description TEXT NOT NULL,
+      manufacturer TEXT NOT NULL DEFAULT '',
+      equipment_model TEXT NOT NULL DEFAULT '',
+      part_number TEXT NOT NULL DEFAULT '',
+      lead_time TEXT NOT NULL DEFAULT '',
+      is_obsolete BOOLEAN NOT NULL DEFAULT FALSE,
+      replaced_by_part_number TEXT NOT NULL DEFAULT '',
+      equipment_family TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await db.query(`ALTER TABLE service_report_spare_parts ADD COLUMN IF NOT EXISTS equipment_model TEXT NOT NULL DEFAULT '';`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_spare_parts_part_number ON service_report_spare_parts (part_number);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_spare_parts_family ON service_report_spare_parts (equipment_family);`);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_equipment_spare_parts (
+      equipment_id BIGINT NOT NULL REFERENCES service_report_equipments(id) ON DELETE CASCADE,
+      spare_part_id BIGINT NOT NULL REFERENCES service_report_spare_parts(id) ON DELETE CASCADE,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (equipment_id, spare_part_id)
+    );
+  `);
+  await db.query(`ALTER TABLE service_report_equipment_spare_parts ADD COLUMN IF NOT EXISTS quantity INTEGER;`);
+  await db.query(`UPDATE service_report_equipment_spare_parts SET quantity = 1 WHERE quantity IS NULL OR quantity <= 0;`);
+  await db.query(`ALTER TABLE service_report_equipment_spare_parts ALTER COLUMN quantity SET DEFAULT 1;`);
+  await db.query(`ALTER TABLE service_report_equipment_spare_parts ALTER COLUMN quantity SET NOT NULL;`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_eq_spare_parts_equipment_id ON service_report_equipment_spare_parts (equipment_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_eq_spare_parts_spare_part_id ON service_report_equipment_spare_parts (spare_part_id);`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS service_report_orders (
@@ -363,6 +401,71 @@ async function migrateServiceReport() {
     );
   `);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_global_technicians (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT '',
+      company TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      is_lead BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_global_instruments (
+      id BIGSERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT '',
+      serial_number TEXT NOT NULL DEFAULT '',
+      calibration_due_date DATE,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_order_technicians (
+      order_id BIGINT NOT NULL REFERENCES service_report_orders(id) ON DELETE CASCADE,
+      technician_id BIGINT NOT NULL REFERENCES service_report_global_technicians(id) ON DELETE CASCADE,
+      PRIMARY KEY (order_id, technician_id)
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_order_instruments (
+      order_id BIGINT NOT NULL REFERENCES service_report_orders(id) ON DELETE CASCADE,
+      instrument_id BIGINT NOT NULL REFERENCES service_report_global_instruments(id) ON DELETE CASCADE,
+      PRIMARY KEY (order_id, instrument_id)
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_sign_requests (
+      id BIGSERIAL PRIMARY KEY,
+      service_report_id BIGINT NOT NULL REFERENCES service_report_reports(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      signer_name TEXT NOT NULL DEFAULT '',
+      signer_email TEXT NOT NULL DEFAULT '',
+      signer_role TEXT NOT NULL DEFAULT '',
+      signer_company TEXT NOT NULL DEFAULT '',
+      signature_data TEXT NOT NULL DEFAULT '',
+      signed_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '30 days'),
+      ip_address TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_sign_requests_report_id ON service_report_sign_requests (service_report_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_sign_requests_token ON service_report_sign_requests (token);`);
+
   await seedServiceReportEquipment();
   await seedServiceReportSample();
 }
@@ -392,4 +495,3 @@ if (require.main === module) {
       process.exit(1);
     });
 }
-

@@ -74,6 +74,24 @@
             form.classList.add("was-validated");
           });
         });
+
+        function isVisibleAlert(node) {
+          if (!node || !node.classList || !node.classList.contains("alert")) return false;
+          if (node.classList.contains("d-none")) return false;
+          if (!node.offsetParent && getComputedStyle(node).position !== "fixed") return false;
+          return String(node.textContent || "").trim().length > 0;
+        }
+
+        function centerFirstSystemAlert() {
+          var alerts = Array.prototype.slice.call(document.querySelectorAll(".alert"));
+          var firstVisible = alerts.find(isVisibleAlert);
+          if (!firstVisible) return;
+          setTimeout(function () {
+            firstVisible.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+          }, 80);
+        }
+
+        centerFirstSystemAlert();
       })();
     </script>
   </body>

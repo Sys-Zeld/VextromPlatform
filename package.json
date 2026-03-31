@@ -1,7 +1,7 @@
 {
-  "name": "app-form-ups-iec",
-  "version": "1.1.2",
-  "description": "Dynamic UPS specification form based on IEC 62040-3 Annex D",
+  "name": "VextromPlatform",
+  "version": "1.1.4",
+  "description": "System VextromPlatform",
   "moduleVersions": {
     "specflow": "beta",
     "module_spec": "0.0.1",
@@ -47,6 +47,7 @@
     "db:seed:report-service": "node report_service/seed.js",
     "db:reseed": "npm run db:reset && npm run db:seed",
     "db:seed:default": "npm run db:seed && node scripts/seed-profile-purchase.js",
+    "report-service:os:init": "node scripts/report-service-init-os-seed.js",
     "api:key:create": "node scripts/api-key-create.js",
     "api:key:list": "node scripts/api-key-list.js",
     "api:key:revoke": "node scripts/api-key-revoke.js",

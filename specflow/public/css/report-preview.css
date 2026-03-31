@@ -66,7 +66,7 @@
 
 .brand-left img {
   width: 100%;
-  max-width: 320px;
+  max-width: 272px;
   height: auto;
   object-fit: contain;
 }
@@ -315,6 +315,64 @@
   margin: 0 0 9px;
 }
 
+.rich-output strong,
+.rich-output b {
+  font-weight: 700;
+}
+
+.rich-output em,
+.rich-output i {
+  font-style: italic;
+}
+
+.rich-output u {
+  text-decoration: underline;
+}
+
+.rich-output h1 {
+  font-size: 1.8em;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 10px;
+}
+
+.rich-output h2 {
+  font-size: 1.4em;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 10px;
+}
+
+.rich-output h3 {
+  font-size: 1.15em;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 10px;
+}
+
+.rich-output blockquote {
+  margin: 0 0 10px;
+  padding: 4px 0 4px 14px;
+  border-left: 3px solid #4f7d33;
+  background: #f4f8f4;
+  color: #3a4e36;
+}
+
+.rich-output a {
+  color: #1f5f92;
+  text-decoration: underline;
+  word-break: break-word;
+}
+
+.rich-output .ql-indent-1 { padding-left: 3em; }
+.rich-output .ql-indent-2 { padding-left: 6em; }
+.rich-output .ql-indent-3 { padding-left: 9em; }
+.rich-output .ql-indent-4 { padding-left: 12em; }
+.rich-output .ql-indent-5 { padding-left: 15em; }
+.rich-output .ql-indent-6 { padding-left: 18em; }
+.rich-output .ql-indent-7 { padding-left: 21em; }
+.rich-output .ql-indent-8 { padding-left: 24em; }
+
 .report-inline-image-card {
   width: 270px;
   margin: 0;
@@ -395,6 +453,7 @@
 .report-inline-image-row,
 .report-inline-components-wrap,
 .report-inline-timesheet-wrap,
+.report-inline-techteam-wrap,
 table,
 figure,
 blockquote {
@@ -499,6 +558,45 @@ blockquote {
 }
 
 .report-inline-timesheet-empty {
+  color: #4b5a52;
+  padding: 8px 6px;
+}
+
+.report-inline-techteam-wrap {
+  margin: 10px 0 14px;
+}
+
+.report-inline-techteam-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #222;
+  background: #fff;
+}
+
+.report-inline-techteam-table th,
+.report-inline-techteam-table td {
+  border: 1px solid #222;
+  padding: 4px 6px;
+  font-size: 0.72rem;
+  line-height: 1.12;
+  text-align: left;
+}
+
+.report-inline-techteam-table thead th {
+  background: #ececec;
+  color: #4e4e4e;
+  font-weight: 700;
+}
+
+.report-inline-techteam-table .report-inline-techteam-title-row th {
+  background: #e2e2e2;
+  color: #4a612b;
+  font-size: 0.92rem;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+.report-inline-techteam-empty {
   color: #4b5a52;
   padding: 8px 6px;
 }
@@ -676,4 +774,80 @@ blockquote {
   font-size: 0.78rem;
   color: #6e7e74;
   text-align: center;
+}
+
+/* ---- Assinaturas eletrônicas ---- */
+.report-signatures-block {
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 1.5px solid #c8d6cb;
+  page-break-inside: avoid;
+}
+
+.report-signatures-label {
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #4f7d33;
+  margin-bottom: 16px;
+}
+
+.report-signatures-row {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.report-signature-item {
+  flex: 1 1 160px;
+  max-width: 220px;
+  min-width: 130px;
+}
+
+.report-signature-canvas {
+  height: 70px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 2px;
+}
+
+.report-signature-img {
+  max-height: 66px;
+  max-width: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.report-signature-line-hr {
+  border: none;
+  border-bottom: 1.5px solid #1f2a26;
+  margin: 0 0 5px;
+}
+
+.report-signature-name {
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: #1f2a26;
+  line-height: 1.3;
+}
+
+.report-signature-detail {
+  font-size: 0.72rem;
+  color: #4d5e54;
+  line-height: 1.35;
+  margin-top: 1px;
+}
+
+.report-signature-date {
+  font-size: 0.68rem;
+  color: #7a8c7c;
+  margin-top: 3px;
+}
+
+@media print {
+  .report-signatures-block {
+    page-break-inside: avoid;
+  }
 }

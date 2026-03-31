@@ -1,0 +1,244 @@
+<%- include("../partials/head", { pageTitle }) %>
+<link href="/public/css/report-editor.css" rel="stylesheet" />
+<%
+  function formatDateOnly(value) {
+    if (!value) return "-";
+    const raw = String(value).trim();
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+    return "-";
+  }
+%>
+
+<section class="token-console">
+  <div class="card app-card token-hero-card">
+    <div class="card-body token-hero-body">
+      <div class="token-hero-copy">
+        <span class="token-hero-eyebrow">SERVICE REPORT</span>
+        <h1 class="h4 app-card-title mb-1">Equipe Tecnica e Instrumentos</h1>
+        <p class="text-muted mb-0">Cadastro global — vincule aos relatorios via Editar OS</p>
+      </div>
+      <div class="token-hero-actions">
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+      </div>
+    </div>
+  </div>
+
+  <% if (saved) { %><div class="alert alert-success mb-0">Dados salvos com sucesso.</div><% } %>
+
+  <div class="row g-3 mt-0">
+
+    <%# ========== EQUIPE TECNICA ========== %>
+    <div class="col-12 col-xl-6">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Equipe Tecnica</h2>
+
+          <form method="post" action="/admin/report-service/assets/technicians" class="row g-2 mb-4" id="technician-form">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+            <div class="col-12 col-sm-6">
+              <input type="text" class="form-control form-control-sm" name="name" placeholder="Nome *" required id="techName" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <input type="text" class="form-control form-control-sm" name="role" placeholder="Funcao / Cargo" id="techRole" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <input type="text" class="form-control form-control-sm" name="company" placeholder="Empresa" id="techCompany" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <input type="text" class="form-control form-control-sm" name="email" placeholder="E-mail" id="techEmail" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <input type="text" class="form-control form-control-sm" name="phone" placeholder="Telefone" id="techPhone" />
+            </div>
+            <div class="col-12 col-sm-6 d-flex align-items-center">
+              <div class="form-check mb-0">
+                <input class="form-check-input" type="checkbox" name="is_lead" id="techIsLead" />
+                <label class="form-check-label small" for="techIsLead">Lider de equipe</label>
+              </div>
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-primary btn-sm" type="submit" id="techSubmitBtn">Adicionar</button>
+              <button class="btn btn-outline-secondary btn-sm d-none" type="button" id="techCancelBtn">Cancelar</button>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table table-sm app-table mb-0">
+              <thead>
+                <tr><th>Nome</th><th>Funcao</th><th>Empresa</th><th>Lider</th><th>Acoes</th></tr>
+              </thead>
+              <tbody>
+                <% if (!technicians.length) { %>
+                  <tr><td colspan="5" class="text-center text-muted py-3">Nenhum tecnico cadastrado.</td></tr>
+                <% } %>
+                <% technicians.forEach((t) => { %>
+                  <tr>
+                    <td>
+                      <%= t.name %>
+                      <% if (t.email) { %><br /><small class="text-muted"><%= t.email %></small><% } %>
+                      <% if (t.phone) { %><br /><small class="text-muted"><%= t.phone %></small><% } %>
+                    </td>
+                    <td><%= t.role || "-" %></td>
+                    <td><%= t.company || "-" %></td>
+                    <td><%= t.is_lead ? "Sim" : "-" %></td>
+                    <td>
+                      <div class="d-flex gap-1">
+                        <button class="btn btn-outline-primary btn-sm" type="button" data-tech-edit
+                          data-id="<%= t.id %>" data-name="<%= t.name %>"
+                          data-role="<%= t.role || '' %>" data-company="<%= t.company || '' %>"
+                          data-email="<%= t.email || '' %>" data-phone="<%= t.phone || '' %>"
+                          data-is-lead="<%= t.is_lead ? 'true' : 'false' %>">Editar</button>
+                        <form method="post" action="/admin/report-service/assets/technicians/<%= t.id %>/delete" class="m-0" onsubmit="return confirm('Excluir tecnico?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%# ========== INSTRUMENTOS ========== %>
+    <div class="col-12 col-xl-6">
+      <div class="card app-card">
+        <div class="card-body">
+          <h2 class="h6 app-card-title mb-3">Instrumentos</h2>
+
+          <form method="post" action="/admin/report-service/assets/instruments" class="row g-2 mb-4" id="instrument-form">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+
+            <div class="col-12 col-sm-6">
+              <input type="text" class="form-control form-control-sm" name="name" placeholder="Nome do instrumento *" required id="instrName" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <input type="text" class="form-control form-control-sm" name="model" placeholder="Modelo" id="instrModel" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <input type="text" class="form-control form-control-sm" name="serial_number" placeholder="Numero de serie" id="instrSerial" />
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label small mb-0 text-muted">Validade calibracao</label>
+              <input type="date" class="form-control form-control-sm" name="calibration_due_date" id="instrCalDate" />
+            </div>
+            <div class="col-12">
+              <input type="text" class="form-control form-control-sm" name="notes" placeholder="Observacoes" id="instrNotes" />
+            </div>
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-primary btn-sm" type="submit" id="instrSubmitBtn">Adicionar</button>
+              <button class="btn btn-outline-secondary btn-sm d-none" type="button" id="instrCancelBtn">Cancelar</button>
+            </div>
+          </form>
+
+          <div class="table-responsive">
+            <table class="table table-sm app-table mb-0">
+              <thead>
+                <tr><th>Nome</th><th>Modelo</th><th>Serie</th><th>Val. Calibracao</th><th>Acoes</th></tr>
+              </thead>
+              <tbody>
+                <% if (!instruments.length) { %>
+                  <tr><td colspan="5" class="text-center text-muted py-3">Nenhum instrumento cadastrado.</td></tr>
+                <% } %>
+                <% instruments.forEach((instr) => { %>
+                  <tr>
+                    <td>
+                      <%= instr.name %>
+                      <% if (instr.notes) { %><br /><small class="text-muted"><%= instr.notes %></small><% } %>
+                    </td>
+                    <td><%= instr.model || "-" %></td>
+                    <td><%= instr.serial_number || "-" %></td>
+                    <td><%= formatDateOnly(instr.calibration_due_date) %></td>
+                    <td>
+                      <div class="d-flex gap-1">
+                        <button class="btn btn-outline-primary btn-sm" type="button" data-instr-edit
+                          data-id="<%= instr.id %>" data-name="<%= instr.name %>"
+                          data-model="<%= instr.model || '' %>" data-serial="<%= instr.serial_number || '' %>"
+                          data-cal-date="<%= instr.calibration_due_date ? String(instr.calibration_due_date).slice(0,10) : '' %>"
+                          data-notes="<%= instr.notes || '' %>">Editar</button>
+                        <form method="post" action="/admin/report-service/assets/instruments/<%= instr.id %>/delete" class="m-0" onsubmit="return confirm('Excluir instrumento?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<%- include("../partials/footer") %>
+
+<script>
+(function () {
+  var techForm = document.getElementById("technician-form");
+  var techSubmitBtn = document.getElementById("techSubmitBtn");
+  var techCancelBtn = document.getElementById("techCancelBtn");
+
+  function resetTechForm() {
+    techForm.action = "/admin/report-service/assets/technicians";
+    techForm.reset();
+    techSubmitBtn.textContent = "Adicionar";
+    techCancelBtn.classList.add("d-none");
+  }
+
+  document.querySelectorAll("[data-tech-edit]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var d = btn.dataset;
+      document.getElementById("techName").value = d.name || "";
+      document.getElementById("techRole").value = d.role || "";
+      document.getElementById("techCompany").value = d.company || "";
+      document.getElementById("techEmail").value = d.email || "";
+      document.getElementById("techPhone").value = d.phone || "";
+      document.getElementById("techIsLead").checked = d.isLead === "true";
+      techForm.action = "/admin/report-service/assets/technicians/" + d.id + "/update";
+      techSubmitBtn.textContent = "Salvar";
+      techCancelBtn.classList.remove("d-none");
+      techForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  if (techCancelBtn) techCancelBtn.addEventListener("click", resetTechForm);
+
+  var instrForm = document.getElementById("instrument-form");
+  var instrSubmitBtn = document.getElementById("instrSubmitBtn");
+  var instrCancelBtn = document.getElementById("instrCancelBtn");
+
+  function resetInstrForm() {
+    instrForm.action = "/admin/report-service/assets/instruments";
+    instrForm.reset();
+    instrSubmitBtn.textContent = "Adicionar";
+    instrCancelBtn.classList.add("d-none");
+  }
+
+  document.querySelectorAll("[data-instr-edit]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var d = btn.dataset;
+      document.getElementById("instrName").value = d.name || "";
+      document.getElementById("instrModel").value = d.model || "";
+      document.getElementById("instrSerial").value = d.serial || "";
+      document.getElementById("instrCalDate").value = d.calDate || "";
+      document.getElementById("instrNotes").value = d.notes || "";
+      instrForm.action = "/admin/report-service/assets/instruments/" + d.id + "/update";
+      instrSubmitBtn.textContent = "Salvar";
+      instrCancelBtn.classList.remove("d-none");
+      instrForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+
+  if (instrCancelBtn) instrCancelBtn.addEventListener("click", resetInstrForm);
+})();
+</script>

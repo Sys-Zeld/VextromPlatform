@@ -42,7 +42,7 @@
     ? window.reportSectionTitleFormats
     : ["font", "size", "color", "bold", "italic", "underline", "align", "link", "image"];
 
-  function buildImageToolbarHandler(quill) {
+  function buildImageToolbarHandler(quill, uploadUrl, csrfToken) {
     return function () {
       var input = document.createElement("input");
       input.setAttribute("type", "file");
@@ -56,6 +56,32 @@
           document.body.removeChild(input);
           return;
         }
+        if (uploadUrl && csrfToken) {
+          fetch(uploadUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": file.type || "application/octet-stream",
+              "x-file-name": encodeURIComponent(file.name),
+              "x-csrf-token": csrfToken
+            },
+            body: file
+          })
+            .then(function (resp) { return resp.json(); })
+            .then(function (json) {
+              if (json.ok && json.data && json.data.filePath) {
+                var imgSrc = "/docs/report/img/" + encodeURIComponent(json.data.filePath);
+                if (quill) {
+                  var range = quill.getSelection(true);
+                  var index = range && Number.isInteger(range.index) ? range.index : quill.getLength();
+                  quill.insertEmbed(index, "image", imgSrc, "user");
+                  quill.setSelection(index + 1, 0, "user");
+                }
+              }
+              document.body.removeChild(input);
+            })
+            .catch(function () { document.body.removeChild(input); });
+          return;
+        }
         var reader = new FileReader();
         reader.onload = function (event) {
           var imageUrl = String(event && event.target && event.target.result ? event.target.result : "");
@@ -63,15 +89,15 @@
             document.body.removeChild(input);
             return;
           }
-          var range = quill.getSelection(true);
-          var index = range && Number.isInteger(range.index) ? range.index : quill.getLength();
-          quill.insertEmbed(index, "image", imageUrl, "user");
-          quill.setSelection(index + 1, 0, "user");
+          var range = quill && quill.getSelection(true);
+          var index = range && Number.isInteger(range.index) ? range.index : (quill ? quill.getLength() : 0);
+          if (quill) {
+            quill.insertEmbed(index, "image", imageUrl, "user");
+            quill.setSelection(index + 1, 0, "user");
+          }
           document.body.removeChild(input);
         };
-        reader.onerror = function () {
-          document.body.removeChild(input);
-        };
+        reader.onerror = function () { document.body.removeChild(input); };
         reader.readAsDataURL(file);
       };
     };
@@ -121,24 +147,37 @@
     if (!hydrated) quill.setText("");
   }
 
+  function applyDefaultJustify(quill) {
+    var ops = (quill.getContents().ops || []);
+    var pos = 0;
+    ops.forEach(function (op) {
+      if (typeof op.insert === "string") {
+        for (var i = 0; i < op.insert.length; i++) {
+          if (op.insert[i] === "\n" && !(op.attributes && op.attributes.align)) {
+            quill.formatLine(pos, 1, "align", "justify", "silent");
+          }
+          pos++;
+        }
+      } else {
+        pos++;
+      }
+    });
+    quill.format("align", "justify", "silent");
+  }
+
   function ensureTagUi(editorEl) {
     var wrap = document.createElement("div");
     wrap.className = "report-tag-tools";
 
     var validationEl = document.createElement("div");
     validationEl.className = "report-tag-validation";
-    validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @timesheet, @equip=ID, @descricaodia=ID ou @descricaodia.";
+    validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @timesheet, @equipetecnica, @equip=ID, @descricaodia=ID, @descricaodia ou @conclusaogeral.";
     wrap.appendChild(validationEl);
-
-    var autocompleteEl = document.createElement("div");
-    autocompleteEl.className = "report-tag-autocomplete";
-    wrap.appendChild(autocompleteEl);
 
     editorEl.insertAdjacentElement("afterend", wrap);
     return {
       wrap: wrap,
-      validationEl: validationEl,
-      autocompleteEl: autocompleteEl
+      validationEl: validationEl
     };
   }
 
@@ -160,7 +199,7 @@
 
     if (!imageIds.length && !equipmentIds.length && !dailyLogIds.length) {
       ui.validationEl.classList.remove("error");
-      ui.validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @timesheet, @equip=ID, @descricaodia=ID ou @descricaodia.";
+      ui.validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @timesheet, @equipetecnica, @equip=ID, @descricaodia=ID, @descricaodia ou @conclusaogeral.";
       quill.container.classList.remove("report-tag-editor-invalid");
       return;
     }
@@ -185,95 +224,6 @@
     editorContainer.classList.remove("report-tag-editor-invalid");
   }
 
-  function getTypedTagContext(quill) {
-    var range = quill.getSelection();
-    if (!range || !Number.isInteger(range.index)) return null;
-    var before = quill.getText(0, range.index);
-    var match = before.match(/@img\s*=\s*(\d*)$/i);
-    if (match) {
-      return {
-        range: range,
-        typedDigits: match[1] || "",
-        matchedToken: match[0] || "",
-        tagType: "img"
-      };
-    }
-    match = before.match(/@equip\s*=\s*(\d*)$/i);
-    if (match) {
-      return {
-        range: range,
-        typedDigits: match[1] || "",
-        matchedToken: match[0] || "",
-        tagType: "equip"
-      };
-    }
-    match = before.match(/@descricaodia\s*=\s*(\d*)$/i);
-    if (!match) return null;
-    return {
-      range: range,
-      typedDigits: match[1] || "",
-      matchedToken: match[0] || "",
-      tagType: "descricaodia"
-    };
-  }
-
-  function renderAutocomplete(ui, quill, label) {
-    ui.autocompleteEl.innerHTML = "";
-    var ctx = getTypedTagContext(quill);
-    if (!ctx) return;
-
-    var typed = String(ctx.typedDigits || "");
-    var sourceIndex = ctx.tagType === "equip"
-      ? equipmentTagIndex
-      : ctx.tagType === "descricaodia"
-        ? dailyLogTagIndex
-        : tagImageIndex;
-    var candidates = sourceIndex
-      .filter(function (item) {
-        var id = String(item.id || "");
-        return typed ? id.indexOf(typed) === 0 : true;
-      })
-      .slice(0, 6);
-
-    if (!candidates.length) return;
-
-    candidates.forEach(function (item) {
-      var chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "report-tag-chip";
-      if (ctx.tagType === "equip") {
-        var equipLabel = item.tag || item.type || "";
-        chip.textContent = "@equip=" + item.id + (equipLabel ? " - " + equipLabel : "");
-      } else if (ctx.tagType === "descricaodia") {
-        var dateLabel = item.activityDate || "";
-        var dailyLabel = item.title || "";
-        chip.textContent = "@descricaodia=" + item.id + (dateLabel || dailyLabel ? " - " + [dateLabel, dailyLabel].filter(Boolean).join(" - ") : "");
-      } else {
-        chip.textContent = "@img=" + item.id + (item.caption ? " - " + item.caption : "");
-      }
-      chip.addEventListener("click", function () {
-        var currentRange = quill.getSelection() || ctx.range;
-        var before = quill.getText(0, currentRange.index);
-        var matcher = ctx.tagType === "equip"
-          ? /@equip\s*=\s*(\d*)$/i
-          : ctx.tagType === "descricaodia"
-            ? /@descricaodia\s*=\s*(\d*)$/i
-            : /@img\s*=\s*(\d*)$/i;
-        var currentMatch = before.match(matcher);
-        if (!currentMatch) return;
-        var token = currentMatch[0];
-        var start = currentRange.index - token.length;
-        quill.deleteText(start, token.length, "user");
-        var inserted = (ctx.tagType === "equip" ? "@equip=" : ctx.tagType === "descricaodia" ? "@descricaodia=" : "@img=") + item.id;
-        quill.insertText(start, inserted, "user");
-        quill.setSelection(start + inserted.length, 0, "user");
-        renderAutocomplete(ui, quill, label);
-        renderValidation(ui, quill, label);
-      });
-      ui.autocompleteEl.appendChild(chip);
-    });
-  }
-
   forms.forEach(function (formEl) {
     var contentEditorEl = formEl.querySelector("[data-quill-editor]");
     var titleEditorEl = formEl.querySelector("[data-quill-title-editor]");
@@ -291,6 +241,7 @@
     if (!contentEditorEl || !titleEditorEl || !deltaField || !htmlField || !textField || !titleDeltaField || !titleHtmlField || !titlePlainField || !titleTextField) return;
     var actionMatch = String(formEl.getAttribute("action") || "").match(/\/admin\/report-service\/orders\/(\d+)\/sections\/[^/]+$/);
     var sectionReviseEndpoint = actionMatch ? ("/admin/report-service/orders/" + actionMatch[1] + "/sections/revise-text") : "";
+    var imgUploadUrl = actionMatch ? ("/admin/report-service/orders/" + actionMatch[1] + "/images/import") : "";
 
     var contentModules = {
       toolbar: {
@@ -326,9 +277,10 @@
     });
     var contentToolbarModule = contentQuill.getModule("toolbar");
     if (contentToolbarModule && contentToolbarModule.handlers) {
-      contentToolbarModule.handlers.image = buildImageToolbarHandler(contentQuill);
+      contentToolbarModule.handlers.image = buildImageToolbarHandler(contentQuill, imgUploadUrl, csrfToken);
     }
     hydrateQuill(contentQuill, deltaField.value, htmlField.value);
+    applyDefaultJustify(contentQuill);
     var contentTagUi = ensureTagUi(contentEditorEl);
 
     var titleQuill = new window.Quill(titleEditorEl, {
@@ -346,22 +298,19 @@
     });
     var titleToolbarModule = titleQuill.getModule("toolbar");
     if (titleToolbarModule && titleToolbarModule.handlers) {
-      titleToolbarModule.handlers.image = buildImageToolbarHandler(titleQuill);
+      titleToolbarModule.handlers.image = buildImageToolbarHandler(titleQuill, imgUploadUrl, csrfToken);
     }
     hydrateQuill(titleQuill, titleDeltaField.value, titleHtmlField.value || titleTextField.value);
+    applyDefaultJustify(titleQuill);
     var titleTagUi = ensureTagUi(titleEditorEl);
 
     function syncTagStates() {
       renderValidation(contentTagUi, contentQuill, "conteudo");
       renderValidation(titleTagUi, titleQuill, "titulo");
-      renderAutocomplete(contentTagUi, contentQuill, "conteudo");
-      renderAutocomplete(titleTagUi, titleQuill, "titulo");
     }
 
     contentQuill.on("text-change", syncTagStates);
     titleQuill.on("text-change", syncTagStates);
-    contentQuill.on("selection-change", function () { renderAutocomplete(contentTagUi, contentQuill, "conteudo"); });
-    titleQuill.on("selection-change", function () { renderAutocomplete(titleTagUi, titleQuill, "titulo"); });
     syncTagStates();
 
     if (aiReviseBtn) {

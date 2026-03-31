@@ -110,6 +110,7 @@
       <div class="token-hero-actions">
         <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/spare-parts">Spare-Parts</a>
       </div>
     </div>
   </div>
@@ -143,7 +144,7 @@
       return { id: item.id, name: item.name || "-" };
     })).replace(/</g, "\\u003c") %>;
     var sites = <%- JSON.stringify((sites || []).map(function (item) {
-      return { id: item.id, site_name: item.site_name || "-" };
+      return { id: item.id, customer_id: item.customer_id, site_name: item.site_name || "-" };
     })).replace(/</g, "\\u003c") %>;
     var equipments = <%- JSON.stringify((equipments || []).map(function (item) {
       return {
@@ -215,10 +216,18 @@
       return base + options;
     }
 
-    function buildSiteOptions(currentValue) {
+    function buildSiteOptions(currentValue, customerId) {
       var normalizedCurrent = String(currentValue || "");
-      var base = "<option value=\"\">Selecione o site</option>";
-      var options = sites.map(function (item) {
+      var normalizedCustomerId = Number(customerId);
+      var filteredSites = Number.isInteger(normalizedCustomerId) && normalizedCustomerId > 0
+        ? sites.filter(function (item) { return Number(item.customer_id) === normalizedCustomerId; })
+        : [];
+      var baseLabel = "Selecione o cliente primeiro";
+      if (normalizedCustomerId > 0) {
+        baseLabel = filteredSites.length ? "Selecione o site" : "Nenhum site para este cliente";
+      }
+      var base = "<option value=\"\">" + escapeHtml(baseLabel) + "</option>";
+      var options = filteredSites.map(function (item) {
         var value = String(item.id || "");
         var selected = value === normalizedCurrent ? " selected" : "";
         return "<option value=\"" + escapeHtml(value) + "\"" + selected + ">" + escapeHtml(item.site_name || "-") + "</option>";
@@ -421,7 +430,7 @@
           return {
             id: escapeHtml(row.id),
             customer: "<select id=\"eq-" + escapeHtml(row.id) + "-customer_id\" class=\"form-select form-select-sm\"" + disabled + ">" + buildCustomerOptions(row.customer_id) + "</select>",
-            site: "<select id=\"eq-" + escapeHtml(row.id) + "-site_id\" class=\"form-select form-select-sm\"" + disabled + ">" + buildSiteOptions(row.site_id) + "</select>",
+            site: "<select id=\"eq-" + escapeHtml(row.id) + "-site_id\" class=\"form-select form-select-sm\"" + disabled + ">" + buildSiteOptions(row.site_id, row.customer_id) + "</select>",
             type: "<input id=\"eq-" + escapeHtml(row.id) + "-type\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.type || "") + "\"" + disabled + " />",
             year: "<input id=\"eq-" + escapeHtml(row.id) + "-year_of_manufacture\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.year_of_manufacture || "") + "\"" + disabled + " />",
             serial: "<input id=\"eq-" + escapeHtml(row.id) + "-serial_number\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.serial_number || "") + "\"" + disabled + " />",
@@ -586,6 +595,31 @@
       var removeBtn = event.target.closest("[data-remove-equipment]");
       if (!removeBtn) return;
       removeInlineEquipment(String(removeBtn.getAttribute("data-remove-equipment") || ""));
+    });
+
+    document.addEventListener("change", function (event) {
+      var customerSelect = event.target.closest("select[id^='eq-'][id$='-customer_id']");
+      if (!customerSelect) return;
+      var match = String(customerSelect.id || "").match(/^eq-(.+)-customer_id$/);
+      if (!match) return;
+      var equipmentId = match[1];
+      var row = findRowById(equipmentId);
+      if (!row) return;
+      row.customer_id = String(customerSelect.value || "");
+
+      var siteSelect = document.getElementById("eq-" + equipmentId + "-site_id");
+      if (!siteSelect) return;
+      var previousSiteId = String(siteSelect.value || "");
+      siteSelect.innerHTML = buildSiteOptions(previousSiteId, row.customer_id);
+      var hasPreviousOption = Array.from(siteSelect.options).some(function (option) {
+        return String(option.value || "") === previousSiteId;
+      });
+      if (!hasPreviousOption) {
+        siteSelect.value = "";
+        row.site_id = "";
+      } else {
+        row.site_id = previousSiteId;
+      }
     });
   })();
 </script>

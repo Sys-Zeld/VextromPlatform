@@ -48,6 +48,12 @@ async function createOrder(input = {}) {
     err.statusCode = 404;
     throw err;
   }
+  const siteId = repo.toInt(input.siteId);
+  if (!siteId) {
+    const err = new Error("OS requer site.");
+    err.statusCode = 422;
+    throw err;
+  }
   const year = Number(input.year || new Date().getFullYear());
   const sequence = await repo.getOrderCodeSequence(year);
   const serviceOrderCode = buildOrderCode(customer.name, year, sequence);
@@ -65,6 +71,14 @@ async function createOrder(input = {}) {
     updatedBy: sanitizeText(input.updatedBy)
   });
 
+  // After a successful creation, move the configured sequence forward.
+  // This keeps the manual initialization as a starting point only.
+  try {
+    await repo.setOrderCodeSeed(year, Number(sequence) + 1);
+  } catch (_err) {
+    // Do not block OS creation if seed persistence fails.
+  }
+
   await ensureReportForOrder(created.id, created.title);
   return repo.getOrderById(created.id);
 }
@@ -76,7 +90,9 @@ async function updateOrder(id, input = {}) {
     err.statusCode = 404;
     throw err;
   }
-  const customerId = repo.toInt(input.customerId || existing.customer_id);
+  const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+  const customerId = repo.toInt(hasOwn(input, "customerId") ? input.customerId : existing.customer_id);
+  const siteId = repo.toInt(hasOwn(input, "siteId") ? input.siteId : existing.site_id);
   if (!customerId) {
     const err = new Error("OS requer cliente.");
     err.statusCode = 422;
@@ -84,7 +100,7 @@ async function updateOrder(id, input = {}) {
   }
   const updated = await repo.updateOrder(id, {
     customerId,
-    siteId: repo.toInt(input.siteId || existing.site_id),
+    siteId,
     title: sanitizeText(input.title || existing.title),
     description: sanitizeText(input.description || existing.description),
     status: ensureStatus(input.status || existing.status, ORDER_STATUSES, "draft"),
@@ -122,11 +138,15 @@ async function createSite(input = {}) {
     err.statusCode = 422;
     throw err;
   }
+  const latitude = input.latitude !== "" && input.latitude != null ? Number(input.latitude) : null;
+  const longitude = input.longitude !== "" && input.longitude != null ? Number(input.longitude) : null;
   return repo.createSite({
     customerId,
     siteName,
     siteCode: sanitizeText(input.siteCode),
     location: sanitizeText(input.location),
+    latitude: Number.isFinite(latitude) ? latitude : null,
+    longitude: Number.isFinite(longitude) ? longitude : null,
     notes: sanitizeText(input.notes)
   });
 }
@@ -356,7 +376,7 @@ async function createSignature(reportId, input = {}) {
     err.statusCode = 422;
     throw err;
   }
-  return repo.createSignature({
+  const created = await repo.createSignature({
     serviceReportId: reportId,
     signerType,
     signerName,
@@ -365,6 +385,20 @@ async function createSignature(reportId, input = {}) {
     signatureData: sanitizeText(input.signatureData),
     signatureFilePath: sanitizeText(input.signatureFilePath)
   });
+  if (signerType === "customer_responsible") {
+    const report = await repo.getReportById(reportId);
+    if (report && report.service_order_id) {
+      try {
+        await updateOrder(report.service_order_id, {
+          status: "approved",
+          updatedBy: sanitizeText(input.updatedBy) || "customer-signature"
+        });
+      } catch (_err) {
+        // keep signature recorded even if order status update fails
+      }
+    }
+  }
+  return created;
 }
 
 async function buildReportAggregate(serviceReportId) {

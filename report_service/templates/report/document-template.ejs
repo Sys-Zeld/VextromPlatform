@@ -79,6 +79,10 @@
   </section>
 
   <% (orderedVisibleSections || []).forEach((section, index) => { %>
+    <%
+      const isLastSection = index === (orderedVisibleSections || []).length - 1;
+      const validSigs = isLastSection ? (signatures || []).filter(function(s) { return s.signer_name || s.signature_data; }) : [];
+    %>
     <section
       class="report-page"
       data-auto-paginate="true"
@@ -107,6 +111,30 @@
         <div class="rich-output">
           <%- section.content_html_preview || section.content_html || "<p><br></p>" %>
         </div>
+
+        <% if (validSigs.length > 0) { %>
+          <div class="report-signatures-block">
+            <div class="report-signatures-label">ASSINATURAS</div>
+            <div class="report-signatures-row">
+              <% validSigs.forEach(function(sig) { %>
+                <div class="report-signature-item">
+                  <div class="report-signature-canvas">
+                    <% if (sig.signature_data && sig.signature_data.indexOf('data:') === 0) { %>
+                      <img class="report-signature-img" src="<%= sig.signature_data %>" alt="Assinatura" />
+                    <% } %>
+                  </div>
+                  <div class="report-signature-line-hr"></div>
+                  <div class="report-signature-meta">
+                    <div class="report-signature-name"><%= sig.signer_name || '-' %></div>
+                    <% if (sig.signer_role) { %><div class="report-signature-detail"><%= sig.signer_role %></div><% } %>
+                    <% if (sig.signer_company) { %><div class="report-signature-detail"><%= sig.signer_company %></div><% } %>
+                    <% if (sig.signed_at) { %><div class="report-signature-date"><%= new Date(sig.signed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) %></div><% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
       </div>
     </section>
   <% }) %>

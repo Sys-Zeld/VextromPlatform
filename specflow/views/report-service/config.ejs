@@ -16,9 +16,9 @@
   <div class="alert alert-success">Configuracoes salvas com sucesso.</div>
 <% } %>
 
-<section class="card app-card">
+<section class="card app-card mb-3">
   <div class="card-body">
-    <form method="post" action="/admin/report-service/config" class="row g-3">
+    <form method="post" action="/admin/report-service/config" class="row g-3" id="config-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
 
       <div class="col-12 col-lg-4">
@@ -31,21 +31,134 @@
         <div class="form-text">Cada template possui rota/codigo de renderizacao proprio no preview HTML.</div>
       </div>
 
+      <!-- Logo Vextrom -->
       <div class="col-12 col-lg-4">
-        <label class="form-label">Logo Vextrom (URL ou caminho publico)</label>
-        <input class="form-control" name="logo_vextrom" value="<%= reportConfig.logoVextrom || '' %>" placeholder="/public/img/logo-vextrom.svg" />
+        <label class="form-label">Logo Vextrom</label>
+
+        <% if (reportConfig.logoVextrom) { %>
+          <div class="mb-2 p-2 border rounded text-center" style="background:var(--app-bg,#f8f9fa);min-height:60px">
+            <img id="preview-vextrom"
+                 src="<%= reportConfig.logoVextrom %>"
+                 alt="Logo Vextrom"
+                 style="max-height:56px;max-width:100%;object-fit:contain"
+                 onerror="this.style.display='none';document.getElementById('preview-vextrom-empty').style.display='block'" />
+            <span id="preview-vextrom-empty" class="text-muted small" style="display:none">Nao foi possivel carregar a imagem</span>
+          </div>
+        <% } else { %>
+          <div class="mb-2 p-2 border rounded text-center" style="background:var(--app-bg,#f8f9fa);min-height:60px">
+            <img id="preview-vextrom" src="" alt="" style="max-height:56px;max-width:100%;object-fit:contain;display:none" />
+            <span id="preview-vextrom-empty" class="text-muted small">Nenhuma logo definida</span>
+          </div>
+        <% } %>
+
+        <div class="input-group mb-1">
+          <input class="form-control form-control-sm" id="input-logo-vextrom" name="logo_vextrom"
+                 value="<%= reportConfig.logoVextrom || '' %>" placeholder="/public/img/logo-vextrom.svg" />
+          <label class="btn btn-outline-secondary btn-sm" for="file-vextrom" title="Importar arquivo de logo">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+              <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+            </svg>
+            Importar
+          </label>
+          <input type="file" id="file-vextrom" accept=".svg,.png,.jpg,.jpeg" class="d-none"
+                 onchange="handleLogoUpload('vextrom', this)" />
+        </div>
+        <div id="status-vextrom" class="form-text">PNG, JPG ou SVG — max 5 MB. Ou informe uma URL/caminho publico.</div>
       </div>
 
+      <!-- Logo Chloride -->
       <div class="col-12 col-lg-4">
-        <label class="form-label">Logo Chloride (URL ou caminho publico)</label>
-        <input class="form-control" name="logo_chloride" value="<%= reportConfig.logoChloride || '' %>" placeholder="https://..." />
+        <label class="form-label">Logo Chloride</label>
+
+        <% if (reportConfig.logoChloride) { %>
+          <div class="mb-2 p-2 border rounded text-center" style="background:var(--app-bg,#f8f9fa);min-height:60px">
+            <img id="preview-chloride"
+                 src="<%= reportConfig.logoChloride %>"
+                 alt="Logo Chloride"
+                 style="max-height:56px;max-width:100%;object-fit:contain"
+                 onerror="this.style.display='none';document.getElementById('preview-chloride-empty').style.display='block'" />
+            <span id="preview-chloride-empty" class="text-muted small" style="display:none">Nao foi possivel carregar a imagem</span>
+          </div>
+        <% } else { %>
+          <div class="mb-2 p-2 border rounded text-center" style="background:var(--app-bg,#f8f9fa);min-height:60px">
+            <img id="preview-chloride" src="" alt="" style="max-height:56px;max-width:100%;object-fit:contain;display:none" />
+            <span id="preview-chloride-empty" class="text-muted small">Nenhuma logo definida</span>
+          </div>
+        <% } %>
+
+        <div class="input-group mb-1">
+          <input class="form-control form-control-sm" id="input-logo-chloride" name="logo_chloride"
+                 value="<%= reportConfig.logoChloride || '' %>" placeholder="https://... ou /public/img/..." />
+          <label class="btn btn-outline-secondary btn-sm" for="file-chloride" title="Importar arquivo de logo">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+              <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+            </svg>
+            Importar
+          </label>
+          <input type="file" id="file-chloride" accept=".svg,.png,.jpg,.jpeg" class="d-none"
+                 onchange="handleLogoUpload('chloride', this)" />
+        </div>
+        <div id="status-chloride" class="form-text">PNG, JPG ou SVG — max 5 MB. Ou informe uma URL/caminho publico.</div>
       </div>
 
       <div class="col-12 d-flex justify-content-end">
-        <button class="btn btn-primary btn-sm" type="submit">Salvar configuracao padrao</button>
+        <button class="btn btn-primary btn-sm" type="submit" id="btn-save">Salvar configuracao padrao</button>
       </div>
     </form>
   </div>
 </section>
+
+<script>
+async function handleLogoUpload(brand, fileInput) {
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  const csrfToken = document.querySelector('#config-form input[name="_csrf"]').value;
+  const statusEl = document.getElementById('status-' + brand);
+  const pathInput = document.getElementById('input-logo-' + brand);
+  const previewImg = document.getElementById('preview-' + brand);
+  const previewEmpty = document.getElementById('preview-' + brand + '-empty');
+  const btnSave = document.getElementById('btn-save');
+
+  statusEl.textContent = 'Enviando...';
+  statusEl.className = 'form-text text-muted';
+  btnSave.disabled = true;
+
+  try {
+    const resp = await fetch('/admin/report-service/config/logo-upload', {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'x-file-name': encodeURIComponent(file.name),
+        'x-logo-brand': brand,
+        'x-csrf-token': csrfToken
+      },
+      body: file
+    });
+
+    const json = await resp.json();
+
+    if (json.ok) {
+      pathInput.value = json.data.filePath;
+      previewImg.src = json.data.filePath;
+      previewImg.style.display = 'block';
+      if (previewEmpty) previewEmpty.style.display = 'none';
+      statusEl.textContent = 'Upload concluido. Clique em "Salvar" para confirmar.';
+      statusEl.className = 'form-text text-success';
+    } else {
+      statusEl.textContent = json.error || 'Erro no upload.';
+      statusEl.className = 'form-text text-danger';
+    }
+  } catch (err) {
+    statusEl.textContent = 'Erro ao enviar arquivo.';
+    statusEl.className = 'form-text text-danger';
+  } finally {
+    btnSave.disabled = false;
+    fileInput.value = '';
+  }
+}
+</script>
 
 <%- include("../partials/footer") %>
