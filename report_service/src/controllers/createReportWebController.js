@@ -294,6 +294,22 @@ function createReportWebController(deps) {
         repo.listSites()
       ]);
       const ordersView = orders.map((order) => withServiceOrderDisplay(order));
+      const orderIds = ordersView
+        .map((order) => Number(order.id))
+        .filter((id) => Number.isInteger(id) && id > 0);
+      const technicianLinks = await repo.listOrderTechnicianLinks(orderIds);
+      const orderTechnicianIdsByOrder = technicianLinks.reduce((acc, row) => {
+        const orderId = Number(row.order_id);
+        const techId = Number(row.technician_id);
+        if (!Number.isInteger(orderId) || orderId <= 0 || !Number.isInteger(techId) || techId <= 0) {
+          return acc;
+        }
+        if (!Array.isArray(acc[orderId])) {
+          acc[orderId] = [];
+        }
+        acc[orderId].push(techId);
+        return acc;
+      }, {});
       return res.render("report-service/orders", {
         pageTitle: "Service Report - Ordens de Servico",
         orders: ordersView,
@@ -301,7 +317,11 @@ function createReportWebController(deps) {
         sites,
         allGlobalTechnicians,
         created: req.query.created === "1",
+        updated: req.query.updated === "1",
+        editLocked: req.query.edit_locked === "1",
+        updateError: req.query.update_error === "1",
         deleted: req.query.deleted === "1",
+        orderTechnicianIdsByOrder,
         csrfToken: req.csrfToken()
       });
     },
@@ -324,6 +344,36 @@ function createReportWebController(deps) {
       return res.redirect("/admin/report-service/orders?created=1");
     },
 
+    async updateOrderRegistration(req, res) {
+      const orderId = Number(req.params.id);
+      const order = await repo.getOrderById(orderId);
+      if (!order) return res.status(404).send("OS nao encontrada.");
+      if (isOrderApproved(order)) {
+        return res.redirect("/admin/report-service/orders?edit_locked=1");
+      }
+
+      const techIds = [].concat(req.body["technician_ids[]"] || req.body.technician_ids || [])
+        .map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0);
+      const uniqueTechIds = Array.from(new Set(techIds));
+      if (!uniqueTechIds.length) {
+        return res.redirect("/admin/report-service/orders?update_error=1");
+      }
+
+      await service.updateOrder(orderId, {
+        customerId: order.customer_id,
+        siteId: order.site_id,
+        title: sanitizeInput(req.body.title),
+        description: sanitizeInput(req.body.description),
+        status: order.status,
+        openingDate: order.opening_date,
+        closingDate: order.closing_date,
+        updatedBy: res.locals.adminUsername || ""
+      });
+      await repo.replaceTechniciansByOrder(orderId, uniqueTechIds);
+      return res.redirect("/admin/report-service/orders?updated=1");
+    },
+
     async deleteOrder(req, res) {
       const orderId = Number(req.params.id);
       const deleted = await repo.deleteOrder(orderId);
@@ -343,6 +393,7 @@ function createReportWebController(deps) {
         created: req.query.created === "1",
         saved: req.query.saved === "1",
         deleted: req.query.deleted === "1",
+        deleteBlocked: req.query.delete_blocked === "1",
         csrfToken: req.csrfToken()
       });
     },
@@ -396,8 +447,15 @@ function createReportWebController(deps) {
 
     async deleteCustomer(req, res) {
       const id = Number(req.params.id);
-      await repo.deleteCustomer(id);
-      return res.redirect("/admin/report-service/customers?deleted=1");
+      try {
+        await repo.deleteCustomer(id);
+        return res.redirect("/admin/report-service/customers?deleted=1");
+      } catch (err) {
+        if (err && err.code === "23503") {
+          return res.redirect("/admin/report-service/customers?delete_blocked=1");
+        }
+        throw err;
+      }
     },
 
     async deleteSite(req, res) {
@@ -908,6 +966,7 @@ function createReportWebController(deps) {
         pageTitle: `Assinar Relatorio - ${orderView.service_order_display || orderView.service_order_code || "-"}`,
         order: orderView,
         report: data.report,
+        technicians: data.technicians || [],
         signatures: vextromSignatures,
         signed: req.query.signed === "1",
         signError: req.query.error === "1",
@@ -1428,6 +1487,23 @@ function createReportWebController(deps) {
         notes: req.body.notes,
         sortOrder: req.body.sort_order
       });
+      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+    },
+
+    async deleteComponent(req, res) {
+      const orderId = Number(req.params.id);
+      if (!await ensureOrderEditable(req, res, orderId)) return;
+      const componentId = Number(req.params.componentId);
+      if (!Number.isInteger(componentId) || componentId <= 0) {
+        return res.status(422).send("Componente invalido.");
+      }
+      const report = await service.ensureReportForOrder(orderId);
+      const components = await repo.listComponents(report.id);
+      const exists = components.some((item) => Number(item.id) === componentId);
+      if (!exists) {
+        return res.status(404).send("Componente nao encontrado nesta OS.");
+      }
+      await repo.deleteComponent(componentId);
       return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
     },
 

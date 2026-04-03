@@ -352,15 +352,21 @@
 
           <div class="table-responsive mt-3">
             <table class="table table-sm app-table mb-0">
-              <thead><tr><th>Categoria</th><th>Descricao</th><th>P/N</th><th>Qtd</th></tr></thead>
+              <thead><tr><th>Categoria</th><th>Descricao</th><th>P/N</th><th>Qtd</th><th>Acoes</th></tr></thead>
               <tbody>
-                <% if (!components.length) { %><tr><td colspan="4" class="text-center text-muted py-3">Sem componentes.</td></tr><% } %>
+                <% if (!components.length) { %><tr><td colspan="5" class="text-center text-muted py-3">Sem componentes.</td></tr><% } %>
                 <% components.forEach((item) => { %>
                   <tr>
                     <td><%= item.category %></td>
                     <td><%= item.description %></td>
                     <td><%= item.part_number || "-" %></td>
                     <td><%= item.quantity %></td>
+                    <td>
+                      <form method="post" action="/admin/report-service/orders/<%= order.id %>/components/<%= item.id %>/delete" class="m-0" onsubmit="return confirm('Excluir este spare/componente da OS?');">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                        <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                      </form>
+                    </td>
                   </tr>
                 <% }) %>
               </tbody>

@@ -60,6 +60,7 @@
   <% if (created) { %><div class="alert alert-success mb-0">Cadastro salvo com sucesso.</div><% } %>
   <% if (saved) { %><div class="alert alert-success mb-0">Registro atualizado com sucesso.</div><% } %>
   <% if (deleted) { %><div class="alert alert-success mb-0">Registro excluido com sucesso.</div><% } %>
+  <% if (deleteBlocked) { %><div class="alert alert-danger mb-0">Site cadastrado em OS, não é possível excluir.</div><% } %>
 
   <!-- Modal editar cliente -->
   <div class="modal fade" id="editCustomerModal" tabindex="-1">

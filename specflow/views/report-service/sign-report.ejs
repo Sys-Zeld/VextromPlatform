@@ -27,9 +27,26 @@
           <h2 class="h6 app-card-title mb-3">Assinar relatorio (Tecnico Vextrom)</h2>
           <form method="post" action="/admin/report-service/orders/<%= order.id %>/sign-report" class="row g-2">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-            <div class="col-12 col-md-6"><input class="form-control" name="signer_name" placeholder="Nome do tecnico" required /></div>
-            <div class="col-12 col-md-6"><input class="form-control" name="signer_role" placeholder="Cargo / Funcao" /></div>
-            <div class="col-12"><input class="form-control" name="signer_company" value="Vextrom" placeholder="Empresa" /></div>
+            <div class="col-12">
+              <label class="form-label">Tecnicos associados na OS</label>
+              <select class="form-select" id="linkedTechnicianSelect">
+                <option value="">Selecione um tecnico da OS</option>
+                <% (technicians || []).forEach((tech) => { %>
+                  <option
+                    value="<%= tech.name || '' %>"
+                    data-role="<%= tech.role || '' %>"
+                    data-company="<%= tech.company || '' %>">
+                    <%= tech.name || "-" %><% if (tech.role) { %> - <%= tech.role %><% } %><% if (tech.company) { %> (<%= tech.company %>)<% } %>
+                  </option>
+                <% }) %>
+              </select>
+              <% if (!(technicians || []).length) { %>
+                <div class="form-text text-warning">Nao ha tecnicos associados a esta OS.</div>
+              <% } %>
+            </div>
+            <div class="col-12 col-md-6"><input class="form-control" name="signer_name" id="signerNameInput" placeholder="Nome do tecnico" required /></div>
+            <div class="col-12 col-md-6"><input class="form-control" name="signer_role" id="signerRoleInput" placeholder="Cargo / Funcao" /></div>
+            <div class="col-12"><input class="form-control" name="signer_company" id="signerCompanyInput" value="Vextrom" placeholder="Empresa" /></div>
             <div class="col-12">
               <label class="form-label">Assinatura (canvas)</label>
               <canvas id="signatureCanvas" width="680" height="180" class="w-100 border rounded bg-white"></canvas>
@@ -84,6 +101,10 @@
     var outputInput = document.getElementById("signatureDataInput");
     var clearBtn = document.getElementById("signatureClearBtn");
     var useBtn = document.getElementById("signatureUseBtn");
+    var linkedTechnicianSelect = document.getElementById("linkedTechnicianSelect");
+    var signerNameInput = document.getElementById("signerNameInput");
+    var signerRoleInput = document.getElementById("signerRoleInput");
+    var signerCompanyInput = document.getElementById("signerCompanyInput");
     if (!canvas || !outputInput || !clearBtn || !useBtn) return;
 
     var ctx = canvas.getContext("2d");
@@ -143,6 +164,20 @@
     useBtn.addEventListener("click", function () {
       outputInput.value = canvas.toDataURL("image/png");
     });
+
+    if (linkedTechnicianSelect && signerNameInput) {
+      linkedTechnicianSelect.addEventListener("change", function () {
+        var selected = linkedTechnicianSelect.options[linkedTechnicianSelect.selectedIndex];
+        if (!selected || !selected.value) return;
+        signerNameInput.value = selected.value || "";
+        if (signerRoleInput && selected.getAttribute("data-role")) {
+          signerRoleInput.value = selected.getAttribute("data-role") || "";
+        }
+        if (signerCompanyInput && selected.getAttribute("data-company")) {
+          signerCompanyInput.value = selected.getAttribute("data-company") || signerCompanyInput.value;
+        }
+      });
+    }
   })();
 </script>
 

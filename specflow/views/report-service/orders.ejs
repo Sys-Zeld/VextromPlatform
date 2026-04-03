@@ -145,7 +145,56 @@
   </div>
 
   <% if (created) { %><div class="alert alert-success mb-0">OS criada com sucesso.</div><% } %>
+  <% if (updated) { %><div class="alert alert-success mb-0">Cadastro da OS atualizado com sucesso.</div><% } %>
+  <% if (updateError) { %><div class="alert alert-danger mb-0">Nao foi possivel salvar: adicione ao menos 1 tecnico na equipe.</div><% } %>
+  <% if (editLocked) { %><div class="alert alert-warning mb-0">OS aprovada. Edicao bloqueada. Use Revalidar OS para liberar.</div><% } %>
   <% if (deleted) { %><div class="alert alert-success mb-0">OS removida com sucesso.</div><% } %>
+
+  <div class="modal fade" id="editOrderRegistrationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <form method="post" id="editOrderRegistrationForm" class="modal-form">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+          <div class="modal-header">
+            <h5 class="modal-title">Editar cadastro da OS</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body row g-2">
+            <div class="col-12">
+              <label class="form-label">Titulo</label>
+              <input class="form-control" name="title" id="editOrderTitleInput" required />
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descricao</label>
+              <textarea class="form-control" name="description" id="editOrderDescriptionInput" rows="3"></textarea>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Equipe tecnica <span class="text-danger">*</span></label>
+              <% if (!(allGlobalTechnicians || []).length) { %>
+                <div class="alert alert-warning py-2 mb-0">Nenhum tecnico no cadastro global. <a href="/admin/report-service/assets">Cadastre tecnicos aqui.</a></div>
+              <% } else { %>
+                <div class="d-flex gap-2 mb-2">
+                  <select class="form-select" id="editOrderTechSelect">
+                    <option value="">Selecione tecnico para adicionar</option>
+                    <% (allGlobalTechnicians || []).forEach(function(t) { %>
+                      <option value="<%= t.id %>"><%= t.name %><% if (t.role) { %> â€” <%= t.role %><% } %><% if (t.company) { %> (<%= t.company %>)<% } %></option>
+                    <% }); %>
+                  </select>
+                  <button class="btn btn-outline-primary btn-sm" type="button" id="editOrderAddTechBtn" style="white-space:nowrap">Adicionar</button>
+                </div>
+              <% } %>
+              <div id="editOrderTechList"></div>
+              <div class="form-text text-danger d-none" id="editOrderTechRequired">Adicione ao menos 1 tecnico.</div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary btn-sm">Salvar alteracoes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <div class="card app-card">
     <div class="card-body">
@@ -222,14 +271,17 @@
 <script>
   (function () {
     var csrfToken = <%- JSON.stringify(csrfToken || "") %>;
+    var orderTechnicianIdsByOrder = <%- JSON.stringify(orderTechnicianIdsByOrder || {}).replace(/</g, "\\u003c") %>;
     var orders = <%- JSON.stringify((orders || []).map(function (order) {
       return {
         id: order.id,
         code: order.service_order_display || "-",
         title: order.title || "-",
+        description: order.description || "",
         customer: order.customer_name || "-",
         site: order.site_name || "-",
-        status: order.status || "-"
+        status: order.status || "-",
+        technicianIds: (orderTechnicianIdsByOrder[String(order.id)] || []).map(function(id) { return Number(id); }).filter(function(id) { return Number.isInteger(id) && id > 0; })
       };
     })).replace(/</g, "\\u003c") %>;
 
@@ -246,6 +298,7 @@
       var idSafe = encodeURIComponent(String(order.id || ""));
       return ""
         + "<div class=\"orders-actions\">"
+        + "<button class=\"btn btn-outline-secondary btn-sm\" type=\"button\" data-order-edit=\"1\" data-order-id=\"" + idSafe + "\">Editar cadastro</button>"
         + "<a class=\"btn btn-outline-primary btn-sm\" href=\"/admin/report-service/orders/" + idSafe + "\">Abrir Editor</a>"
         + "<form method=\"post\" action=\"/admin/report-service/orders/" + idSafe + "/delete\" class=\"m-0\" onsubmit=\"return confirm('Excluir esta OS e todos os dados vinculados?');\">"
         + "<input type=\"hidden\" name=\"_csrf\" value=\"" + escapeHtml(csrfToken) + "\" />"
@@ -318,6 +371,119 @@
         summary: false
       }
     }).render(gridTarget);
+
+    var editModalEl = document.getElementById("editOrderRegistrationModal");
+    var editForm = document.getElementById("editOrderRegistrationForm");
+    var editTitleInput = document.getElementById("editOrderTitleInput");
+    var editDescriptionInput = document.getElementById("editOrderDescriptionInput");
+    var editTechSelect = document.getElementById("editOrderTechSelect");
+    var editAddTechBtn = document.getElementById("editOrderAddTechBtn");
+    var editTechList = document.getElementById("editOrderTechList");
+    var editTechRequired = document.getElementById("editOrderTechRequired");
+    var selectedTechIds = [];
+
+    function getOrderById(orderId) {
+      var target = String(orderId || "");
+      for (var i = 0; i < orders.length; i += 1) {
+        if (String(orders[i].id) === target) return orders[i];
+      }
+      return null;
+    }
+
+    function getTechLabelById(techId) {
+      if (!editTechSelect || !editTechSelect.options) return "Tecnico #" + String(techId);
+      for (var i = 0; i < editTechSelect.options.length; i += 1) {
+        var opt = editTechSelect.options[i];
+        if (String(opt.value) === String(techId)) return opt.text || ("Tecnico #" + String(techId));
+      }
+      return "Tecnico #" + String(techId);
+    }
+
+    function refreshEditTechOptions() {
+      if (!editTechSelect || !editTechSelect.options) return;
+      var used = selectedTechIds.map(function(id) { return String(id); });
+      Array.prototype.forEach.call(editTechSelect.options, function(opt) {
+        if (!opt.value) return;
+        opt.disabled = used.indexOf(String(opt.value)) !== -1;
+      });
+    }
+
+    function renderEditTechList() {
+      if (!editTechList) return;
+      editTechList.innerHTML = "";
+      if (!selectedTechIds.length) return;
+      var table = document.createElement("table");
+      table.className = "table table-sm app-table mb-0";
+      var tbody = document.createElement("tbody");
+      selectedTechIds.forEach(function(techId, idx) {
+        var tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + escapeHtml(getTechLabelById(techId)) + "</td>" +
+          "<td style=\"width:1%\">" +
+            "<input type=\"hidden\" name=\"technician_ids[]\" value=\"" + escapeHtml(String(techId)) + "\" />" +
+            "<button type=\"button\" class=\"btn btn-outline-danger btn-sm\" data-edit-tech-remove=\"" + String(idx) + "\">Remover</button>" +
+          "</td>";
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      editTechList.appendChild(table);
+      editTechList.querySelectorAll("button[data-edit-tech-remove]").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          var index = Number(this.getAttribute("data-edit-tech-remove"));
+          if (!Number.isInteger(index) || index < 0 || index >= selectedTechIds.length) return;
+          selectedTechIds.splice(index, 1);
+          renderEditTechList();
+          refreshEditTechOptions();
+        });
+      });
+    }
+
+    function openEditRegistrationModal(orderId) {
+      var order = getOrderById(orderId);
+      if (!order || !editForm || !editTitleInput || !editDescriptionInput || !editModalEl) return;
+      editForm.action = "/admin/report-service/orders/" + encodeURIComponent(String(order.id)) + "/update-registration";
+      editTitleInput.value = order.title && order.title !== "-" ? order.title : "";
+      editDescriptionInput.value = order.description || "";
+      selectedTechIds = Array.from(new Set((order.technicianIds || []).map(function(id) { return Number(id); }).filter(function(id) { return Number.isInteger(id) && id > 0; })));
+      renderEditTechList();
+      refreshEditTechOptions();
+      if (editTechRequired) editTechRequired.classList.add("d-none");
+      if (window.bootstrap && window.bootstrap.Modal) {
+        window.bootstrap.Modal.getOrCreateInstance(editModalEl).show();
+      }
+    }
+
+    if (editAddTechBtn && editTechSelect) {
+      editAddTechBtn.addEventListener("click", function() {
+        var selectedValue = Number(editTechSelect.value);
+        if (!Number.isInteger(selectedValue) || selectedValue <= 0) return;
+        if (selectedTechIds.indexOf(selectedValue) !== -1) return;
+        selectedTechIds.push(selectedValue);
+        editTechSelect.value = "";
+        renderEditTechList();
+        refreshEditTechOptions();
+        if (editTechRequired) editTechRequired.classList.add("d-none");
+      });
+    }
+
+    if (editForm) {
+      editForm.addEventListener("submit", function(e) {
+        if (!selectedTechIds.length) {
+          e.preventDefault();
+          if (editTechRequired) editTechRequired.classList.remove("d-none");
+          if (editTechSelect) editTechSelect.focus();
+        }
+      });
+    }
+
+    gridTarget.addEventListener("click", function(evt) {
+      var target = evt.target;
+      if (!target || !target.closest) return;
+      var editBtn = target.closest("button[data-order-edit=\"1\"]");
+      if (!editBtn) return;
+      evt.preventDefault();
+      openEditRegistrationModal(editBtn.getAttribute("data-order-id") || "");
+    });
   })();
 </script>
 <script>

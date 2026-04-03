@@ -1619,6 +1619,38 @@ async function unlinkTechnicianFromOrder(orderId, technicianId) {
   );
 }
 
+async function replaceTechniciansByOrder(orderId, technicianIds = []) {
+  const normalizedIds = Array.from(new Set(
+    (Array.isArray(technicianIds) ? technicianIds : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0)
+  ));
+  await db.query(`DELETE FROM service_report_order_technicians WHERE order_id = $1`, [orderId]);
+  for (const technicianId of normalizedIds) {
+    // eslint-disable-next-line no-await-in-loop
+    await linkTechnicianToOrder(orderId, technicianId);
+  }
+}
+
+async function listOrderTechnicianLinks(orderIds = []) {
+  const normalizedOrderIds = Array.from(new Set(
+    (Array.isArray(orderIds) ? orderIds : [])
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0)
+  ));
+  if (!normalizedOrderIds.length) return [];
+  const result = await db.query(
+    `
+      SELECT order_id, technician_id
+      FROM service_report_order_technicians
+      WHERE order_id = ANY($1::int[])
+      ORDER BY order_id ASC, technician_id ASC
+    `,
+    [normalizedOrderIds]
+  );
+  return result.rows;
+}
+
 async function listInstrumentsByOrder(orderId) {
   const result = await db.query(
     `SELECT i.* FROM service_report_global_instruments i
@@ -1970,6 +2002,8 @@ module.exports = {
   listTechniciansByOrder,
   linkTechnicianToOrder,
   unlinkTechnicianFromOrder,
+  replaceTechniciansByOrder,
+  listOrderTechnicianLinks,
   listInstrumentsByOrder,
   linkInstrumentToOrder,
   unlinkInstrumentFromOrder,

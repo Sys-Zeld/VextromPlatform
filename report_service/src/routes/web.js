@@ -9,6 +9,7 @@ function createReportServiceWebRouter(deps) {
   router.get("/", deps.requireAdminAuth, asyncHandler(controller.home));
   router.get("/orders", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.listOrders));
   router.post("/orders", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createOrder));
+  router.post("/orders/:id/update-registration", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateOrderRegistration));
   router.post("/orders/:id/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteOrder));
   router.post("/orders/:id/validate-os", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.validateOrder));
   router.post("/orders/:id/revalidate-os", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.revalidateOrder));
@@ -39,6 +40,7 @@ function createReportServiceWebRouter(deps) {
   router.post("/orders/:id/sections/:sectionKey", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.saveSection));
   router.post("/orders/:id/sections/:sectionKey/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteSection));
   router.post("/orders/:id/components", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.addComponent));
+  router.post("/orders/:id/components/:componentId/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteComponent));
   router.post("/orders/:id/signatures", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.addSignature));
   router.post("/orders/:id/signatures/:signatureId/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteSignature));
   router.post("/orders/:id/sign-requests", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createSignRequest));
