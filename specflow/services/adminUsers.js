@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const db = require("../db");
+const db = require("../../configdb/db");
 const env = require("../config/env");
 
 const USERS_FILE = path.resolve(env.admin.usersFile);

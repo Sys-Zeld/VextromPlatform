@@ -50,12 +50,12 @@
 }
 
 :root[data-theme="vextrom"] {
-  --background: #eceff1;
-  --surface: #f7f8f8;
-  --surface-2: #eef1ef;
-  --border: #cfd6d2;
-  --text: #2f3633;
-  --muted-text: #5f6763;
+  --background: #f2f6f3;
+  --surface: #fbfdfb;
+  --surface-2: #eef4f0;
+  --border: #c6d2ca;
+  --text: #2e4236;
+  --muted-text: #5c6f63;
 
   --primary: #5fa73a;
   --primary-hover: #4e9031;
@@ -63,33 +63,33 @@
   --warning: #d4a33a;
   --success: #5fa73a;
 
-  --section-header-bg: #5d8f3d;
-  --section-header-text: #eef5ec;
+  --section-header-bg: #6aa447;
+  --section-header-text: #f3f9f1;
 
-  --input-bg: #44524a;
-  --input-border: #708176;
-  --input-focus: #7bc752;
-  --input-text: #f0f4ef;
-  --input-placeholder: #c4cfca;
+  --input-bg: #f7fbf8;
+  --input-border: #b9c9be;
+  --input-focus: #7fc35c;
+  --input-text: #2f473a;
+  --input-placeholder: #7d9387;
 
   --toggle-on: #5fa73a;
-  --toggle-off: #6d7f74;
+  --toggle-off: #b8c8bd;
 
-  --badge-default-bg: #466f45;
-  --badge-default-text: #e3f5dc;
+  --badge-default-bg: #dcebdc;
+  --badge-default-text: #335e3a;
 
-  --shadow-sm: 0 8px 18px rgba(24, 35, 30, 0.14);
-  --shadow-md: 0 14px 26px rgba(24, 35, 30, 0.2);
-  --surface-rgb: 247, 248, 248;
+  --shadow-sm: 0 8px 16px rgba(33, 56, 42, 0.1);
+  --shadow-md: 0 14px 24px rgba(33, 56, 42, 0.14);
+  --surface-rgb: 251, 253, 251;
 }
 
 :root[data-theme="xvextrom"] {
-  --background: #edf3ee;
-  --surface: #f8fcf9;
-  --surface-2: #ecf4ee;
-  --border: #c9d9ce;
-  --text: #264034;
-  --muted-text: #5f7669;
+  --background: #f4f8f4;
+  --surface: #fcfefd;
+  --surface-2: #eff6f1;
+  --border: #c4d6c8;
+  --text: #2a4437;
+  --muted-text: #617b6d;
 
   --primary: #6baa4b;
   --primary-hover: #5b973f;
@@ -97,24 +97,24 @@
   --warning: #c69735;
   --success: #5f9f42;
 
-  --section-header-bg: #dcecd9;
-  --section-header-text: #2f5f3a;
+  --section-header-bg: #5e9f41;
+  --section-header-text: #f2faee;
 
-  --input-bg: #f8fcf9;
-  --input-border: #b8ccb9;
-  --input-focus: #7bb85a;
-  --input-text: #274037;
+  --input-bg: #fbfefb;
+  --input-border: #b7cdbb;
+  --input-focus: #84be62;
+  --input-text: #2d483b;
   --input-placeholder: #7d9487;
 
   --toggle-on: #6baa4b;
   --toggle-off: #b7c9bc;
 
-  --badge-default-bg: #dceddd;
-  --badge-default-text: #2f5f3a;
+  --badge-default-bg: #e1f0e2;
+  --badge-default-text: #355f3d;
 
-  --shadow-sm: 0 8px 18px rgba(27, 55, 36, 0.12);
-  --shadow-md: 0 14px 28px rgba(27, 55, 36, 0.18);
-  --surface-rgb: 248, 252, 249;
+  --shadow-sm: 0 8px 16px rgba(28, 59, 39, 0.1);
+  --shadow-md: 0 14px 26px rgba(28, 59, 39, 0.14);
+  --surface-rgb: 252, 254, 253;
 }
 
 :root[data-font="inter"] {
@@ -293,7 +293,18 @@ body.app-shell {
   box-shadow: var(--shadow-sm);
 }
 
+.card-app {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
 :root[data-theme="soft"] .app-card {
+  background: linear-gradient(180deg, #f9fbfd 0%, #f1f5f9 100%);
+}
+
+:root[data-theme="soft"] .card-app {
   background: linear-gradient(180deg, #f9fbfd 0%, #f1f5f9 100%);
 }
 
@@ -301,7 +312,15 @@ body.app-shell {
   background: linear-gradient(180deg, #fcfcfc 0%, #f2f4f3 100%);
 }
 
+:root[data-theme="vextrom"] .card-app {
+  background: linear-gradient(180deg, #fcfcfc 0%, #f2f4f3 100%);
+}
+
 :root[data-theme="xvextrom"] .app-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f3f7fd 100%);
+}
+
+:root[data-theme="xvextrom"] .card-app {
   background: linear-gradient(180deg, #ffffff 0%, #f3f7fd 100%);
 }
 
@@ -387,7 +406,7 @@ body.app-shell {
 
 :root[data-theme="vextrom"] .form-control,
 :root[data-theme="vextrom"] .form-select {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.26);
+  box-shadow: inset 0 1px 1px rgba(61, 97, 73, 0.14);
 }
 
 :root[data-theme="xvextrom"] .form-control,
@@ -441,13 +460,13 @@ body.app-shell {
 }
 
 :root[data-theme="vextrom"] .field-row {
-  background: transparent;
-  border-color: rgba(191, 208, 197, 0.24);
+  background: linear-gradient(180deg, #f8fcf9 0%, #eff5f1 100%);
+  border-color: #b8c9be;
 }
 
 
 :root[data-theme="vextrom"] .field-row-label .form-label {
-  color: #ffffff;
+  color: #365542;
 }
 
 
@@ -684,9 +703,9 @@ body.app-shell {
 }
 
 :root[data-theme="vextrom"] .btn-outline-secondary {
-  color: #f1f4f2;
-  background: linear-gradient(180deg, #5b6860 0%, #46534b 100%);
-  border-color: #5f6f66;
+  color: #355341;
+  background: linear-gradient(180deg, #f8fcf9 0%, #eef4f0 100%);
+  border-color: #b7cbbd;
  
 }
 
@@ -705,9 +724,9 @@ body.app-shell {
 
 :root[data-theme="vextrom"] .btn-outline-secondary:hover,
 :root[data-theme="vextrom"] .btn-outline-secondary:focus {
-  color: #ffffff;
-  background: linear-gradient(180deg, #546159 0%, #3f4b44 100%);
-  border-color: #596a61;
+  color: #2f4b3a;
+  background: linear-gradient(180deg, #eef6f1 0%, #e4eee8 100%);
+  border-color: #adc3b3;
 }
 
 :root[data-theme="xvextrom"] .btn-outline-secondary:hover,
@@ -929,8 +948,8 @@ form[action*="/send-email"] .btn:not(.lang-btn):not(.btn-no-icon)::before {
 }
 
 :root[data-theme="vextrom"] .app-form-shell {
-  background: linear-gradient(180deg, #425147 0%, #36453d 100%);
-  border-color: #5c6d63;
+  background: linear-gradient(180deg, #f8fcf9 0%, #edf4ef 100%);
+  border-color: #bed0c3;
 }
 
 :root[data-theme="vextrom"] .app-form-shell .card-body {
@@ -1110,6 +1129,44 @@ code {
   gap: var(--spacing-4);
 }
 
+/* ── Hero card banner style ───────────────────────────────────────────────── */
+.token-hero-card {
+  background-color: var(--surface) !important;
+  background-image:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--surface) 78%, #ffffff 22%) 0%,
+      color-mix(in srgb, var(--surface-2) 84%, #ffffff 16%) 58%,
+      color-mix(in srgb, var(--surface) 90%, #ffffff 10%) 100%
+    ),
+    radial-gradient(ellipse at 86% 44%, rgba(255,255,255,0.3) 0%, transparent 66%) !important;
+  border-color: color-mix(in srgb, var(--border) 86%, #b7c7bb 14%) !important;
+  box-shadow: 0 10px 22px rgba(36, 62, 45, 0.1) !important;
+}
+
+:root[data-theme="soft"] .token-hero-card {
+  background-image:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--surface) 80%, #ffffff 20%) 0%,
+      color-mix(in srgb, var(--surface-2) 84%, #ffffff 16%) 58%,
+      color-mix(in srgb, var(--surface) 92%, #ffffff 8%) 100%
+    ),
+    radial-gradient(ellipse at 84% 46%, rgba(255,255,255,0.34) 0%, transparent 66%) !important;
+}
+
+:root[data-theme="vextrom"] .token-hero-card,
+:root[data-theme="xvextrom"] .token-hero-card {
+  background-image:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--surface) 76%, #ffffff 24%) 0%,
+      color-mix(in srgb, var(--surface-2) 86%, #ffffff 14%) 58%,
+      color-mix(in srgb, var(--surface) 92%, #ffffff 8%) 100%
+    ),
+    radial-gradient(ellipse at 84% 46%, rgba(255,255,255,0.28) 0%, transparent 64%) !important;
+}
+
 .token-hero-body {
   display: flex;
   align-items: center;
@@ -1127,11 +1184,22 @@ code {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   letter-spacing: 0.12em;
   font-weight: 700;
   text-transform: uppercase;
-  color: var(--muted-text);
+  color: color-mix(in srgb, var(--muted-text) 86%, #315745 14%);
+}
+
+.token-hero-card .app-card-title,
+.token-hero-card h1,
+.token-hero-card h2 {
+  color: var(--text) !important;
+}
+
+.token-hero-card p,
+.token-hero-card .text-muted {
+  color: var(--muted-text) !important;
 }
 
 .token-hero-actions {
@@ -1143,6 +1211,30 @@ code {
 
 .token-hero-actions form {
   margin: 0;
+}
+
+/* Ghost buttons inside hero */
+.token-hero-card .token-hero-actions .btn-outline-secondary,
+.token-hero-card .token-hero-actions .btn-outline-light,
+.token-hero-card .token-hero-actions .btn-light {
+  background: color-mix(in srgb, var(--surface-2) 86%, #ffffff 14%) !important;
+  color: color-mix(in srgb, var(--text) 88%, #1f3f30 12%) !important;
+  border-color: color-mix(in srgb, var(--border) 82%, #a8bcaf 18%) !important;
+}
+.token-hero-card .token-hero-actions .btn-outline-secondary:hover,
+.token-hero-card .token-hero-actions .btn-outline-light:hover,
+.token-hero-card .token-hero-actions .btn-light:hover {
+  background: color-mix(in srgb, var(--surface-2) 74%, #ffffff 26%) !important;
+}
+
+/* Primary / accent button inside hero */
+.token-hero-card .token-hero-actions .btn-primary {
+  background: rgba(255,255,255,0.96) !important;
+  color: var(--section-header-bg) !important;
+  border-color: transparent !important;
+}
+.token-hero-card .token-hero-actions .btn-primary:hover {
+  background: #fff !important;
 }
 
 .token-feedback {

@@ -1,15 +1,28 @@
-<%
+<% 
+  function formatClassicDate(value) {
+    if (!value) return "-";
+    const raw = String(value).trim();
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return "-";
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear());
+    return `${day}/${month}/${year}`;
+  }
+
   function formatClassicDateTime(value) {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "-";
-    const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = String(date.getFullYear()).slice(-2);
     const hours = String(date.getHours()).padStart(2, "0");
     const minutes = String(date.getMinutes()).padStart(2, "0");
     const seconds = String(date.getSeconds()).padStart(2, "0");
-    return `${weekDays[date.getDay()]} ${months[date.getMonth()]} ${day} ${date.getFullYear()} ${hours}:${minutes}:${seconds}`;
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
   }
 %>
 
@@ -56,26 +69,29 @@
     <div class="report-meta-grid">
       <div class="report-meta-item"><strong>Executado por</strong><span><%= report?.prepared_by || "-" %></span></div>
       <div class="report-meta-item"><strong>Revisao</strong><span><%= report?.revision || "-" %></span></div>
+      <div class="report-meta-item"><strong>Ultima revisao</strong><span><%= formatClassicDate(report?.issue_date || report?.last_modified_at || generatedAt) %></span></div>
       <div class="report-meta-item"><strong>OS</strong><span><%= order?.service_order_number || "-" %></span></div>
       <div class="report-meta-item"><strong>Atualizado em</strong><span><%= formatClassicDateTime(report?.last_modified_at || generatedAt) %></span></div>
     </div>
 
-    <div class="report-section-title mt-4">SUMARIO</div>
-    <ul class="report-toc">
-      <% if (!toc || !toc.length) { %>
-        <li>
-          <span>Sem capitulos.</span>
-          <span class="report-toc-page">-</span>
-        </li>
-      <% } %>
-      <% (toc || []).forEach((item) => { %>
-        <li>
-          <a class="report-toc-link report-toc-title" href="#<%= item.anchorId %>"><%= item.title %></a>
-          <span class="report-toc-dots"></span>
-          <a class="report-toc-link report-toc-page" href="#<%= item.anchorId %>"><%= item.startPage %></a>
-        </li>
-      <% }) %>
-    </ul>
+    <div class="report-summary-block">
+      <div class="report-section-title">SUMARIO</div>
+      <ul class="report-toc">
+        <% if (!toc || !toc.length) { %>
+          <li>
+            <span>Sem capitulos.</span>
+            <span class="report-toc-page">-</span>
+          </li>
+        <% } %>
+        <% (toc || []).forEach((item) => { %>
+          <li>
+            <a class="report-toc-link report-toc-title" href="#<%= item.anchorId %>"><%= item.title %></a>
+            <span class="report-toc-dots"></span>
+            <a class="report-toc-link report-toc-page" href="#<%= item.anchorId %>"><%= item.startPage %></a>
+          </li>
+        <% }) %>
+      </ul>
+    </div>
   </section>
 
   <% (orderedVisibleSections || []).forEach((section, index) => { %>

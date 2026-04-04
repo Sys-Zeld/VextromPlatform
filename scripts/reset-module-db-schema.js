@@ -24,13 +24,20 @@ function resolveModuleConfig(moduleNameRaw) {
       ssl: env.databases.specflow.ssl
     };
   }
+  if (moduleName === "config") {
+    return {
+      label: "Config",
+      connectionString: env.databases.config.url,
+      ssl: env.databases.config.ssl
+    };
+  }
   return null;
 }
 
 async function resetSchema(moduleName) {
   const config = resolveModuleConfig(moduleName);
   if (!config) {
-    throw new Error("Modulo invalido. Use: specflow | module-spec | report-service");
+    throw new Error("Modulo invalido. Use: specflow | config | module-spec | report-service");
   }
 
   const pool = new Pool({
@@ -75,4 +82,3 @@ if (require.main === module) {
 module.exports = {
   resetSchema
 };
-

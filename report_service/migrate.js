@@ -200,6 +200,7 @@ async function migrateServiceReport() {
       title TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'draft',
       issue_date DATE,
+      document_language TEXT NOT NULL DEFAULT 'pt',
       template_name TEXT NOT NULL DEFAULT 'service-report-default',
       template_version TEXT NOT NULL DEFAULT '1.0.0',
       last_modified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -210,6 +211,12 @@ async function migrateServiceReport() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+  await db.query(`ALTER TABLE service_report_reports ADD COLUMN IF NOT EXISTS document_language TEXT NOT NULL DEFAULT 'pt';`);
+  await db.query(`
+    UPDATE service_report_reports
+    SET document_language = 'pt'
+    WHERE trim(COALESCE(document_language, '')) = '';
   `);
   await db.query(`ALTER TABLE service_report_reports ADD COLUMN IF NOT EXISTS template_name TEXT NOT NULL DEFAULT 'service-report-default';`);
   await db.query(`ALTER TABLE service_report_reports ADD COLUMN IF NOT EXISTS template_version TEXT NOT NULL DEFAULT '1.0.0';`);

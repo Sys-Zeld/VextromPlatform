@@ -235,7 +235,8 @@ async function ensureReportForOrder(serviceOrderId, fallbackTitle = "") {
     reportNumber,
     revision: "A",
     title: fallbackTitle || `Relatorio ${order.service_order_code}`,
-    status: "draft"
+    status: "draft",
+    documentLanguage: "pt"
   });
   await repo.ensureDefaultSections(created.id);
   return created;
@@ -253,6 +254,7 @@ async function updateReport(id, input = {}) {
     title: sanitizeText(input.title || existing.title),
     status: ensureStatus(input.status || existing.status, REPORT_STATUSES, "draft"),
     issueDate: input.issueDate || existing.issue_date || null,
+    documentLanguage: sanitizeText(input.documentLanguage || existing.document_language || "pt").toLowerCase(),
     preparedBy: sanitizeText(input.preparedBy || existing.prepared_by),
     reviewedBy: sanitizeText(input.reviewedBy || existing.reviewed_by),
     approvedBy: sanitizeText(input.approvedBy || existing.approved_by),
@@ -385,13 +387,24 @@ async function createSignature(reportId, input = {}) {
     signatureData: sanitizeText(input.signatureData),
     signatureFilePath: sanitizeText(input.signatureFilePath)
   });
+  if (signerType === "vextrom_technician") {
+    try {
+      await updateReport(reportId, {
+        preparedBy: signerName
+      });
+    } catch (_err) {
+      // keep signature recorded even if report metadata update fails
+    }
+  }
   if (signerType === "customer_responsible") {
     const report = await repo.getReportById(reportId);
     if (report && report.service_order_id) {
       try {
+        const order = await repo.getOrderById(report.service_order_id);
+        const orderSystemUser = sanitizeText(order && (order.created_by || order.updated_by));
         await updateOrder(report.service_order_id, {
           status: "approved",
-          updatedBy: sanitizeText(input.updatedBy) || "customer-signature"
+          updatedBy: sanitizeText(input.updatedBy) || orderSystemUser || "customer-signature"
         });
       } catch (_err) {
         // keep signature recorded even if order status update fails

@@ -1,4 +1,4 @@
-const path = require("path");
+﻿const path = require("path");
 const { SECTION_DEFINITIONS } = require("../constants");
 const sanitizeHtml = require("sanitize-html");
 const { withServiceOrderDisplay } = require("../utils/serviceOrderDisplay");
@@ -254,6 +254,83 @@ function renderTechTeamInlineTable(technicianItems) {
   `;
 }
 
+function normalizeInlineCellValue(value, fallback = "-") {
+  const raw = String(value == null ? "" : value).trim();
+  return raw || fallback;
+}
+
+function renderEquipmentsInlineTable(orderEquipments) {
+  const rows = (Array.isArray(orderEquipments) ? orderEquipments : [])
+    .slice()
+    .sort((a, b) => Number(a?.ref_id || 0) - Number(b?.ref_id || 0) || Number(a?.id || 0) - Number(b?.id || 0));
+
+  if (!rows.length) {
+    return `
+      <div class="report-inline-equipments-wrap">
+        <table class="report-inline-equipments-table">
+          <tbody>
+            <tr><td class="report-inline-equipments-empty">Sem equipamentos vinculados na OS.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  const pairsPerRow = 3;
+  const columnsPerRow = pairsPerRow * 2;
+
+  const renderPairsRows = (pairs) => {
+    const chunks = [];
+    for (let i = 0; i < pairs.length; i += pairsPerRow) {
+      chunks.push(pairs.slice(i, i + pairsPerRow));
+    }
+    return chunks.map((chunk) => {
+      const cells = chunk.map((pair) => `
+        <th class="report-inline-equipments-label">${escapeHtml(pair.label)}</th>
+        <td class="report-inline-equipments-value">${escapeHtml(normalizeInlineCellValue(pair.value))}</td>
+      `).join("");
+      const missingPairs = Math.max(0, pairsPerRow - chunk.length);
+      const filler = missingPairs ? `<td colspan="${missingPairs * 2}" class="report-inline-equipments-filler"></td>` : "";
+      return `<tr>${cells}${filler}</tr>`;
+    }).join("");
+  };
+
+  const tablesHtml = rows.map((item) => {
+    const tagValue = normalizeInlineCellValue(item.tag_number);
+    const tableTitle = tagValue !== "-"
+      ? `TAG ${tagValue}`
+      : `Equipamento ${normalizeInlineCellValue(item.ref_id)}`;
+
+    const pairs = [
+      { label: "Tipo", value: item.type },
+      { label: "Fabricante", value: item.manufacturer },
+      { label: "Modelo/Família", value: item.model_family },
+      { label: "Série", value: item.serial_number },
+      { label: "DT", value: item.dt_number },
+      { label: "Ano", value: item.year_of_manufacture },
+      { label: "AC In (V)", value: item.rated_ac_input_voltage },
+      { label: "In Freq", value: item.input_frequency },
+      { label: "DC (V)", value: item.rated_dc_voltage },
+      { label: "AC Out (V)", value: item.rated_ac_output_voltage },
+      { label: "Out Freq", value: item.output_frequency },
+      { label: "Grau Prot.", value: item.degree_of_protection },
+      { label: "Main Label", value: item.main_label }
+    ];
+
+    return `
+      <table class="report-inline-equipments-table">
+        <thead>
+          <tr class="report-inline-equipments-title-row">
+            <th colspan="${columnsPerRow}">${escapeHtml(tableTitle)}</th>
+          </tr>
+        </thead>
+        <tbody>${renderPairsRows(pairs)}</tbody>
+      </table>
+    `;
+  }).join("");
+
+  return `<div class="report-inline-equipments-wrap">${tablesHtml}</div>`;
+}
 function renderDailyLogInlineItem(dailyLog, requestedId = null, context = null) {
   if (!dailyLog) return "";
   const contentHtml = String(dailyLog.content || "").trim();
@@ -268,7 +345,8 @@ function renderDailyLogInlineItem(dailyLog, requestedId = null, context = null) 
     context.dailyLogsById,
     context.dailyLogsOrdered,
     { expandDailyLogTags: false },
-    context.technicianItems || []
+    context.technicianItems || [],
+    context.orderEquipments || []
   );
 }
 
@@ -364,7 +442,7 @@ function wrapImageCardsIntoRows(html) {
   return result;
 }
 
-function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems, dailyLogsById, dailyLogsOrdered, options = {}, technicianItems = []) {
+function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems, dailyLogsById, dailyLogsOrdered, options = {}, technicianItems = [], orderEquipments = []) {
   const source = String(contentHtml || "");
   if (!source) return "<p><br></p>";
   const opts = {
@@ -391,8 +469,10 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
   const withReplacedTable = withImages.replace(tableReplacedPattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "replaced")));
   const withRequiredTable = withReplacedTable.replace(tableRequiredPattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "required")));
   const withTables = withRequiredTable.replace(tableSparePattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "spare")));
+  const equipmentTablePattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*(?:tblequip(?:amentos)?)/gi;
+  const withEquipmentTable = withTables.replace(equipmentTablePattern, () => renderEquipmentsInlineTable(orderEquipments));
   const timesheetTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*timesheet/gi;
-  const withTimesheet = withTables.replace(timesheetTagPattern, () => renderTimesheetInlineTable(timesheetItems));
+  const withTimesheet = withEquipmentTable.replace(timesheetTagPattern, () => renderTimesheetInlineTable(timesheetItems));
   const techTeamTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*equipetecnica/gi;
   const withTechTeam = withTimesheet.replace(techTeamTagPattern, () => renderTechTeamInlineTable(technicianItems));
   if (!opts.expandDailyLogTags) return wrapImageCardsIntoRows(withTechTeam);
@@ -404,7 +484,8 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
     timesheetItems,
     dailyLogsById,
     dailyLogsOrdered,
-    technicianItems
+    technicianItems,
+    orderEquipments
   };
   const dailyLogTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi;
   const withDailyLogs = withTechTeam.replace(dailyLogTagPattern, (_match, rawId) => {
@@ -428,7 +509,25 @@ function buildPreviewModel(payload, options = {}) {
     ? options.reportConfig
     : {};
   const templateKey = String(options && options.templateKey ? options.templateKey : reportConfig.templateKey || "").trim().toLowerCase();
-  const order = withServiceOrderDisplay(payload.order || {});
+  const rawOrder = payload.order || {};
+  const order = withServiceOrderDisplay(rawOrder);
+  const rawReport = payload.report || {};
+  const signatures = Array.isArray(payload.signatures) ? payload.signatures : [];
+  const vextromSignatures = signatures
+    .filter((item) => String(item && item.signer_type || "").toLowerCase() === "vextrom_technician")
+    .sort((a, b) => {
+      const aDate = new Date(a && (a.signed_at || a.created_at || a.updated_at) || 0).getTime();
+      const bDate = new Date(b && (b.signed_at || b.created_at || b.updated_at) || 0).getTime();
+      if (aDate !== bDate) return bDate - aDate;
+      return Number(b && b.id || 0) - Number(a && a.id || 0);
+    });
+  const signedTechnicianName = String(vextromSignatures[0] && vextromSignatures[0].signer_name || "").trim();
+  const preparedByRaw = String(rawReport.prepared_by || "").trim();
+  const systemUserFallback = String(rawOrder.created_by || rawOrder.updated_by || "").trim();
+  const report = {
+    ...rawReport,
+    prepared_by: signedTechnicianName || preparedByRaw || systemUserFallback
+  };
   const images = Array.isArray(payload.images) ? payload.images : [];
   const imageById = new Map(
     images
@@ -540,7 +639,8 @@ function buildPreviewModel(payload, options = {}) {
           dailyLogsById,
           dailyLogsOrdered,
           {},
-          technicianItems
+          technicianItems,
+          orderEquipments
         ),
         content_html_preview: injectTaggedImagesInHtml(
           section.content_html || "<p><br></p>",
@@ -551,7 +651,8 @@ function buildPreviewModel(payload, options = {}) {
           dailyLogsById,
           dailyLogsOrdered,
           {},
-          technicianItems
+          technicianItems,
+          orderEquipments
         ),
         section_title_html: section.section_title_html || `<p>${section.section_title || "-"}</p>`,
         section_title_text: section.section_title_text || section.section_title || "-",
@@ -572,6 +673,7 @@ function buildPreviewModel(payload, options = {}) {
 
   return {
     ...payload,
+    report,
     order,
     orderedVisibleSections,
     brandAssets: {
@@ -594,3 +696,4 @@ function buildPreviewModel(payload, options = {}) {
 module.exports = {
   buildPreviewModel
 };
+

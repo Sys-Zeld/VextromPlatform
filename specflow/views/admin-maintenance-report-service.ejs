@@ -135,7 +135,7 @@
     <form method="post" action="/admin/maintenance/report-service/email-templates/save" class="row g-3" id="email-template-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <input type="hidden" id="template_id" name="template_id" value="<%= emailTemplateEditorValues && emailTemplateEditorValues.template_id ? emailTemplateEditorValues.template_id : '' %>" />
-      <div class="col-12 col-md-5">
+      <div class="col-12 col-md-4">
         <label class="form-label" for="template_name">Nome do modelo</label>
         <input
           id="template_name"
@@ -147,7 +147,16 @@
           value="<%= emailTemplateEditorValues && emailTemplateEditorValues.template_name ? emailTemplateEditorValues.template_name : '' %>"
         />
       </div>
-      <div class="col-12 col-md-7">
+      <div class="col-12 col-md-3">
+        <label class="form-label" for="template_purpose">Finalidade</label>
+        <select id="template_purpose" name="template_purpose" class="form-select">
+          <option value="general" <%= (!emailTemplateEditorValues || !emailTemplateEditorValues.template_purpose || emailTemplateEditorValues.template_purpose === 'general') ? 'selected' : '' %>>Geral</option>
+          <option value="nova_os" <%= (emailTemplateEditorValues && emailTemplateEditorValues.template_purpose === 'nova_os') ? 'selected' : '' %>>Nova OS (para tecnicos)</option>
+          <option value="relatorio_assinado" <%= (emailTemplateEditorValues && emailTemplateEditorValues.template_purpose === 'relatorio_assinado') ? 'selected' : '' %>>Relatorio assinado (para cliente)</option>
+          <option value="envio_assinatura" <%= (emailTemplateEditorValues && emailTemplateEditorValues.template_purpose === 'envio_assinatura') ? 'selected' : '' %>>Envio assinatura (para signatario)</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-5">
         <label class="form-label" for="template_subject">Assunto do e-mail</label>
         <input
           id="template_subject"
@@ -199,6 +208,7 @@
         <thead>
           <tr>
             <th>Nome</th>
+            <th>Finalidade</th>
             <th>Assunto</th>
             <th>Atualizado em</th>
             <th>Acoes</th>
@@ -207,15 +217,30 @@
         <tbody>
           <% if (!emailSettings || !emailSettings.emailTemplates || !emailSettings.emailTemplates.length) { %>
             <tr>
-              <td colspan="4" class="text-muted">Nenhum modelo HTML cadastrado.</td>
+              <td colspan="5" class="text-muted">Nenhum modelo HTML cadastrado.</td>
             </tr>
           <% } %>
+          <%
+            var purposeLabels = { general: 'Geral', nova_os: 'Nova OS', relatorio_assinado: 'Relatorio assinado', envio_assinatura: 'Envio assinatura' };
+          %>
           <% (emailSettings && emailSettings.emailTemplates ? emailSettings.emailTemplates : []).forEach((template) => { %>
             <tr>
               <td>
                 <strong><%= template.name %></strong>
                 <% if (emailSettings.defaultTemplateId === template.id) { %>
                   <span class="badge text-bg-success ms-1">Padrao</span>
+                <% } %>
+              </td>
+              <td>
+                <% var purposeLabel = purposeLabels[template.purpose] || 'Geral'; %>
+                <% if (template.purpose === 'nova_os') { %>
+                  <span class="badge text-bg-primary"><%= purposeLabel %></span>
+                <% } else if (template.purpose === 'relatorio_assinado') { %>
+                  <span class="badge text-bg-info text-dark"><%= purposeLabel %></span>
+                <% } else if (template.purpose === 'envio_assinatura') { %>
+                  <span class="badge text-bg-warning text-dark"><%= purposeLabel %></span>
+                <% } else { %>
+                  <span class="badge text-bg-secondary"><%= purposeLabel %></span>
                 <% } %>
               </td>
               <td><code><%= template.subject %></code></td>
@@ -228,6 +253,7 @@
                     data-template-id="<%= template.id %>"
                     data-template-name="<%= template.name %>"
                     data-template-subject="<%= template.subject %>"
+                    data-template-purpose="<%= template.purpose || 'general' %>"
                     data-template-default="<%= emailSettings.defaultTemplateId === template.id ? '1' : '0' %>"
                   >
                     Editar
@@ -268,6 +294,7 @@
     var templateIdInput = document.getElementById("template_id");
     var templateNameInput = document.getElementById("template_name");
     var templateSubjectInput = document.getElementById("template_subject");
+    var templatePurposeSelect = document.getElementById("template_purpose");
     var templateHtmlInput = document.getElementById("template_html");
     var templateSetDefaultInput = document.getElementById("set_default_template");
     var templateFileInput = document.getElementById("template_html_file");
@@ -278,6 +305,7 @@
       if (templateIdInput) templateIdInput.value = "";
       if (templateNameInput) templateNameInput.value = "";
       if (templateSubjectInput) templateSubjectInput.value = "";
+      if (templatePurposeSelect) templatePurposeSelect.value = "general";
       if (templateHtmlInput) templateHtmlInput.value = "";
       if (templateSetDefaultInput) templateSetDefaultInput.checked = false;
       if (templateFileInput) templateFileInput.value = "";
@@ -315,6 +343,7 @@
         var templateId = button.getAttribute("data-template-id") || "";
         var templateName = button.getAttribute("data-template-name") || "";
         var templateSubject = button.getAttribute("data-template-subject") || "";
+        var templatePurpose = button.getAttribute("data-template-purpose") || "general";
         var isDefault = button.getAttribute("data-template-default") === "1";
         var htmlSourceEl = document.getElementById("email-template-html-" + templateId);
         var templateHtml = htmlSourceEl ? htmlSourceEl.value : "";
@@ -322,6 +351,7 @@
         if (templateIdInput) templateIdInput.value = templateId;
         if (templateNameInput) templateNameInput.value = templateName;
         if (templateSubjectInput) templateSubjectInput.value = templateSubject;
+        if (templatePurposeSelect) templatePurposeSelect.value = templatePurpose;
         if (templateHtmlInput) templateHtmlInput.value = templateHtml;
         if (templateSetDefaultInput) templateSetDefaultInput.checked = isDefault;
         if (templateFileInput) templateFileInput.value = "";

@@ -4,7 +4,7 @@ const EMPTY_DELTA = { ops: [{ insert: "\n" }] };
 
 function toInt(value) {
   const num = Number(value);
-  return Number.isInteger(num) ? num : null;
+  return Number.isInteger(num) && num > 0 ? num : null;
 }
 
 function stripHtmlToText(value) {
@@ -735,9 +735,27 @@ async function listOrderEquipments(serviceOrderId) {
         oe.*,
         e.type,
         e.serial_number,
-        e.tag_number
+        e.tag_number,
+        e.customer_id,
+        e.site_id,
+        e.year_of_manufacture,
+        e.rated_ac_input_voltage,
+        e.input_frequency,
+        e.rated_dc_voltage,
+        e.rated_ac_output_voltage,
+        e.output_frequency,
+        e.degree_of_protection,
+        e.main_label,
+        e.dt_number,
+        e.manufacturer,
+        e.model_family,
+        e.notes AS equipment_notes,
+        c.name AS customer_name,
+        s.site_name
       FROM service_report_order_equipments oe
       INNER JOIN service_report_equipments e ON e.id = oe.equipment_id
+      LEFT JOIN service_report_customers c ON c.id = e.customer_id
+      LEFT JOIN service_report_customer_sites s ON s.id = e.site_id
       WHERE oe.service_order_id = $1
       ORDER BY oe.ref_id ASC, oe.id ASC
     `,
@@ -1000,6 +1018,7 @@ async function createReport(payload) {
         title,
         status,
         issue_date,
+        document_language,
         template_name,
         template_version,
         last_modified_at,
@@ -1010,7 +1029,7 @@ async function createReport(payload) {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),$9,$10,$11,$12,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),$10,$11,$12,$13,NOW(),NOW())
       RETURNING *
     `,
     [
@@ -1020,6 +1039,7 @@ async function createReport(payload) {
       payload.title,
       payload.status || "draft",
       payload.issueDate,
+      payload.documentLanguage || "pt",
       payload.templateName || "service-report-default",
       payload.templateVersion || "1.0.0",
       payload.preparedBy || "",
@@ -1040,12 +1060,13 @@ async function updateReport(id, payload) {
         title = $3,
         status = $4,
         issue_date = $5,
-        template_name = $6,
-        template_version = $7,
-        prepared_by = $8,
-        reviewed_by = $9,
-        approved_by = $10,
-        pdf_path = $11,
+        document_language = $6,
+        template_name = $7,
+        template_version = $8,
+        prepared_by = $9,
+        reviewed_by = $10,
+        approved_by = $11,
+        pdf_path = $12,
         last_modified_at = NOW(),
         updated_at = NOW()
       WHERE id = $1
@@ -1057,6 +1078,7 @@ async function updateReport(id, payload) {
       payload.title,
       payload.status || "draft",
       payload.issueDate,
+      payload.documentLanguage || "pt",
       payload.templateName || "service-report-default",
       payload.templateVersion || "1.0.0",
       payload.preparedBy || "",

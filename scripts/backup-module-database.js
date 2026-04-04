@@ -10,6 +10,10 @@ const MODULE_CONFIG = {
     dbUrl: env.databases.specflow.url,
     filePrefix: "specflow-backup"
   },
+  config: {
+    dbUrl: env.databases.config.url,
+    filePrefix: "config-backup"
+  },
   "module-spec": {
     dbUrl: env.databases.moduleSpec.url,
     filePrefix: "module-spec-backup"
@@ -65,10 +69,10 @@ function runPgDump(databaseUrl, outputFile) {
 function normalizeTargets(rawTarget) {
   const target = String(rawTarget || "").trim().toLowerCase();
   if (!target || target === "all") {
-    return ["specflow", "module-spec", "report-service"];
+    return ["specflow", "config", "module-spec", "report-service"];
   }
   if (!Object.prototype.hasOwnProperty.call(MODULE_CONFIG, target)) {
-    throw new Error("Modulo invalido. Use: specflow | module-spec | report-service | all.");
+    throw new Error("Modulo invalido. Use: specflow | config | module-spec | report-service | all.");
   }
   return [target];
 }

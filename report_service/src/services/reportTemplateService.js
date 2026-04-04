@@ -45,7 +45,9 @@ function resolveTemplatePath(templateKey) {
 }
 
 async function renderReportPreviewHtml(payload, options = {}) {
-  const templateKey = normalizeReportTemplateKey(options.templateKey);
+  const templateKey = normalizeReportTemplateKey(
+    options.templateKey || (options.reportConfig && options.reportConfig.templateKey)
+  );
   const viewPath = resolveTemplatePath(templateKey);
   const model = buildPreviewModel(payload, {
     reportConfig: options.reportConfig || null,

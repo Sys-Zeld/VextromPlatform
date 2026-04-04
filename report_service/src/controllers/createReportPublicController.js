@@ -3,9 +3,9 @@ const repo = require("../repositories/serviceReportRepository");
 const service = require("../services/serviceReportService");
 const { renderReportPreviewHtml } = require("../services/reportTemplateService");
 const { getReportConfigSettings } = require("../services/reportConfigSettings");
-const { getReportServiceEmailSettings } = require("../services/emailSettings");
-const { buildPdfBufferFromHtml } = require("../services/serviceReportPdfService");
+const { getReportServiceEmailSettings, getTemplateByPurpose } = require("../services/emailSettings");
 const crypto = require("crypto");
+const env = require("../../../specflow/config/env");
 
 function createReportPublicController(deps) {
   const sanitizeInput = deps.sanitizeInput;
@@ -58,6 +58,41 @@ function createReportPublicController(deps) {
     return String(value || "").replace(/[\r\n]+/g, " ").trim();
   }
 
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderEmailPlaceholder(template, variables) {
+    return String(template || "").replace(/\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}/g, (match, key) => {
+      const normalizedKey = String(key || "").trim().toLowerCase();
+      if (!Object.prototype.hasOwnProperty.call(variables, normalizedKey)) return match;
+      return escapeHtml(String(variables[normalizedKey] || ""));
+    });
+  }
+
+  function buildSignedReportTemplateVariables(signRequest, signedLink) {
+    return {
+      os_codigo: signRequest.service_order_code || signRequest.order_title || `OS-${signRequest.order_id || ""}`,
+      relatorio_numero: String(signRequest.report_number || ""),
+      cliente: signRequest.customer_name || "",
+      local: "",
+      link_relatorio: signedLink || ""
+    };
+  }
+
+  function resolveRequestBaseUrl(req) {
+    const host = String((req.get && req.get("host")) || req.headers.host || "").trim();
+    const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+    const protocol = forwardedProto || req.protocol || "http";
+    if (host) return `${protocol}://${host}`;
+    return String(env.appBaseUrl || "http://localhost:3000").replace(/\/+$/, "");
+  }
+
   return {
     async clientSignedReportPage(req, res) {
       const token = sanitizeInput(String(req.params.token || "")).trim();
@@ -93,13 +128,34 @@ function createReportPublicController(deps) {
   <style>
     body { margin: 0; background: #e9eeea; }
     .report-doc { margin: 24px auto; }
+    .report-print-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 9999;
+      padding: 10px 20px;
+      background: #4f7d33;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .report-print-btn:hover { background: #3d6228; }
     @media print {
       body { background: #fff; }
       .report-doc { margin: 0; }
+      .report-print-btn { display: none !important; }
     }
   </style>
 </head>
 <body>
+<button class="report-print-btn" onclick="window.print()">Imprimir</button>
 ${reportHtml}
 </body>
 </html>`);
@@ -133,7 +189,8 @@ ${reportHtml}
         invalid_cc: "Existe e-mail invalido no campo CC.",
         smtp: "Configuracao SMTP indisponivel no modulo Service Report.",
         send_failed: "Falha ao enviar o e-mail com o relatorio assinado.",
-        not_signed: "O envio por e-mail so e permitido para documento assinado."
+        not_signed: "O envio por e-mail so e permitido para documento assinado.",
+        token_not_found: "Nao foi possivel gerar o link assinado do relatorio."
       };
       const now = new Date();
       const expiresAt = new Date(signRequest.expires_at);
@@ -312,8 +369,7 @@ ${reportHtml}
         signerName,
         signerRole,
         signerCompany,
-        signatureData,
-        updatedBy: "public-sign-approval"
+        signatureData
       });
 
       clearEmailProofCookie(res);
@@ -350,9 +406,11 @@ ${reportHtml}
       });
 
       try {
+        const order = await repo.getOrderById(signRequest.order_id);
+        const systemUser = String(order && (order.created_by || order.updated_by) || "").trim() || "system";
         await service.updateOrder(signRequest.order_id, {
           status: "waiting_review",
-          updatedBy: "public-sign-refusal"
+          updatedBy: systemUser
         });
       } catch (_err) {
         // keep sign request cancelled even if order update fails
@@ -387,12 +445,6 @@ ${reportHtml}
       }
 
       try {
-        const report = await repo.getReportById(signRequest.service_report_id);
-        const payload = await service.buildReportAggregate(report.id);
-        const reportConfig = await getReportConfigSettings();
-        const reportHtml = await renderReportPreviewHtml(payload, { reportConfig });
-        const pdfBuffer = await buildPdfBufferFromHtml(reportHtml, payload);
-
         const transporter = nodemailer.createTransport({
           host: emailSettings.smtp.host,
           port: emailSettings.smtp.port,
@@ -402,30 +454,43 @@ ${reportHtml}
             : undefined
         });
 
+        const signedLink = `${resolveRequestBaseUrl(req)}/r/signed/${encodeURIComponent(token)}`;
         const reportNumber = String(signRequest.report_number || "").trim();
         const orderLabel = String(signRequest.service_order_code || signRequest.order_title || "").trim();
-        const subject = sanitizeSubjectHeaderValue(`Relatorio assinado ${reportNumber || orderLabel || "Service Report"}`);
+        const signedTemplate = getTemplateByPurpose(
+          emailSettings.emailTemplates,
+          emailSettings.defaultTemplateId,
+          "relatorio_assinado"
+        );
+        const signedVars = buildSignedReportTemplateVariables(signRequest, signedLink);
+        const subject = sanitizeSubjectHeaderValue(
+          signedTemplate && signedTemplate.subject
+            ? renderEmailPlaceholder(signedTemplate.subject, signedVars)
+            : `Relatorio assinado ${reportNumber || orderLabel || "Service Report"}`
+        );
         const customMessage = sanitizeInput(req.body.message || "");
-        const bodyIntro = customMessage
-          ? `<p style="margin:0 0 12px 0;">${customMessage}</p>`
-          : "<p style=\"margin:0 0 12px 0;\">Segue em anexo o relatorio assinado.</p>";
+        let htmlBody;
+        if (signedTemplate && signedTemplate.html) {
+          htmlBody = `<!doctype html><html><body>${renderEmailPlaceholder(signedTemplate.html, signedVars)}</body></html>`;
+        } else {
+          const bodyIntro = customMessage
+            ? `<p style="margin:0 0 12px 0;">${customMessage}</p>`
+            : "<p style=\"margin:0 0 12px 0;\">Seu relatorio assinado esta disponivel no link abaixo para visualizacao e impressao.</p>";
+          htmlBody = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937;">${bodyIntro}<p style="margin:0 0 8px 0;"><strong>Relatorio:</strong> ${reportNumber || "-"}</p><p style="margin:0 0 8px 0;"><strong>OS:</strong> ${orderLabel || "-"}</p><p style="margin:0 0 8px 0;"><strong>Cliente:</strong> ${signRequest.customer_name || "-"}</p><p style="margin:16px 0;"><a href="${escapeHtml(signedLink)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#14532d;color:#fff;text-decoration:none;font-weight:600;">Abrir relatorio assinado</a></p><p style="margin:12px 0 0 0;color:#6b7280;font-size:12px;">E-mail enviado pelo link de assinatura eletrônica.</p></body></html>`;
+        }
 
         await transporter.sendMail({
           from: emailSettings.smtp.from,
           to,
           cc: cc.length ? cc : undefined,
           subject,
-          html: `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937;">${bodyIntro}<p style="margin:0 0 8px 0;"><strong>Relatorio:</strong> ${reportNumber || "-"}</p><p style="margin:0 0 8px 0;"><strong>OS:</strong> ${orderLabel || "-"}</p><p style="margin:0 0 8px 0;"><strong>Cliente:</strong> ${signRequest.customer_name || "-"}</p><p style="margin:12px 0 0 0;color:#6b7280;font-size:12px;">E-mail enviado pelo link de assinatura eletrônica.</p></body></html>`,
-          attachments: [
-            {
-              filename: `${(reportNumber || orderLabel || "service-report").replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`,
-              content: pdfBuffer
-            }
-          ]
+          html: htmlBody
         });
 
         return res.redirect(`/r/sign/${token}?email_sent=1`);
       } catch (_err) {
+        // eslint-disable-next-line no-console
+        console.error("[report-service] Falha ao enviar e-mail com relatorio assinado (link publico).", _err);
         return res.redirect(`/r/sign/${token}?email_error=send_failed`);
       }
     }

@@ -43,6 +43,7 @@ const defaultDatabaseSsl = parseBooleanFlag(process.env.DATABASE_SSL, false);
 const specflowDatabaseUrl = process.env.SPECFLOW_DATABASE_URL || baseDatabaseUrl;
 const moduleSpecDatabaseUrl = process.env.MODULE_SPEC_DATABASE_URL || withDatabaseName(baseDatabaseUrl, "dbmodulespec");
 const reportServiceDatabaseUrl = process.env.REPORT_SERVICE_DATABASE_URL || withDatabaseName(baseDatabaseUrl, "reportservice");
+const configDatabaseUrl = process.env.CONFIG_DATABASE_URL || withDatabaseName(baseDatabaseUrl, "configdb");
 
 module.exports = {
   nodeEnv,
@@ -77,6 +78,10 @@ module.exports = {
     reportService: {
       url: reportServiceDatabaseUrl,
       ssl: parseBooleanFlag(process.env.REPORT_SERVICE_DATABASE_SSL, defaultDatabaseSsl)
+    },
+    config: {
+      url: configDatabaseUrl,
+      ssl: parseBooleanFlag(process.env.CONFIG_DATABASE_SSL, defaultDatabaseSsl)
     }
   },
   smtp: {

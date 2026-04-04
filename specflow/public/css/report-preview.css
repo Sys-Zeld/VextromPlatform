@@ -169,6 +169,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  padding-bottom: 10px;
 }
 
 .report-meta-item {
@@ -184,6 +185,10 @@
   color: #5f6d64;
   margin-bottom: 4px;
   text-transform: uppercase;
+}
+
+.report-summary-block {
+  padding-top: 14px;
 }
 
 .report-toc {
@@ -453,6 +458,7 @@
 .report-inline-image-row,
 .report-inline-components-wrap,
 .report-inline-timesheet-wrap,
+.report-inline-equipments-wrap,
 .report-inline-techteam-wrap,
 table,
 figure,
@@ -558,6 +564,63 @@ blockquote {
 }
 
 .report-inline-timesheet-empty {
+  color: #4b5a52;
+  padding: 8px 6px;
+}
+
+.report-inline-equipments-wrap {
+  margin: 10px 0 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.report-inline-equipments-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #222;
+  background: #fff;
+}
+
+.report-inline-equipments-table th,
+.report-inline-equipments-table td {
+  border: 1px solid #222;
+  padding: 4px 6px;
+  font-size: 0.7rem;
+  line-height: 1.18;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.report-inline-equipments-table thead th,
+.report-inline-equipments-table .report-inline-equipments-label {
+  background: #ececec;
+  color: #4e4e4e;
+  font-weight: 700;
+}
+
+.report-inline-equipments-table .report-inline-equipments-title-row th {
+  background: #e2e2e2;
+  color: #4a612b;
+  font-size: 0.88rem;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+.report-inline-equipments-table .report-inline-equipments-label {
+  width: 14%;
+  white-space: nowrap;
+}
+
+.report-inline-equipments-table .report-inline-equipments-value {
+  width: 19%;
+  word-break: break-word;
+}
+
+.report-inline-equipments-table .report-inline-equipments-filler {
+  background: #fff;
+}
+
+.report-inline-equipments-empty {
   color: #4b5a52;
   padding: 8px 6px;
 }

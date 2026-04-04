@@ -61,6 +61,7 @@
         <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/equipments">Equipamentos</a>
+        <button class="btn btn-primary btn-sm" type="button" id="printSparePartsBtn">Imprimir Lista</button>
       </div>
     </div>
   </div>
@@ -190,47 +191,12 @@
               </div>
             </form>
 
-            <div class="table-responsive">
-              <table class="table table-sm app-table mb-0">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Descricao</th>
-                    <th>PN</th>
-                    <th>Fabricante</th>
-                    <th>Quantidade</th>
-                    <th>Obsoleto</th>
-                    <th>Acoes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% if (!(linkedSpareParts || []).length) { %>
-                    <tr><td colspan="7" class="text-center text-muted py-3">Sem spare-parts associados a este equipamento.</td></tr>
-                  <% } %>
-                  <% (linkedSpareParts || []).forEach((item) => { %>
-                    <tr>
-                      <td><%= item.id %></td>
-                      <td><%= item.description || '-' %></td>
-                      <td><%= item.part_number || '-' %></td>
-                      <td><%= item.manufacturer || '-' %></td>
-                      <td style="min-width: 130px;">
-                        <form method="post" action="/admin/report-service/spare-parts/equipment-links/<%= selectedEquipment.id %>/<%= item.id %>/quantity" class="d-flex align-items-center gap-1">
-                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                          <input class="form-control form-control-sm" type="number" min="1" step="1" name="quantity" value="<%= item.quantity || 1 %>" required />
-                          <button class="btn btn-outline-primary btn-sm" type="submit">Salvar</button>
-                        </form>
-                      </td>
-                      <td><%= item.is_obsolete ? 'Sim' : 'Nao' %></td>
-                      <td>
-                        <form method="post" action="/admin/report-service/spare-parts/equipment-links/<%= selectedEquipment.id %>/<%= item.id %>/delete" onsubmit="return confirm('Desassociar este spare-part do equipamento?');">
-                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                          <button class="btn btn-outline-danger btn-sm" type="submit">Desassociar</button>
-                        </form>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="small text-muted">Spare-parts associados ao equipamento</span>
+              <button class="btn btn-primary btn-sm" type="button" id="printLinkedSparePartsBtn">Imprimir Lista</button>
+            </div>
+            <div class="spare-parts-grid-wrap">
+              <div id="linkedSparePartsGrid"></div>
             </div>
           <% } else { %>
             <div class="text-muted">Selecione um equipamento para gerenciar as associacoes de spare-parts.</div>
@@ -389,6 +355,170 @@
 </script>
 <script>
   (function () {
+    var linkedTarget = document.getElementById("linkedSparePartsGrid");
+    if (!linkedTarget || !window.gridjs || !window.gridjs.Grid) return;
+
+    var linkedData = <%- JSON.stringify(linkedSpareParts || []).replace(/</g, "\\u003c") %>;
+    var equipmentId = <%- JSON.stringify((selectedEquipment && selectedEquipment.id) ? String(selectedEquipment.id) : "") %>;
+    var csrfToken  = <%- JSON.stringify(csrfToken || "") %>;
+
+    if (!linkedData.length) {
+      linkedTarget.innerHTML = "<div class=\"text-center text-muted py-4\">Sem spare-parts associados a este equipamento.</div>";
+      return;
+    }
+
+    function esc(v) {
+      return String(v || "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    function qtyCell(row) {
+      var url = "/admin/report-service/spare-parts/equipment-links/" + esc(equipmentId) + "/" + esc(row.id) + "/quantity";
+      return "<form method=\"post\" action=\"" + url + "\" class=\"d-flex align-items-center gap-1\" style=\"min-width:130px;\">"
+        + "<input type=\"hidden\" name=\"_csrf\" value=\"" + esc(csrfToken) + "\" />"
+        + "<input class=\"form-control form-control-sm\" type=\"number\" min=\"1\" step=\"1\" name=\"quantity\" value=\"" + Number(row.quantity || 1) + "\" required style=\"width:70px;\" />"
+        + "<button class=\"btn btn-outline-primary btn-sm\" type=\"submit\">Salvar</button>"
+        + "</form>";
+    }
+
+    function deleteCell(row) {
+      var url = "/admin/report-service/spare-parts/equipment-links/" + esc(equipmentId) + "/" + esc(row.id) + "/delete";
+      return "<form method=\"post\" action=\"" + url + "\" onsubmit=\"return confirm('Desassociar este spare-part do equipamento?');\">"
+        + "<input type=\"hidden\" name=\"_csrf\" value=\"" + esc(csrfToken) + "\" />"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">Desassociar</button>"
+        + "</form>";
+    }
+
+    var data = linkedData.map(function (row) {
+      return {
+        id: Number(row.id || 0),
+        description: esc(row.description || "-"),
+        partNumber: esc(row.part_number || "-"),
+        manufacturer: esc(row.manufacturer || "-"),
+        quantity: qtyCell(row),
+        obsolete: row.is_obsolete ? "Sim" : "Nao",
+        actions: deleteCell(row)
+      };
+    });
+
+    new window.gridjs.Grid({
+      columns: [
+        { id: "id", name: "ID", width: "70px" },
+        { id: "description", name: "Descricao", formatter: function (c) { return window.gridjs.html(c); } },
+        { id: "partNumber", name: "PN", formatter: function (c) { return window.gridjs.html(c); } },
+        { id: "manufacturer", name: "Fabricante", formatter: function (c) { return window.gridjs.html(c); } },
+        { id: "quantity", name: "Quantidade", sort: false, formatter: function (c) { return window.gridjs.html(c); } },
+        { id: "obsolete", name: "Obsoleto", width: "90px" },
+        { id: "actions", name: "Acoes", sort: false, formatter: function (c) { return window.gridjs.html(c); } }
+      ],
+      data: data,
+      search: true,
+      sort: true,
+      pagination: { limit: 15, summary: false },
+      language: {
+        search: { placeholder: "Filtrar associacoes..." },
+        loading: "Carregando...",
+        noRecordsFound: "Nenhum registro encontrado.",
+        error: "Falha ao carregar dados."
+      }
+    }).render(linkedTarget);
+  })();
+</script>
+<script>
+  (function () {
+    var printBtn = document.getElementById("printLinkedSparePartsBtn");
+    if (!printBtn) return;
+
+    printBtn.addEventListener("click", function () {
+      var grid = document.getElementById("linkedSparePartsGrid");
+      if (!grid) return;
+
+      // Equipment info from the alert block
+      var equipmentInfo = (function () {
+        var alert = document.querySelector(".alert.alert-light.border");
+        return alert ? alert.innerText.replace(/\s+/g, " ").trim() : "";
+      })();
+
+      // Column headers — exclude last "Acoes" column
+      var headers = [];
+      var thEls = grid.querySelectorAll(".gridjs-thead .gridjs-th");
+      thEls.forEach(function (th, i) {
+        if (i < thEls.length - 1) headers.push(th.innerText.trim());
+      });
+
+      // Visible (filtered) rows — for quantity column read the input value, skip actions
+      var rows = [];
+      var trEls = grid.querySelectorAll(".gridjs-tbody .gridjs-tr");
+      trEls.forEach(function (tr) {
+        var cells = tr.querySelectorAll(".gridjs-td");
+        var rowData = [];
+        cells.forEach(function (td, i) {
+          if (i >= cells.length - 1) return; // skip actions column
+          // For quantity cell, read the input value if present
+          var input = td.querySelector("input[type='number']");
+          rowData.push(input ? input.value : td.innerText.trim());
+        });
+        if (rowData.length) rows.push(rowData);
+      });
+
+      var searchInput = grid.querySelector(".gridjs-search-input");
+      var searchTerm = searchInput ? searchInput.value.trim() : "";
+      var now = new Date().toLocaleString("pt-BR");
+
+      var headerRow = headers.map(function (h) { return "<th>" + h + "</th>"; }).join("");
+      var bodyRows = rows.map(function (r) {
+        return "<tr>" + r.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>";
+      }).join("");
+
+      var filterLine = searchTerm
+        ? "<p class=\"filter\">Filtro aplicado: <strong>" + searchTerm + "</strong></p>"
+        : "";
+
+      var html = "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" />"
+        + "<title>Spare-Parts do Equipamento</title>"
+        + "<style>"
+        + "*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }"
+        + "body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1f2937; padding: 24px; }"
+        + ".banner { background: linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.28) 60%, rgba(0,0,0,0.10) 100%) #4e8c38; color: #fff; border-radius: 8px; padding: 14px 20px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }"
+        + ".banner h1 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }"
+        + ".banner-equip { font-size: 10px; opacity: 0.75; }"
+        + ".banner-meta { font-size: 10px; opacity: 0.7; text-align: right; white-space: nowrap; }"
+        + ".filter { font-size: 10px; color: #6b7280; margin-bottom: 10px; }"
+        + ".count { font-size: 10px; color: #6b7280; margin-bottom: 8px; }"
+        + "table { width: 100%; border-collapse: collapse; }"
+        + "thead th { background: #4e8c38; color: #fff; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 7px 8px; text-align: left; }"
+        + "tbody tr { border-bottom: 1px solid #e5e7eb; }"
+        + "tbody tr:nth-child(even) { background: #f9fafb; }"
+        + "tbody td { padding: 6px 8px; vertical-align: middle; }"
+        + "tbody td:first-child { color: #6b7280; font-size: 10px; }"
+        + "@media print { body { padding: 12px; } }"
+        + "</style></head><body>"
+        + "<div class=\"banner\">"
+        + "<div>"
+        + "<div style=\"font-size:9px;opacity:.55;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;\">SERVICE REPORT</div>"
+        + "<h1>Spare-Parts do Equipamento</h1>"
+        + (equipmentInfo ? "<div class=\"banner-equip\">" + equipmentInfo + "</div>" : "")
+        + "</div>"
+        + "<div class=\"banner-meta\">Gerado em:<br/>" + now + "</div>"
+        + "</div>"
+        + filterLine
+        + "<p class=\"count\">" + rows.length + " registro(s)</p>"
+        + "<table><thead><tr>" + headerRow + "</tr></thead>"
+        + "<tbody>" + bodyRows + "</tbody></table>"
+        + "</body></html>";
+
+      var win = window.open("", "_blank");
+      if (!win) { alert("Permita pop-ups para imprimir a lista."); return; }
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      win.print();
+    });
+  })();
+</script>
+<script>
+  (function () {
     var filterForm = document.getElementById("sparePartFilterForm");
     var customerSelect = document.getElementById("sparePartFilterCustomer");
     var equipmentSelect = document.getElementById("sparePartFilterEquipment");
@@ -401,4 +531,87 @@
   })();
 </script>
 
+<script>
+  (function () {
+    var printBtn = document.getElementById("printSparePartsBtn");
+    if (!printBtn) return;
+
+    printBtn.addEventListener("click", function () {
+      var grid = document.getElementById("sparePartsGrid");
+      if (!grid) return;
+
+      // Column headers (exclude last "Acoes" column)
+      var headers = [];
+      var thEls = grid.querySelectorAll(".gridjs-thead .gridjs-th");
+      thEls.forEach(function (th, i) {
+        if (i < thEls.length - 1) headers.push(th.innerText.trim());
+      });
+
+      // Visible rows (Grid.js renders only filtered rows in the DOM)
+      var rows = [];
+      var trEls = grid.querySelectorAll(".gridjs-tbody .gridjs-tr");
+      trEls.forEach(function (tr) {
+        var cells = tr.querySelectorAll(".gridjs-td");
+        var rowData = [];
+        cells.forEach(function (td, i) {
+          if (i < cells.length - 1) rowData.push(td.innerText.trim()); // skip actions column
+        });
+        if (rowData.length) rows.push(rowData);
+      });
+
+      // Get current search term if any
+      var searchInput = grid.querySelector(".gridjs-search-input");
+      var searchTerm = searchInput ? searchInput.value.trim() : "";
+
+      // Build print HTML
+      var headerRow = headers.map(function (h) {
+        return "<th>" + h + "</th>";
+      }).join("");
+
+      var bodyRows = rows.map(function (r) {
+        return "<tr>" + r.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>";
+      }).join("");
+
+      var now = new Date().toLocaleString("pt-BR");
+      var filterLine = searchTerm
+        ? "<p class=\"filter\">Filtro aplicado: <strong>" + searchTerm + "</strong></p>"
+        : "";
+
+      var html = "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" />"
+        + "<title>Lista de Spare-Parts</title>"
+        + "<style>"
+        + "*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }"
+        + "body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1f2937; padding: 24px; }"
+        + ".banner { background: linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.28) 60%, rgba(0,0,0,0.10) 100%) #4e8c38; color: #fff; border-radius: 8px; padding: 14px 20px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }"
+        + ".banner h1 { font-size: 16px; font-weight: 700; }"
+        + ".banner-meta { font-size: 10px; opacity: 0.7; text-align: right; }"
+        + ".filter { font-size: 10px; color: #6b7280; margin-bottom: 10px; }"
+        + ".count { font-size: 10px; color: #6b7280; margin-bottom: 8px; }"
+        + "table { width: 100%; border-collapse: collapse; }"
+        + "thead th { background: #4e8c38; color: #fff; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 7px 8px; text-align: left; }"
+        + "tbody tr { border-bottom: 1px solid #e5e7eb; }"
+        + "tbody tr:nth-child(even) { background: #f9fafb; }"
+        + "tbody td { padding: 6px 8px; vertical-align: middle; }"
+        + "tbody td:first-child { color: #6b7280; font-size: 10px; }"
+        + "@media print { body { padding: 12px; } }"
+        + "</style></head><body>"
+        + "<div class=\"banner\">"
+        + "<div><div style=\"font-size:9px;opacity:.55;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;\">SERVICE REPORT</div><h1>Lista de Spare-Parts</h1></div>"
+        + "<div class=\"banner-meta\">Gerado em: " + now + "</div>"
+        + "</div>"
+        + filterLine
+        + "<p class=\"count\">" + rows.length + " registro(s)</p>"
+        + "<table><thead><tr>" + headerRow + "</tr></thead>"
+        + "<tbody>" + bodyRows + "</tbody></table>"
+        + "</body></html>";
+
+      var win = window.open("", "_blank");
+      if (!win) { alert("Permita pop-ups para imprimir a lista."); return; }
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      win.print();
+    });
+  })();
+</script>
 <%- include("../partials/footer") %>

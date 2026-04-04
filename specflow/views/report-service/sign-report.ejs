@@ -1,5 +1,55 @@
 <%- include("../partials/head", { pageTitle }) %>
 <link href="/public/css/report-editor.css" rel="stylesheet" />
+<style>
+  .sign-canvas-wrap {
+    border: 2px solid #b0c4b1;
+    border-radius: 8px;
+    background: #fafcfa;
+    position: relative;
+  }
+  #signatureCanvas {
+    display: block;
+    width: 100%;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .sign-canvas-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #a0b4a2;
+    font-size: 0.88rem;
+    pointer-events: none;
+    user-select: none;
+  }
+  .sign-canvas-clear {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: 0.78rem;
+    color: #888;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .sign-canvas-clear:hover { color: #b02a37; }
+</style>
+<%
+  function fmtDateTime(value) {
+    if (!value) return "-";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "-";
+    const dd = String(d.getDate()).padStart(2,"0");
+    const mo = String(d.getMonth()+1).padStart(2,"0");
+    const yy = String(d.getFullYear()).slice(-2);
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mi = String(d.getMinutes()).padStart(2,"0");
+    const ss = String(d.getSeconds()).padStart(2,"0");
+    return `${dd}/${mo}/${yy} ${hh}:${mi}:${ss}`;
+  }
+%>
 
 <section class="token-console">
   <div class="card app-card token-hero-card">
@@ -49,12 +99,12 @@
             <div class="col-12"><input class="form-control" name="signer_company" id="signerCompanyInput" value="Vextrom" placeholder="Empresa" /></div>
             <div class="col-12">
               <label class="form-label">Assinatura (canvas)</label>
-              <canvas id="signatureCanvas" width="680" height="180" class="w-100 border rounded bg-white"></canvas>
-              <input type="hidden" name="signature_data" id="signatureDataInput" />
-              <div class="d-flex gap-2 mt-2">
-                <button class="btn btn-outline-secondary btn-sm" type="button" id="signatureClearBtn">Limpar assinatura</button>
-                <button class="btn btn-outline-primary btn-sm" type="button" id="signatureUseBtn">Usar assinatura</button>
+              <div class="sign-canvas-wrap" style="height:160px;">
+                <canvas id="signatureCanvas" height="160"></canvas>
+                <span class="sign-canvas-hint" id="canvasHint">Assine aqui</span>
+                <button type="button" class="sign-canvas-clear" id="clearCanvas">Limpar</button>
               </div>
+              <input type="hidden" name="signature_data" id="signatureDataInput" />
             </div>
             <div class="col-12 d-flex justify-content-end">
               <button class="btn btn-success btn-sm" type="submit">Confirmar assinatura</button>
@@ -77,7 +127,7 @@
                   <tr>
                     <td><%= item.signer_name || "-" %></td>
                     <td><%= item.signer_role || "-" %></td>
-                    <td><%= item.signed_at ? new Date(item.signed_at).toLocaleString('pt-BR') : "-" %></td>
+                    <td><%= fmtDateTime(item.signed_at) %></td>
                     <td>
                       <form method="post" action="/admin/report-service/orders/<%= order.id %>/signatures/<%= item.id %>/delete" class="m-0" onsubmit="return confirm('Excluir esta assinatura?');">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
@@ -99,16 +149,33 @@
   (function () {
     var canvas = document.getElementById("signatureCanvas");
     var outputInput = document.getElementById("signatureDataInput");
-    var clearBtn = document.getElementById("signatureClearBtn");
-    var useBtn = document.getElementById("signatureUseBtn");
+    var clearBtn = document.getElementById("clearCanvas");
+    var hint = document.getElementById("canvasHint");
+    var form = document.querySelector('form[action="/admin/report-service/orders/<%= order.id %>/sign-report"]');
     var linkedTechnicianSelect = document.getElementById("linkedTechnicianSelect");
     var signerNameInput = document.getElementById("signerNameInput");
     var signerRoleInput = document.getElementById("signerRoleInput");
     var signerCompanyInput = document.getElementById("signerCompanyInput");
-    if (!canvas || !outputInput || !clearBtn || !useBtn) return;
+    if (!canvas || !outputInput || !clearBtn || !form) return;
 
     var ctx = canvas.getContext("2d");
     var drawing = false;
+    var hasDrawn = false;
+
+    function resizeCanvas() {
+      var rect = canvas.parentElement.getBoundingClientRect();
+      var dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = 160 * dpr;
+      canvas.style.width = rect.width + "px";
+      canvas.style.height = "160px";
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      ctx.strokeStyle = "#1a2b1e";
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    }
 
     function getPosition(event) {
       var rect = canvas.getBoundingClientRect();
@@ -129,6 +196,8 @@
       var point = getPosition(event);
       ctx.beginPath();
       ctx.moveTo(point.x, point.y);
+      if (hint) hint.style.display = "none";
+      hasDrawn = true;
       event.preventDefault();
     }
 
@@ -157,12 +226,22 @@
     canvas.addEventListener("touchend", endDraw, { passive: false });
 
     clearBtn.addEventListener("click", function () {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      var dpr = window.devicePixelRatio || 1;
+      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      hasDrawn = false;
+      if (hint) hint.style.display = "";
       outputInput.value = "";
     });
 
-    useBtn.addEventListener("click", function () {
+    form.addEventListener("submit", function (event) {
+      if (!hasDrawn) {
+        outputInput.value = "";
+        return;
+      }
       outputInput.value = canvas.toDataURL("image/png");
+      if (!outputInput.value || outputInput.value === "data:,") {
+        event.preventDefault();
+      }
     });
 
     if (linkedTechnicianSelect && signerNameInput) {
@@ -178,6 +257,9 @@
         }
       });
     }
+
+    resizeCanvas();
+    window.addEventListener("resize", resizeCanvas);
   })();
 </script>
 

@@ -1,12 +1,17 @@
 const express = require("express");
 const { createReportWebController } = require("../controllers/createReportWebController");
+const { createAnalyticsWebController } = require("../controllers/analyticsController");
 
 function createReportServiceWebRouter(deps) {
   const router = express.Router();
   const asyncHandler = deps.asyncHandler;
   const controller = createReportWebController(deps);
+  const analyticsController = createAnalyticsWebController(deps);
 
   router.get("/", deps.requireAdminAuth, asyncHandler(controller.home));
+  router.get("/analytics", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(analyticsController.dashboard));
+  router.get("/analytics/data", deps.requireAdminAuth, asyncHandler(analyticsController.dashboardData));
+  router.get("/analytics/export-pdf", deps.requireAdminAuth, asyncHandler(analyticsController.exportPdf));
   router.get("/orders", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.listOrders));
   router.post("/orders", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createOrder));
   router.post("/orders/:id/update-registration", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateOrderRegistration));
@@ -36,6 +41,9 @@ function createReportServiceWebRouter(deps) {
   router.post("/orders/:id/daily-logs/revise-text", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.reviseDailyLogText));
   router.post("/orders/:id/daily-logs/generate-conclusion", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.generateConclusionFromLogs));
   router.post("/orders/:id/sections/revise-text", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.reviseSectionText));
+  router.post("/orders/:id/translate", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.translateReport));
+  router.post("/orders/:id/translate/start", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.startTranslateReportJob));
+  router.get("/orders/:id/translate/jobs/:jobId", deps.requireAdminAuth, asyncHandler(controller.getTranslateReportJob));
   router.post("/orders/:id/sections", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createSection));
   router.post("/orders/:id/sections/:sectionKey", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.saveSection));
   router.post("/orders/:id/sections/:sectionKey/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteSection));
@@ -48,6 +56,7 @@ function createReportServiceWebRouter(deps) {
   router.post("/orders/:id/sign-requests/:requestId/cancel", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.cancelSignRequest));
   router.post("/orders/:id/sign-requests/:requestId/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteSignRequest));
   router.post("/orders/:id/send-signed-email", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.sendSignedReportByEmail));
+  router.post("/orders/:id/send-os-email", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.sendOsCreatedEmail));
   router.get("/assets", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.listAssetsGlobal));
   router.post("/assets/technicians", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createGlobalTechnician));
   router.post("/assets/technicians/:techId/update", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateGlobalTechnician));

@@ -83,11 +83,11 @@
       <% if (justSigned) { %>
         <div class="sign-state-icon">✅</div>
         <h2 class="h5 mb-2 text-success">Assinatura registrada com sucesso!</h2>
-        <p class="text-muted">Obrigado, <strong><%= signRequest.signer_name %></strong>. Sua assinatura foi registrada em <%= new Date(signRequest.updated_at).toLocaleString('pt-BR') %>.</p>
+        <p class="text-muted">Obrigado, <strong><%= signRequest.signer_name %></strong>. Sua assinatura foi registrada em <%= (() => { const d = new Date(signRequest.updated_at); const dd=String(d.getDate()).padStart(2,"0"), mo=String(d.getMonth()+1).padStart(2,"0"), yy=String(d.getFullYear()).slice(-2), hh=String(d.getHours()).padStart(2,"0"), mi=String(d.getMinutes()).padStart(2,"0"), ss=String(d.getSeconds()).padStart(2,"0"); return `${dd}/${mo}/${yy} ${hh}:${mi}:${ss}`; })() %>.</p>
       <% } else { %>
         <div class="sign-state-icon">✅</div>
         <h2 class="h5 mb-2">Documento já assinado</h2>
-        <p class="text-muted">Este documento foi assinado por <strong><%= signRequest.signer_name %></strong> em <%= new Date(signRequest.signed_at).toLocaleString('pt-BR') %>.</p>
+        <p class="text-muted">Este documento foi assinado por <strong><%= signRequest.signer_name %></strong> em <%= (() => { const d = new Date(signRequest.signed_at); const dd=String(d.getDate()).padStart(2,"0"), mo=String(d.getMonth()+1).padStart(2,"0"), yy=String(d.getFullYear()).slice(-2), hh=String(d.getHours()).padStart(2,"0"), mi=String(d.getMinutes()).padStart(2,"0"), ss=String(d.getSeconds()).padStart(2,"0"); return `${dd}/${mo}/${yy} ${hh}:${mi}:${ss}`; })() %>.</p>
       <% } %>
       <div class="d-flex justify-content-center gap-2 mt-3">
         <a class="btn btn-outline-secondary btn-sm" href="/r/sign/<%= signRequest.token %>/report" target="_blank" rel="noopener">Expandir relatorio</a>

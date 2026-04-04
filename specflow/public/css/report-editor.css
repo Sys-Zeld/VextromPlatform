@@ -288,3 +288,51 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Theme alignment */
+.token-console {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 16px);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface) 92%, #fff 8%) 0%,
+      var(--surface-2) 100%
+    );
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+}
+
+.report-section-card {
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.report-image-input-card {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--surface-2) 70%, var(--surface) 30%);
+}
+
+.report-section-card-footer {
+  border-top-color: color-mix(in srgb, var(--border) 72%, var(--muted-text) 28%);
+}
+
+.report-section-footer-title {
+  color: var(--muted-text);
+}
+
+.report-image-preview-slot {
+  border-color: color-mix(in srgb, var(--text) 78%, var(--border) 22%);
+  background: color-mix(in srgb, var(--surface-2) 78%, var(--surface) 22%);
+  color: var(--text);
+}
+
+.report-quill-title-editor .ql-toolbar.ql-snow,
+.report-quill-editor .ql-toolbar.ql-snow,
+.report-quill-title-editor .ql-container.ql-snow,
+.report-quill-editor .ql-container.ql-snow,
+.report-quill-editor .ql-editor td,
+.report-quill-editor .ql-editor th {
+  border-color: var(--border);
+}

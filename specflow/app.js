@@ -640,7 +640,7 @@ function extractBackupFileNameFromOutput(output) {
   const matches = text.match(/Backup(?:\s+[a-z-]+)?\s+concluido:\s*([^\r\n]+\.sql)/i);
   if (!matches || !matches[1]) return "";
   const candidate = path.basename(matches[1].trim());
-  if (!/^(db-backup|specflow-backup|module-spec-backup|report-service-backup|db-import)-.*\.sql$/i.test(candidate)) return "";
+  if (!/^(db-backup|specflow-backup|config-backup|module-spec-backup|report-service-backup|db-import)-.*\.sql$/i.test(candidate)) return "";
   return candidate;
 }
 
@@ -655,6 +655,7 @@ function resolveRestoreModuleFromBackupPath(backupFilePath) {
   if (!fileName.endsWith(".sql")) return "";
   if (fileName.startsWith("module-spec-backup-")) return "module-spec";
   if (fileName.startsWith("report-service-backup-")) return "report-service";
+  if (fileName.startsWith("config-backup-")) return "config";
   if (fileName.startsWith("specflow-backup-") || fileName.startsWith("db-backup-") || fileName.startsWith("db-import-")) {
     return "specflow";
   }
@@ -2196,9 +2197,10 @@ app.post("/admin/maintenance/system/command", csrfProtection, requireAdminAuth, 
     label = "node scripts/backup-module-database.js all";
     execution = await runNodeScripts([{ script: "scripts/backup-module-database.js", args: ["all"] }]);
   } else if (action === "migrate_all") {
-    label = "npm run db:migrate + npm run db:migrate:module-spec + npm run db:migrate:report-service";
+    label = "npm run db:migrate + npm run db:migrate:config + npm run db:migrate:module-spec + npm run db:migrate:report-service";
     execution = await runNodeScripts([
       { script: "scripts/migrate.js" },
+      { script: "configdb/migrate.js" },
       { script: "module_spec/migrate.js" },
       { script: "report_service/migrate.js" }
     ]);
@@ -2354,12 +2356,14 @@ app.post("/admin/maintenance/report-service/email-templates/save", csrfProtectio
   const templateName = sanitizeInput(req.body.template_name);
   const templateSubject = sanitizeInput(req.body.template_subject);
   const templateHtml = String(req.body.template_html || "").slice(0, 120000);
+  const templatePurpose = sanitizeInput(req.body.template_purpose) || "general";
   const setDefaultTemplate = parseBooleanInput(req.body.set_default_template) === true;
   const emailTemplateEditorValues = {
     template_id: templateId,
     template_name: templateName,
     template_subject: templateSubject,
     template_html: templateHtml,
+    template_purpose: templatePurpose,
     set_default_template: setDefaultTemplate
   };
 
@@ -2370,6 +2374,7 @@ app.post("/admin/maintenance/report-service/email-templates/save", csrfProtectio
       name: templateName,
       subject: templateSubject,
       html: templateHtml,
+      purpose: templatePurpose,
       setAsDefault: setDefaultTemplate
     });
     emailTemplatesUpdateResult = {
@@ -4897,5 +4902,4 @@ if (require.main === module) {
       process.exit(1);
     });
 }
-
 

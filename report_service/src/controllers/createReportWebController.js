@@ -5,9 +5,13 @@ const nodemailer = require("nodemailer");
 const { v4: uuidv4 } = require("uuid");
 const repo = require("../repositories/serviceReportRepository");
 const service = require("../services/serviceReportService");
-const { generatePdfToFile, buildPdfBufferFromHtml } = require("../services/serviceReportPdfService");
+const {
+  buildPdfBufferFromHtml,
+  buildPdfBufferFromUrl
+} = require("../services/serviceReportPdfService");
+const env = require("../../../specflow/config/env");
 const { getReportConfigSettings, saveReportConfigSettings } = require("../services/reportConfigSettings");
-const { getReportServiceEmailSettings } = require("../services/emailSettings");
+const { getReportServiceEmailSettings, getTemplateByPurpose } = require("../services/emailSettings");
 const { buildPreviewModel } = require("../services/reportPreviewService");
 const {
   renderReportPreviewHtml,
@@ -69,6 +73,44 @@ function createReportWebController(deps) {
     return Boolean(site && Number(site.customer_id) === customerId);
   };
   const buildTemplatePreviewRoute = (orderId, templateKey) => `/admin/report-service/orders/${orderId}/preview-html/template/${normalizeReportTemplateKey(templateKey)}`;
+  const resolveRequestBaseUrl = (req) => {
+    const host = String((req.get && req.get("host")) || req.headers.host || "").trim();
+    const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+    const protocol = forwardedProto || req.protocol || "http";
+    if (host) return `${protocol}://${host}`;
+    return String(env.appBaseUrl || "http://localhost:3000").replace(/\/+$/, "");
+  };
+  const buildTemplatePreviewAbsoluteUrl = (req, orderId, templateKey) => `${resolveRequestBaseUrl(req)}${buildTemplatePreviewRoute(orderId, templateKey)}`;
+  const buildSignedReportLink = (req, token) => `${resolveRequestBaseUrl(req)}/r/signed/${encodeURIComponent(String(token || "").trim())}`;
+  const buildSignRequestLink = (req, token) => `${resolveRequestBaseUrl(req)}/r/sign/${encodeURIComponent(String(token || "").trim())}`;
+  const REPORT_LANGUAGES = Object.freeze({
+    pt: { key: "pt", label: "Português" },
+    en: { key: "en", label: "Inglês" },
+    es: { key: "es", label: "Espanhol" }
+  });
+  const REPORT_LANGUAGE_KEYS = Object.keys(REPORT_LANGUAGES);
+  const translationJobs = new Map();
+
+  function normalizeReportLanguage(value, fallback = "pt") {
+    const normalized = String(value || "").trim().toLowerCase();
+    return REPORT_LANGUAGE_KEYS.includes(normalized) ? normalized : fallback;
+  }
+
+  function stripHtmlToText(value) {
+    return String(value || "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function buildTranslationPrompt(languageKey) {
+    const lang = REPORT_LANGUAGES[normalizeReportLanguage(languageKey)] || REPORT_LANGUAGES.pt;
+    return `Traduza o conteudo para ${lang.label}. Apenas traduza e retorne apenas o texto. Sem explicacoes extras. Preserve codigos tecnicos, placeholders como @img=ID/@equip=ID/@tblequip e URLs sem alteracao.`;
+  }
 
   function parseTimeToMinutes(timeStr) {
     if (!timeStr) return null;
@@ -161,6 +203,66 @@ function createReportWebController(deps) {
     return String(value || "").replace(/[\r\n]+/g, " ").trim();
   }
 
+  function incrementReportRevision(value) {
+    const input = String(value || "").trim().toUpperCase();
+    if (!/^[A-Z]+$/.test(input)) return "A";
+    const chars = input.split("");
+    let cursor = chars.length - 1;
+    while (cursor >= 0) {
+      if (chars[cursor] !== "Z") {
+        chars[cursor] = String.fromCharCode(chars[cursor].charCodeAt(0) + 1);
+        return chars.join("");
+      }
+      chars[cursor] = "A";
+      cursor -= 1;
+    }
+    return `A${chars.join("")}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderEmailPlaceholder(template, variables) {
+    return String(template || "").replace(/\{\{\s*([a-zA-Z0-9_-]+)\s*\}\}/g, (match, key) => {
+      const k = String(key || "").trim().toLowerCase();
+      if (!Object.prototype.hasOwnProperty.call(variables, k)) return match;
+      return escapeHtml(String(variables[k] || ""));
+    });
+  }
+
+  function buildOsTemplateVariables(order, technicians) {
+    const techNames = (Array.isArray(technicians) ? technicians : [])
+      .map((t) => String(t.name || "").trim())
+      .filter(Boolean)
+      .join(", ");
+    return {
+      os_codigo: order.service_order_code || order.service_order_display || `OS-${order.id}`,
+      os_titulo: order.title || "",
+      cliente: order.customer_name || "",
+      local: order.site_name || "",
+      data_abertura: order.opening_date ? String(order.opening_date).slice(0, 10) : "",
+      status: order.status || "",
+      tecnicos: techNames
+    };
+  }
+
+  function buildSignedReportTemplateVariables(order, report, signedLink, extra = {}) {
+    return {
+      os_codigo: order.service_order_code || order.service_order_display || `OS-${order.id}`,
+      relatorio_numero: String(report.report_number || ""),
+      cliente: order.customer_name || "",
+      local: order.site_name || "",
+      link_relatorio: signedLink || "",
+      signatario: String(extra.signatario || "")
+    };
+  }
+
   function hasSignedApproval(signRequests, signatures) {
     const requests = Array.isArray(signRequests) ? signRequests : [];
     const sigs = Array.isArray(signatures) ? signatures : [];
@@ -174,10 +276,18 @@ function createReportWebController(deps) {
   }
 
   function buildOrderEditorRedirect(req, orderId) {
+    const returnTo = String((req.body && req.body.return_to) || (req.query && req.query.return_to) || "").trim().toLowerCase();
+    if (returnTo === "report-editor") {
+      return `/admin/report-service/orders/${orderId}/report-editor`;
+    }
     const referer = String(req.headers.referer || "");
     return referer.includes("/report-editor")
       ? `/admin/report-service/orders/${orderId}/report-editor`
       : `/admin/report-service/orders/${orderId}`;
+  }
+
+  function isSystemAdminUser(res) {
+    return String(res.locals.adminRole || "").toLowerCase() === "admin";
   }
 
   async function ensureOrderEditable(req, res, orderId, options = {}) {
@@ -192,7 +302,7 @@ function createReportWebController(deps) {
     }
 
     if (isOrderApproved(order)) {
-      const message = "OS aprovada. Edicao bloqueada. Use Revalidar OS com senha para liberar.";
+      const message = "OS aprovada. Edicao bloqueada. Use Revalidar OS para liberar.";
       if (options.json) {
         res.status(423).json({ ok: false, error: message });
       } else {
@@ -281,6 +391,336 @@ function createReportWebController(deps) {
     return { reportConfig, templateKey };
   }
 
+  async function buildPdfFromPreviewRoute(req, orderId, templateKey, payload) {
+    const previewUrl = buildTemplatePreviewAbsoluteUrl(req, orderId, templateKey);
+    try {
+      return await buildPdfBufferFromUrl(previewUrl, {
+        cookieHeader: String(req.headers.cookie || "")
+      });
+    } catch (urlErr) {
+      // eslint-disable-next-line no-console
+      console.error("[report-service] Falha ao gerar PDF pela URL de preview. Fallback HTML acionado.", urlErr);
+      const { reportConfig } = await resolveRenderConfig(templateKey, null);
+      const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
+      return buildPdfBufferFromHtml(htmlSource, payload);
+    }
+  }
+
+  function maskProtectedTokens(inputText) {
+    const source = String(inputText || "");
+    const matches = [];
+    const masked = source.replace(/(@[a-z_]+(?:\s*=\s*\d+)?|https?:\/\/[^\s<>"']+|\/docs\/report\/img\/[^\s<>"']+)/gi, (found) => {
+      const token = `[[[KEEP_TOKEN_${matches.length}]]]`;
+      matches.push(found);
+      return token;
+    });
+    return { masked, matches };
+  }
+
+  function unmaskProtectedTokens(inputText, matches = []) {
+    let output = String(inputText || "");
+    matches.forEach((value, index) => {
+      const token = `[[[KEEP_TOKEN_${index}]]]`;
+      output = output.split(token).join(String(value || ""));
+    });
+    return output;
+  }
+
+  async function translateTextUsingAi(sourceText, targetLanguage, cache = null) {
+    const text = String(sourceText || "");
+    if (!text.trim()) return text;
+    const cacheKey = `${normalizeReportLanguage(targetLanguage, "pt")}::${text}`;
+    if (cache && cache.has(cacheKey)) return cache.get(cacheKey);
+    if (typeof reviseTextWithAi !== "function") {
+      const err = new Error("Servico de IA indisponivel.");
+      err.statusCode = 500;
+      throw err;
+    }
+    const { masked, matches } = maskProtectedTokens(text);
+    const result = await reviseTextWithAi({
+      text: masked,
+      prompt: buildTranslationPrompt(targetLanguage),
+      preserveFormatting: false
+    });
+    const translatedRaw = String(result && result.revisedText ? result.revisedText : "");
+    const translated = unmaskProtectedTokens(translatedRaw, matches);
+    if (cache) cache.set(cacheKey, translated);
+    return translated;
+  }
+
+  async function translateTextKeepingSpacing(sourceText, targetLanguage, cache = null) {
+    const text = String(sourceText || "");
+    if (!text.trim()) return text;
+    const leading = (text.match(/^\s+/) || [""])[0];
+    const trailing = (text.match(/\s+$/) || [""])[0];
+    const middle = text.slice(leading.length, text.length - trailing.length);
+    const translatedMiddle = await translateTextUsingAi(middle, targetLanguage, cache);
+    return `${leading}${String(translatedMiddle || "").trim()}${trailing}`;
+  }
+
+  function normalizeDelta(rawDelta, fallbackText = "") {
+    if (rawDelta && typeof rawDelta === "object" && Array.isArray(rawDelta.ops)) {
+      return rawDelta;
+    }
+    if (typeof rawDelta === "string" && rawDelta.trim()) {
+      try {
+        const parsed = JSON.parse(rawDelta);
+        if (parsed && Array.isArray(parsed.ops)) return parsed;
+      } catch (_err) {
+        // ignore parse errors and fallback
+      }
+    }
+    return {
+      ops: [{ insert: `${String(fallbackText || "")}\n` }]
+    };
+  }
+
+  function extractTextFromDelta(delta) {
+    if (!delta || !Array.isArray(delta.ops)) return "";
+    return delta.ops
+      .map((op) => (op && typeof op.insert === "string" ? op.insert : ""))
+      .join("")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  async function translateDeltaUsingAi(sourceDelta, targetLanguage, fallbackText = "", cache = null) {
+    const delta = normalizeDelta(sourceDelta, fallbackText);
+    const translatedOps = [];
+    for (const op of delta.ops) {
+      if (typeof op?.insert === "string") {
+        // eslint-disable-next-line no-await-in-loop
+        const translatedInsert = await translateTextKeepingSpacing(op.insert, targetLanguage, cache);
+        translatedOps.push({
+          ...op,
+          insert: translatedInsert
+        });
+      } else {
+        translatedOps.push(op);
+      }
+    }
+    return { ops: translatedOps };
+  }
+
+  async function translateHtmlPreservingStructure(sourceHtml, targetLanguage, cache = null) {
+    const html = String(sourceHtml || "").trim();
+    if (!html) return "";
+    const tokens = html.split(/(<[^>]+>)/g);
+    const output = [];
+    for (const token of tokens) {
+      if (!token) continue;
+      if (token.startsWith("<")) {
+        output.push(token);
+      } else {
+        // eslint-disable-next-line no-await-in-loop
+        const translatedToken = await translateTextKeepingSpacing(token, targetLanguage, cache);
+        output.push(translatedToken);
+      }
+    }
+    return sanitizeReportSectionHtml(output.join(""));
+  }
+
+  async function translatePersistedReportContent(orderId, targetLanguage, options = {}) {
+    const normalizedTarget = normalizeReportLanguage(targetLanguage, "pt");
+    const translationCache = new Map();
+    const onProgress = typeof options.onProgress === "function" ? options.onProgress : null;
+    const data = await loadOrderEditorData(orderId);
+    if (!data || !data.report) {
+      const err = new Error("OS nao encontrada.");
+      err.statusCode = 404;
+      throw err;
+    }
+    const currentLanguage = normalizeReportLanguage(data.report.document_language, "pt");
+    if (currentLanguage === normalizedTarget) {
+      if (onProgress) {
+        onProgress({
+          progress: 100,
+          message: `Relatorio ja esta em ${REPORT_LANGUAGES[normalizedTarget].label}.`,
+          current: 0,
+          total: 0
+        });
+      }
+      return { changed: false, targetLanguage: normalizedTarget };
+    }
+
+    const sections = Array.isArray(data.sections) ? data.sections : [];
+    const dailyLogs = Array.isArray(data.dailyLogs) ? data.dailyLogs : [];
+    const components = Array.isArray(data.components) ? data.components : [];
+    const totalSteps = 1 + sections.length + dailyLogs.length + components.length;
+    let doneSteps = 0;
+    const emitProgress = (message) => {
+      doneSteps += 1;
+      if (!onProgress) return;
+      onProgress({
+        progress: Math.max(1, Math.min(99, Math.round((doneSteps / totalSteps) * 100))),
+        message,
+        current: doneSteps,
+        total: totalSteps
+      });
+    };
+
+    const translatedReportTitle = await translateTextUsingAi(data.report.title || "", normalizedTarget, translationCache);
+    await service.updateReport(data.report.id, {
+      revision: data.report.revision,
+      title: translatedReportTitle || data.report.title,
+      status: data.report.status,
+      issueDate: data.report.issue_date,
+      documentLanguage: normalizedTarget,
+      preparedBy: data.report.prepared_by || "",
+      reviewedBy: data.report.reviewed_by || "",
+      approvedBy: data.report.approved_by || "",
+      pdfPath: data.report.pdf_path || ""
+    });
+    emitProgress("Traduzindo dados principais do relatorio...");
+
+    for (let i = 0; i < sections.length; i += 1) {
+      const section = sections[i];
+      const sectionTitleSource = String(section.section_title_text || section.section_title || "");
+      const sectionContentSource = String(section.content_text || stripHtmlToText(section.content_html || ""));
+      // eslint-disable-next-line no-await-in-loop
+      const translatedTitleDelta = await translateDeltaUsingAi(
+        section.section_title_delta_json,
+        normalizedTarget,
+        sectionTitleSource,
+        translationCache
+      );
+      // eslint-disable-next-line no-await-in-loop
+      const translatedContentDelta = await translateDeltaUsingAi(
+        section.content_delta_json,
+        normalizedTarget,
+        sectionContentSource,
+        translationCache
+      );
+      let translatedTitleHtml = String(section.section_title_html || "");
+      let translatedContentHtml = String(section.content_html || "");
+      if (translatedTitleHtml.trim()) {
+        // eslint-disable-next-line no-await-in-loop
+        translatedTitleHtml = await translateHtmlPreservingStructure(translatedTitleHtml, normalizedTarget, translationCache);
+      }
+      if (translatedContentHtml.trim()) {
+        // eslint-disable-next-line no-await-in-loop
+        translatedContentHtml = await translateHtmlPreservingStructure(translatedContentHtml, normalizedTarget, translationCache);
+      }
+      const translatedTitleText = extractTextFromDelta(translatedTitleDelta) || sectionTitleSource;
+      const translatedContentText = extractTextFromDelta(translatedContentDelta) || sectionContentSource;
+
+      // eslint-disable-next-line no-await-in-loop
+      await service.upsertReportSection(data.report.id, section.section_key, {
+        sectionTitle: translatedTitleText || section.section_title || "",
+        sectionTitleText: translatedTitleText || section.section_title_text || "",
+        sectionTitleHtml: translatedTitleHtml || section.section_title_html || "",
+        sectionTitleDeltaJson: translatedTitleDelta,
+        contentText: translatedContentText || section.content_text || "",
+        contentHtml: translatedContentHtml || section.content_html || "",
+        contentDeltaJson: translatedContentDelta,
+        imageLeftPath: section.image_left_path || "",
+        imageRightPath: section.image_right_path || "",
+        sortOrder: section.sort_order,
+        isVisible: section.is_visible !== false
+      });
+      emitProgress(`Traduzindo capitulo ${i + 1}/${sections.length}...`);
+    }
+
+    for (let i = 0; i < dailyLogs.length; i += 1) {
+      const log = dailyLogs[i];
+      const sourceTitle = String(log.title || "").trim();
+      const sourceContent = String(log.content || "").trim();
+      // eslint-disable-next-line no-await-in-loop
+      const translatedTitle = sourceTitle ? await translateTextUsingAi(sourceTitle, normalizedTarget, translationCache) : "";
+      // eslint-disable-next-line no-await-in-loop
+      const translatedContent = sourceContent ? await translateTextUsingAi(sourceContent, normalizedTarget, translationCache) : "";
+      // eslint-disable-next-line no-await-in-loop
+      await repo.updateDailyLogByOrderAndId(orderId, Number(log.id), {
+        activityDate: log.activity_date,
+        title: translatedTitle || sourceTitle,
+        content: translatedContent || sourceContent,
+        notes: log.notes || "",
+        sortOrder: Number(log.sort_order || 0)
+      });
+      emitProgress(`Traduzindo descricoes diarias ${i + 1}/${dailyLogs.length}...`);
+    }
+
+    for (let i = 0; i < components.length; i += 1) {
+      const component = components[i];
+      const sourceDescription = String(component.description || "").trim();
+      const sourceNotes = String(component.notes || "").trim();
+      // eslint-disable-next-line no-await-in-loop
+      const translatedDescription = sourceDescription ? await translateTextUsingAi(sourceDescription, normalizedTarget, translationCache) : "";
+      // eslint-disable-next-line no-await-in-loop
+      const translatedNotes = sourceNotes ? await translateTextUsingAi(sourceNotes, normalizedTarget, translationCache) : "";
+      // eslint-disable-next-line no-await-in-loop
+      await repo.updateComponent(Number(component.id), {
+        category: component.category,
+        equipmentId: component.equipment_id ? Number(component.equipment_id) : null,
+        quantity: Number(component.quantity || 1),
+        description: translatedDescription || sourceDescription,
+        partNumber: component.part_number || "",
+        notes: translatedNotes || sourceNotes,
+        sortOrder: Number(component.sort_order || 0)
+      });
+      emitProgress(`Traduzindo componentes ${i + 1}/${components.length}...`);
+    }
+
+    if (onProgress) {
+      onProgress({
+        progress: 100,
+        message: `Traducao concluida para ${REPORT_LANGUAGES[normalizedTarget].label}.`,
+        current: totalSteps,
+        total: totalSteps
+      });
+    }
+
+    return { changed: true, targetLanguage: normalizedTarget };
+  }
+
+  function createTranslationJob({ orderId, targetLanguage }) {
+    const jobId = uuidv4();
+    const nowIso = new Date().toISOString();
+    const job = {
+      id: jobId,
+      orderId,
+      targetLanguage,
+      status: "queued",
+      progress: 0,
+      message: "Tradução na fila...",
+      error: "",
+      createdAt: nowIso,
+      updatedAt: nowIso,
+      finishedAt: ""
+    };
+    translationJobs.set(jobId, job);
+
+    (async () => {
+      try {
+        job.status = "running";
+        job.message = "Iniciando tradução com IA...";
+        job.updatedAt = new Date().toISOString();
+        const result = await translatePersistedReportContent(orderId, targetLanguage, {
+          onProgress(state) {
+            job.progress = Number(state && state.progress ? state.progress : job.progress);
+            job.message = String(state && state.message ? state.message : job.message);
+            job.updatedAt = new Date().toISOString();
+          }
+        });
+        job.status = "completed";
+        job.progress = 100;
+        job.message = `Tradução concluída (${REPORT_LANGUAGES[result.targetLanguage].label}).`;
+      } catch (err) {
+        job.status = "failed";
+        job.error = err && err.message ? err.message : "Falha ao traduzir relatório.";
+        job.message = "Falha na tradução.";
+      } finally {
+        job.updatedAt = new Date().toISOString();
+        job.finishedAt = new Date().toISOString();
+        setTimeout(() => {
+          translationJobs.delete(jobId);
+        }, 30 * 60 * 1000);
+      }
+    })();
+
+    return job;
+  }
+
   return {
     async home(_req, res) {
       return res.redirect("/admin/report-service/orders");
@@ -317,6 +757,7 @@ function createReportWebController(deps) {
         sites,
         allGlobalTechnicians,
         created: req.query.created === "1",
+        createError: sanitizeInput(req.query.create_error).toLowerCase(),
         updated: req.query.updated === "1",
         editLocked: req.query.edit_locked === "1",
         updateError: req.query.update_error === "1",
@@ -327,6 +768,9 @@ function createReportWebController(deps) {
     },
 
     async createOrder(req, res) {
+      if (!isSystemAdminUser(res)) {
+        return res.redirect("/admin/report-service/orders?create_error=forbidden_admin");
+      }
       const created = await service.createOrder({
         customerId: req.body.customer_id,
         siteId: req.body.site_id,
@@ -366,7 +810,7 @@ function createReportWebController(deps) {
         title: sanitizeInput(req.body.title),
         description: sanitizeInput(req.body.description),
         status: order.status,
-        openingDate: order.opening_date,
+        openingDate: sanitizeInput(req.body.opening_date) || order.opening_date || null,
         closingDate: order.closing_date,
         updatedBy: res.locals.adminUsername || ""
       });
@@ -894,6 +1338,8 @@ function createReportWebController(deps) {
         validationError: req.query.validation_error === "1",
         revalidated: req.query.revalidated === "1",
         revalidateError: sanitizeInput(req.query.revalidate_error).toLowerCase(),
+        osEmailSent: req.query.os_email_sent === "1",
+        osEmailError: sanitizeInput(req.query.os_email_error).toLowerCase(),
         osValidation,
         timesheetError: null,
         csrfToken: req.csrfToken()
@@ -905,6 +1351,8 @@ function createReportWebController(deps) {
       const data = await loadOrderEditorData(orderId);
       if (!data) return res.status(404).send("OS nao encontrada.");
       const orderView = withServiceOrderDisplay(data.order);
+      const requestedTemplateKey = sanitizeInput(req.query.template_key);
+      const { reportConfig, templateKey } = await resolveRenderConfig(requestedTemplateKey, null);
       const osValidation = buildOrderValidationSummary(data);
       const signRequestGuard = buildElectronicSignatureLinkGuard(data);
       let signRequests = [];
@@ -912,12 +1360,29 @@ function createReportWebController(deps) {
       const canSendSignedReport = hasSignedApproval(signRequests, data.signatures);
       const emailErrorMap = {
         not_signed: "O envio por e-mail so e permitido apos o relatorio estar assinado.",
+        token_not_found: "Nao foi possivel gerar o link assinado do relatorio.",
         invalid_to: "Informe ao menos 1 destinatario valido no campo Para.",
         invalid_cc: "Existe e-mail invalido no campo CC.",
         smtp: "Configuracao SMTP incompleta no modulo Service Report.",
         send_failed: "Falha ao enviar e-mail do relatorio assinado."
       };
       const emailErrorKey = sanitizeInput(req.query.email_error).toLowerCase();
+      const signLinkEmailErrorMap = {
+        invalid_signer_email: "Informe um e-mail valido para o signatario.",
+        smtp: "Configuracao SMTP incompleta no modulo Service Report.",
+        send_failed: "Link criado, mas houve falha ao enviar e-mail para o signatario.",
+        translate_failed: "Falha ao traduzir o relatorio antes de enviar para assinatura.",
+        ai_unavailable: "Servico de IA indisponivel para traducao."
+      };
+      const signLinkEmailErrorKey = sanitizeInput(req.query.sign_link_email_error).toLowerCase();
+      const reportLanguage = normalizeReportLanguage(data.report.document_language, "pt");
+      const translationErrorMap = {
+        invalid_language: "Idioma de traducao invalido.",
+        ai_unavailable: "Servico de IA indisponivel para traducao.",
+        failed: "Falha ao traduzir e salvar o relatorio."
+      };
+      const translationErrorKey = sanitizeInput(req.query.translate_error).toLowerCase();
+      const translatedTo = normalizeReportLanguage(req.query.translated_to, "");
       return res.render("report-service/report-editor", {
         pageTitle: `Editar Relatorio - ${orderView.service_order_display || orderView.service_order_code || "-"}`,
         order: orderView,
@@ -928,6 +1393,9 @@ function createReportWebController(deps) {
         dailyLogs: data.dailyLogs,
         signatures: data.signatures,
         signRequests,
+        reportConfig,
+        templateKey,
+        templatePreviewRoute: buildTemplatePreviewRoute(orderId, templateKey),
         quillSectionToolbar: QUILL_SECTION_TOOLBAR,
         quillSectionTitleToolbar: QUILL_SECTION_TITLE_TOOLBAR,
         quillSectionFormats: QUILL_SECTION_FORMATS,
@@ -943,8 +1411,15 @@ function createReportWebController(deps) {
         signRequestGuard,
         signLinkBlocked: req.query.sign_link_blocked === "1",
         signedLinkCreated: req.query.signed_link === "1",
+        signLinkEmailSent: req.query.sign_link_email_sent === "1",
+        signLinkEmailError: signLinkEmailErrorMap[signLinkEmailErrorKey] || "",
         signRequestUpdated: req.query.sign_request_updated === "1",
         signRequestEditBlocked: req.query.sign_request_edit_blocked === "1",
+        reportLanguages: REPORT_LANGUAGES,
+        reportLanguage,
+        translated: req.query.translated === "1",
+        translatedTo,
+        translationError: translationErrorMap[translationErrorKey] || "",
         canSendSignedReport,
         emailSent: req.query.email_sent === "1",
         emailError: emailErrorMap[emailErrorKey] || "",
@@ -1073,7 +1548,7 @@ function createReportWebController(deps) {
       }
 
       await repo.attachEquipmentToOrder(orderId, equipmentId, sanitizeInput(req.body.notes));
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async detachEquipment(req, res) {
@@ -1081,7 +1556,7 @@ function createReportWebController(deps) {
       if (!await ensureOrderEditable(req, res, orderId)) return;
       const equipmentId = Number(req.params.equipmentId);
       await repo.detachEquipmentFromOrder(orderId, equipmentId);
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async validateOrder(req, res) {
@@ -1117,22 +1592,20 @@ function createReportWebController(deps) {
       if (!data) return res.status(404).send("OS nao encontrada.");
 
       const redirectBase = buildOrderEditorRedirect(req, orderId);
+      if (!isSystemAdminUser(res)) {
+        return res.redirect(`${redirectBase}?revalidate_error=forbidden_admin`);
+      }
       if (!isOrderApproved(data.order)) {
         return res.redirect(`${redirectBase}?revalidate_error=invalid_state`);
-      }
-
-      const expectedPassword = String(process.env.SERVICE_REPORT_REVALIDATE_PASSWORD || "").trim();
-      const informedPassword = String(req.body.revalidate_password || "").trim();
-      if (!expectedPassword) {
-        return res.redirect(`${redirectBase}?revalidate_error=not_configured`);
-      }
-      if (!informedPassword || informedPassword !== expectedPassword) {
-        return res.redirect(`${redirectBase}?revalidate_error=invalid_password`);
       }
 
       await service.updateOrder(orderId, {
         status: "valid",
         updatedBy: res.locals.adminUsername || "revalidate-os"
+      });
+      await service.updateReport(data.report.id, {
+        revision: incrementReportRevision(data.report.revision || "A"),
+        issueDate: new Date().toISOString().slice(0, 10)
       });
       return res.redirect(`${redirectBase}?revalidated=1`);
     },
@@ -1174,6 +1647,12 @@ function createReportWebController(deps) {
       }
       }
 
+      const addInMin = parseTimeToMinutes(checkInClient);
+      const addOutMin = parseTimeToMinutes(checkOutClient);
+      const addWorkedHours = (addInMin !== null && addOutMin !== null && addOutMin > addInMin)
+        ? Math.round((addOutMin - addInMin) / 60 * 100) / 100
+        : null;
+
       await repo.createTimesheetEntry({
         serviceOrderId: orderId,
         activityDate,
@@ -1182,10 +1661,10 @@ function createReportWebController(deps) {
         checkOutClient,
         checkOutBase: sanitizeInput(req.body.check_out_base),
         technicianName: sanitizeInput(req.body.technician_name),
-        workedHours: req.body.worked_hours ? Number(req.body.worked_hours) : null,
+        workedHours: addWorkedHours,
         notes: sanitizeInput(req.body.notes)
       });
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async updateTimesheet(req, res) {
@@ -1207,6 +1686,12 @@ function createReportWebController(deps) {
         }
       }
 
+      const updInMin = parseTimeToMinutes(checkInClient);
+      const updOutMin = parseTimeToMinutes(checkOutClient);
+      const updWorkedHours = (updInMin !== null && updOutMin !== null && updOutMin > updInMin)
+        ? Math.round((updOutMin - updInMin) / 60 * 100) / 100
+        : null;
+
       const updated = await repo.updateTimesheetEntry(entryId, {
         activityDate,
         checkInBase: sanitizeInput(req.body.check_in_base),
@@ -1214,7 +1699,7 @@ function createReportWebController(deps) {
         checkOutClient,
         checkOutBase: sanitizeInput(req.body.check_out_base),
         technicianName: sanitizeInput(req.body.technician_name),
-        workedHours: req.body.worked_hours ? Number(req.body.worked_hours) : null,
+        workedHours: updWorkedHours,
         notes: sanitizeInput(req.body.notes)
       });
       if (!updated) return res.status(404).json({ ok: false, error: "Registro nao encontrado." });
@@ -1226,7 +1711,7 @@ function createReportWebController(deps) {
       if (!await ensureOrderEditable(req, res, orderId)) return;
       const entryId = Number(req.params.entryId);
       await repo.deleteTimesheetEntry(entryId);
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async addDailyLog(req, res) {
@@ -1247,7 +1732,7 @@ function createReportWebController(deps) {
       } else {
         await repo.createDailyLog(payload);
       }
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async deleteDailyLog(req, res) {
@@ -1257,7 +1742,7 @@ function createReportWebController(deps) {
       if (Number.isInteger(dailyLogId) && dailyLogId > 0) {
         await repo.deleteDailyLogByOrderAndId(orderId, dailyLogId);
       }
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async generateConclusionFromLogs(req, res) {
@@ -1419,8 +1904,6 @@ function createReportWebController(deps) {
     async saveSection(req, res) {
       const orderId = Number(req.params.id);
       if (!await ensureOrderEditable(req, res, orderId)) return;
-      const referer = String(req.headers.referer || "");
-      const fromReportEditor = referer.includes("/report-editor");
       const sectionKey = sanitizeInput(req.params.sectionKey).toLowerCase();
       const report = await service.ensureReportForOrder(orderId);
       await service.upsertReportSection(report.id, sectionKey, {
@@ -1435,17 +1918,13 @@ function createReportWebController(deps) {
         imageRightPath: sanitizeInput(req.body.image_right_path),
         isVisible: req.body.is_visible
       });
-      const redirectBase = fromReportEditor
-        ? `/admin/report-service/orders/${orderId}/report-editor`
-        : `/admin/report-service/orders/${orderId}`;
+      const redirectBase = buildOrderEditorRedirect(req, orderId);
       return res.redirect(`${redirectBase}?saved=1`);
     },
 
     async createSection(req, res) {
       const orderId = Number(req.params.id);
       if (!await ensureOrderEditable(req, res, orderId)) return;
-      const referer = String(req.headers.referer || "");
-      const fromReportEditor = referer.includes("/report-editor");
       const report = await service.ensureReportForOrder(orderId);
       await service.createReportSection(report.id, {
         sectionTitle: sanitizeInput(req.body.section_title) || "NOVO CAPITULO",
@@ -1454,23 +1933,17 @@ function createReportWebController(deps) {
         contentHtml: "<p><br></p>",
         isVisible: true
       });
-      const createRedirectBase = fromReportEditor
-        ? `/admin/report-service/orders/${orderId}/report-editor`
-        : `/admin/report-service/orders/${orderId}`;
+      const createRedirectBase = buildOrderEditorRedirect(req, orderId);
       return res.redirect(`${createRedirectBase}?saved=1`);
     },
 
     async deleteSection(req, res) {
       const orderId = Number(req.params.id);
       if (!await ensureOrderEditable(req, res, orderId)) return;
-      const referer = String(req.headers.referer || "");
-      const fromReportEditor = referer.includes("/report-editor");
       const sectionKey = sanitizeInput(req.params.sectionKey).toLowerCase();
       const report = await service.ensureReportForOrder(orderId);
       await service.deleteReportSection(report.id, sectionKey);
-      const deleteRedirectBase = fromReportEditor
-        ? `/admin/report-service/orders/${orderId}/report-editor`
-        : `/admin/report-service/orders/${orderId}`;
+      const deleteRedirectBase = buildOrderEditorRedirect(req, orderId);
       return res.redirect(`${deleteRedirectBase}?saved=1`);
     },
 
@@ -1487,7 +1960,7 @@ function createReportWebController(deps) {
         notes: req.body.notes,
         sortOrder: req.body.sort_order
       });
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async deleteComponent(req, res) {
@@ -1504,17 +1977,36 @@ function createReportWebController(deps) {
         return res.status(404).send("Componente nao encontrado nesta OS.");
       }
       await repo.deleteComponent(componentId);
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async createSignRequest(req, res) {
       const orderId = Number(req.params.id);
       if (!await ensureOrderEditable(req, res, orderId)) return;
-      const data = await loadOrderEditorData(orderId);
+      let data = await loadOrderEditorData(orderId);
       if (!data) return res.status(404).send("OS nao encontrada.");
       const guard = buildElectronicSignatureLinkGuard(data);
       if (!guard.allowed) {
         return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?sign_link_blocked=1`);
+      }
+      const signerEmail = sanitizeInput(req.body.signer_email) || "";
+      if (!isValidEmailAddress(signerEmail)) {
+        return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?sign_link_email_error=invalid_signer_email`);
+      }
+      const requestedLanguage = normalizeReportLanguage(
+        req.body.document_language,
+        normalizeReportLanguage(data.report.document_language, "pt")
+      );
+      const reportLanguage = normalizeReportLanguage(data.report.document_language, "pt");
+      if (requestedLanguage !== reportLanguage) {
+        try {
+          await translatePersistedReportContent(orderId, requestedLanguage);
+          data = await loadOrderEditorData(orderId);
+          if (!data) return res.status(404).send("OS nao encontrada.");
+        } catch (err) {
+          const errorCode = err && (err.statusCode === 500 || err.statusCode === 503) ? "ai_unavailable" : "translate_failed";
+          return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?sign_link_email_error=${errorCode}`);
+        }
       }
       const report = data.report;
       const token = uuidv4();
@@ -1522,12 +2014,115 @@ function createReportWebController(deps) {
         serviceReportId: report.id,
         token,
         signerName: sanitizeInput(req.body.signer_name) || "",
-        signerEmail: sanitizeInput(req.body.signer_email) || "",
+        signerEmail,
         signerRole: sanitizeInput(req.body.signer_role) || "",
         signerCompany: sanitizeInput(req.body.signer_company) || "",
         notes: sanitizeInput(req.body.notes) || ""
       });
-      return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?signed_link=1`);
+      const emailSettings = await getReportServiceEmailSettings();
+      if (!emailSettings.smtp || !emailSettings.smtp.host || !emailSettings.smtp.from) {
+        return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?signed_link=1&sign_link_email_error=smtp`);
+      }
+      try {
+        const signLink = buildSignRequestLink(req, token);
+        const transporter = nodemailer.createTransport({
+          host: emailSettings.smtp.host,
+          port: emailSettings.smtp.port,
+          secure: emailSettings.smtp.secure,
+          auth: emailSettings.smtp.user
+            ? { user: emailSettings.smtp.user, pass: emailSettings.smtp.pass }
+            : undefined
+        });
+
+        const linkTemplate = getTemplateByPurpose(
+          emailSettings.emailTemplates,
+          emailSettings.defaultTemplateId,
+          "envio_assinatura"
+        );
+        const vars = buildSignedReportTemplateVariables(data.order, report, signLink, {
+          signatario: sanitizeInput(req.body.signer_name) || ""
+        });
+        const orderDisplay = data.order.service_order_display || data.order.service_order_code || `OS-${orderId}`;
+        const subject = sanitizeSubjectHeaderValue(
+          linkTemplate && linkTemplate.subject
+            ? renderEmailPlaceholder(linkTemplate.subject, vars)
+            : `Solicitacao de assinatura - ${report.report_number || orderDisplay}`
+        );
+        let htmlBody;
+        if (linkTemplate && linkTemplate.html) {
+          htmlBody = `<!doctype html><html><body>${renderEmailPlaceholder(linkTemplate.html, vars)}</body></html>`;
+        } else {
+          htmlBody = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937;"><p style="margin:0 0 12px 0;">Foi solicitada sua assinatura eletrônica para o relatório técnico.</p><p style="margin:0 0 8px 0;"><strong>OS:</strong> ${orderDisplay}</p><p style="margin:0 0 8px 0;"><strong>Relatório:</strong> ${report.report_number || "-"}</p><p style="margin:16px 0;"><a href="${escapeHtml(signLink)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#14532d;color:#fff;text-decoration:none;font-weight:600;">Abrir para assinar</a></p><p style="margin:12px 0 0 0;color:#6b7280;font-size:12px;">E-mail enviado pelo modulo Service Report.</p></body></html>`;
+        }
+        await transporter.sendMail({
+          from: emailSettings.smtp.from,
+          to: signerEmail,
+          subject,
+          html: htmlBody
+        });
+        return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?signed_link=1&sign_link_email_sent=1`);
+      } catch (_err) {
+        // eslint-disable-next-line no-console
+        console.error("[report-service] Link de assinatura criado, mas houve falha ao enviar e-mail ao signatario.", _err);
+        return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?signed_link=1&sign_link_email_error=send_failed`);
+      }
+    },
+
+    async translateReport(req, res) {
+      const orderId = Number(req.params.id);
+      if (!await ensureOrderEditable(req, res, orderId)) return;
+      const targetLanguage = normalizeReportLanguage(req.body.target_language, "");
+      if (!targetLanguage) {
+        return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?translate_error=invalid_language`);
+      }
+      try {
+        const result = await translatePersistedReportContent(orderId, targetLanguage);
+        if (!result.changed) {
+          return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?translated=1&translated_to=${encodeURIComponent(result.targetLanguage)}&saved=1`);
+        }
+        return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?translated=1&translated_to=${encodeURIComponent(result.targetLanguage)}&saved=1`);
+      } catch (err) {
+        const errorCode = err && (err.statusCode === 500 || err.statusCode === 503) ? "ai_unavailable" : "failed";
+        return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?translate_error=${errorCode}`);
+      }
+    },
+
+    async startTranslateReportJob(req, res) {
+      const orderId = Number(req.params.id);
+      if (!await ensureOrderEditable(req, res, orderId, { json: true })) return;
+      const targetLanguage = normalizeReportLanguage(req.body && req.body.target_language, "");
+      if (!targetLanguage) {
+        return res.status(422).json({ ok: false, message: "Idioma de tradução inválido." });
+      }
+      const job = createTranslationJob({ orderId, targetLanguage });
+      return res.status(202).json({
+        ok: true,
+        jobId: job.id,
+        status: job.status,
+        progress: job.progress,
+        targetLanguage: job.targetLanguage
+      });
+    },
+
+    async getTranslateReportJob(req, res) {
+      const orderId = Number(req.params.id);
+      const jobId = String(req.params.jobId || "");
+      const job = translationJobs.get(jobId);
+      if (!job || Number(job.orderId) !== orderId) {
+        return res.status(404).json({ ok: false, message: "Job de tradução não encontrado." });
+      }
+      return res.status(200).json({
+        ok: true,
+        jobId: job.id,
+        orderId: job.orderId,
+        targetLanguage: job.targetLanguage,
+        status: job.status,
+        progress: Number(job.progress || 0),
+        message: job.message || "",
+        error: job.error || "",
+        updatedAt: job.updatedAt || "",
+        finishedAt: job.finishedAt || ""
+      });
     },
 
     async updateSignRequest(req, res) {
@@ -1600,11 +2195,12 @@ function createReportWebController(deps) {
       }
 
       try {
-        const payload = await service.buildReportAggregate(data.report.id);
-        if (!payload) return res.status(404).send("Relatorio nao encontrado.");
-        const { reportConfig, templateKey } = await resolveRenderConfig("", null);
-        const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
-        const pdfBuffer = await buildPdfBufferFromHtml(htmlSource, payload);
+        const signedRequest = (Array.isArray(signRequests) ? signRequests : [])
+          .find((item) => String(item.status || "").toLowerCase() === "signed" && String(item.token || "").trim());
+        if (!signedRequest) {
+          return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?email_error=token_not_found`);
+        }
+        const signedLink = buildSignedReportLink(req, signedRequest.token);
 
         const transporter = nodemailer.createTransport({
           host: emailSettings.smtp.host,
@@ -1617,31 +2213,111 @@ function createReportWebController(deps) {
 
         const reportNumber = String(data.report.report_number || "").trim();
         const orderDisplay = data.order.service_order_display || data.order.service_order_code || `OS-${orderId}`;
+
+        const signedTemplate = getTemplateByPurpose(
+          emailSettings.emailTemplates,
+          emailSettings.defaultTemplateId,
+          "relatorio_assinado"
+        );
+        const signedVars = buildSignedReportTemplateVariables(data.order, data.report, signedLink);
         const subject = sanitizeSubjectHeaderValue(
-          `Relatorio assinado ${reportNumber || orderDisplay}`
+          signedTemplate && signedTemplate.subject
+            ? renderEmailPlaceholder(signedTemplate.subject, signedVars)
+            : `Relatorio assinado ${reportNumber || orderDisplay}`
         );
         const customMessage = sanitizeInput(req.body.message || "");
-        const bodyIntro = customMessage
-          ? `<p style="margin:0 0 12px 0;">${customMessage}</p>`
-          : "<p style=\"margin:0 0 12px 0;\">Segue em anexo o relatorio assinado.</p>";
+        let htmlBody;
+        if (signedTemplate && signedTemplate.html) {
+          htmlBody = `<!doctype html><html><body>${renderEmailPlaceholder(signedTemplate.html, signedVars)}</body></html>`;
+        } else {
+          const bodyIntro = customMessage
+            ? `<p style="margin:0 0 12px 0;">${customMessage}</p>`
+            : "<p style=\"margin:0 0 12px 0;\">Seu relatorio assinado esta disponivel no link abaixo para visualizacao e impressao.</p>";
+          htmlBody = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937;">${bodyIntro}<p style="margin:0 0 8px 0;"><strong>OS:</strong> ${orderDisplay}</p><p style="margin:0 0 8px 0;"><strong>Relatorio:</strong> ${reportNumber || "-"}</p><p style="margin:0 0 8px 0;"><strong>Cliente:</strong> ${data.order.customer_name || "-"}</p><p style="margin:16px 0;"><a href="${escapeHtml(signedLink)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 16px;border-radius:8px;background:#14532d;color:#fff;text-decoration:none;font-weight:600;">Abrir relatorio assinado</a></p><p style="margin:12px 0 0 0;color:#6b7280;font-size:12px;">E-mail enviado pelo modulo Service Report.</p></body></html>`;
+        }
 
         await transporter.sendMail({
           from: emailSettings.smtp.from,
           to,
           cc: cc.length ? cc : undefined,
           subject,
-          html: `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937;">${bodyIntro}<p style="margin:0 0 8px 0;"><strong>OS:</strong> ${orderDisplay}</p><p style="margin:0 0 8px 0;"><strong>Relatorio:</strong> ${reportNumber || "-"}</p><p style="margin:0 0 8px 0;"><strong>Cliente:</strong> ${data.order.customer_name || "-"}</p><p style="margin:12px 0 0 0;color:#6b7280;font-size:12px;">E-mail enviado pelo modulo Service Report.</p></body></html>`,
-          attachments: [
-            {
-              filename: `${(reportNumber || orderDisplay).replace(/[^a-zA-Z0-9._-]+/g, "_")}.pdf`,
-              content: pdfBuffer
-            }
-          ]
+          html: htmlBody
         });
 
         return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?email_sent=1`);
       } catch (_err) {
+        // eslint-disable-next-line no-console
+        console.error("[report-service] Falha ao enviar e-mail com relatorio assinado (admin).", _err);
         return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?email_error=send_failed`);
+      }
+    },
+
+    async sendOsCreatedEmail(req, res) {
+      const orderId = Number(req.params.id);
+      const data = await loadOrderEditorData(orderId);
+      if (!data) return res.status(404).send("OS nao encontrada.");
+
+      const technicians = Array.isArray(data.technicians) ? data.technicians : [];
+      const toFromTechs = technicians
+        .map((t) => String(t.email || "").trim())
+        .filter((e) => isValidEmailAddress(e));
+
+      const extraTo = parseEmailList(req.body.to);
+      const cc = parseEmailList(req.body.cc);
+      const to = Array.from(new Set([...toFromTechs, ...extraTo])).filter((e) => isValidEmailAddress(e));
+
+      if (!to.length) {
+        return res.redirect(`/admin/report-service/orders/${orderId}?os_email_error=no_recipients`);
+      }
+      if (cc.some((item) => !isValidEmailAddress(item))) {
+        return res.redirect(`/admin/report-service/orders/${orderId}?os_email_error=invalid_cc`);
+      }
+
+      const emailSettings = await getReportServiceEmailSettings();
+      if (!emailSettings.smtp || !emailSettings.smtp.host || !emailSettings.smtp.from) {
+        return res.redirect(`/admin/report-service/orders/${orderId}?os_email_error=smtp`);
+      }
+
+      try {
+        const transporter = nodemailer.createTransport({
+          host: emailSettings.smtp.host,
+          port: emailSettings.smtp.port,
+          secure: emailSettings.smtp.secure,
+          auth: emailSettings.smtp.user
+            ? { user: emailSettings.smtp.user, pass: emailSettings.smtp.pass }
+            : undefined
+        });
+
+        const osVars = buildOsTemplateVariables(data.order, technicians);
+        const osTemplate = getTemplateByPurpose(
+          emailSettings.emailTemplates,
+          emailSettings.defaultTemplateId,
+          "nova_os"
+        );
+        const orderDisplay = data.order.service_order_display || data.order.service_order_code || `OS-${orderId}`;
+        const subject = sanitizeSubjectHeaderValue(
+          osTemplate && osTemplate.subject
+            ? renderEmailPlaceholder(osTemplate.subject, osVars)
+            : `Nova OS: ${orderDisplay}`
+        );
+        let htmlBody;
+        if (osTemplate && osTemplate.html) {
+          htmlBody = `<!doctype html><html><body>${renderEmailPlaceholder(osTemplate.html, osVars)}</body></html>`;
+        } else {
+          htmlBody = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#1f2937;"><p style="margin:0 0 12px 0;">Uma nova Ordem de Servico foi criada e voce foi designado como tecnico responsavel.</p><p style="margin:0 0 8px 0;"><strong>OS:</strong> ${orderDisplay}</p><p style="margin:0 0 8px 0;"><strong>Titulo:</strong> ${data.order.title || "-"}</p><p style="margin:0 0 8px 0;"><strong>Cliente:</strong> ${data.order.customer_name || "-"}</p><p style="margin:0 0 8px 0;"><strong>Local:</strong> ${data.order.site_name || "-"}</p><p style="margin:0 0 8px 0;"><strong>Data de abertura:</strong> ${osVars.data_abertura || "-"}</p><p style="margin:12px 0 0 0;color:#6b7280;font-size:12px;">E-mail enviado pelo modulo Service Report.</p></body></html>`;
+        }
+
+        await transporter.sendMail({
+          from: emailSettings.smtp.from,
+          to,
+          cc: cc.length ? cc : undefined,
+          subject,
+          html: htmlBody
+        });
+
+        return res.redirect(`/admin/report-service/orders/${orderId}?os_email_sent=1`);
+      } catch (_err) {
+        return res.redirect(`/admin/report-service/orders/${orderId}?os_email_error=send_failed`);
       }
     },
 
@@ -1661,7 +2337,7 @@ function createReportWebController(deps) {
         signatureData: req.body.signature_data,
         updatedBy: res.locals.adminUsername || "manual-signature"
       });
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async deleteSignature(req, res) {
@@ -1926,7 +2602,7 @@ function createReportWebController(deps) {
       const imageId = Number(req.params.imageId);
       const report = await service.ensureReportForOrder(orderId);
       await repo.deleteImageByRefId(report.id, imageId);
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async previewPage(req, res) {
@@ -2010,9 +2686,9 @@ ${bodyHtml}
       const report = await service.ensureReportForOrder(orderId);
       const payload = await service.buildReportAggregate(report.id);
       if (!payload) return res.status(404).send("Relatorio nao encontrado.");
-      const { reportConfig, templateKey } = await resolveRenderConfig("", null);
-      const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
-      const buffer = await buildPdfBufferFromHtml(htmlSource, payload);
+      const requestedTemplateKey = sanitizeInput(req.query.template_key || req.body?.template_key);
+      const { templateKey } = await resolveRenderConfig(requestedTemplateKey, null);
+      const buffer = await buildPdfFromPreviewRoute(req, orderId, templateKey, payload);
       res.setHeader("Content-Type", "application/pdf");
       return res.send(buffer);
     },
@@ -2023,16 +2699,18 @@ ${bodyHtml}
       const payload = await service.buildReportAggregate(report.id);
       if (!payload) return res.status(404).send("Relatorio nao encontrado.");
       const outputPath = service.resolveReportPdfPath(report.id);
-      const { reportConfig, templateKey } = await resolveRenderConfig("", null);
+      const requestedTemplateKey = sanitizeInput(req.body.template_key || req.query.template_key);
+      const { reportConfig, templateKey } = await resolveRenderConfig(requestedTemplateKey, null);
       const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
       fs.writeFileSync(service.resolveReportHtmlPath(report.id), htmlSource, "utf8");
-      await generatePdfToFile(payload, outputPath, htmlSource);
+      const pdfBuffer = await buildPdfFromPreviewRoute(req, orderId, templateKey, payload);
+      fs.writeFileSync(outputPath, pdfBuffer);
       await service.updateReport(report.id, {
         pdfPath: outputPath,
         status: "issued",
         issueDate: new Date().toISOString().slice(0, 10)
       });
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async reportEditor(req, res) {

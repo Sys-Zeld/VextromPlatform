@@ -11,6 +11,10 @@ const MODULE_CONFIG = {
     dbUrl: env.databases.specflow.url,
     ssl: env.databases.specflow.ssl
   },
+  config: {
+    dbUrl: env.databases.config.url,
+    ssl: env.databases.config.ssl
+  },
   "module-spec": {
     dbUrl: env.databases.moduleSpec.url,
     ssl: env.databases.moduleSpec.ssl
@@ -23,13 +27,14 @@ const MODULE_CONFIG = {
 
 const MODULE_FILE_PREFIXES = {
   specflow: ["db-backup-", "specflow-backup-", "db-import-"],
+  config: ["config-backup-"],
   "module-spec": ["module-spec-backup-"],
   "report-service": ["report-service-backup-"]
 };
 
 function normalizeModuleName(value) {
   const text = String(value || "").trim().toLowerCase();
-  if (text === "specflow" || text === "module-spec" || text === "report-service") return text;
+  if (text === "specflow" || text === "config" || text === "module-spec" || text === "report-service") return text;
   return "";
 }
 
@@ -62,7 +67,7 @@ function resolveTargetModule({ moduleFromFlag, backupFilePath, strict = true }) 
   if (strict) {
     throw new Error(
       "Nao foi possivel identificar o modulo pelo nome do arquivo. "
-      + "Use --module=specflow|module-spec|report-service."
+      + "Use --module=specflow|config|module-spec|report-service."
     );
   }
   return "specflow";
@@ -236,7 +241,7 @@ async function run() {
   if (moduleFromFlag === "") {
     const hasModuleFlag = process.argv.slice(2).some((arg) => String(arg).startsWith("--module="));
     if (hasModuleFlag) {
-      throw new Error("Modulo invalido em --module. Use: specflow | module-spec | report-service.");
+      throw new Error("Modulo invalido em --module. Use: specflow | config | module-spec | report-service.");
     }
   }
 

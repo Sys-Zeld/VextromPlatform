@@ -171,7 +171,7 @@
 
     var validationEl = document.createElement("div");
     validationEl.className = "report-tag-validation";
-    validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @timesheet, @equipetecnica, @equip=ID, @descricaodia=ID, @descricaodia ou @conclusaogeral.";
+    validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @tblequip, @timesheet, @equipetecnica, @equip=ID, @descricaodia=ID, @descricaodia ou @conclusaogeral.";
     wrap.appendChild(validationEl);
 
     editorEl.insertAdjacentElement("afterend", wrap);
@@ -199,7 +199,7 @@
 
     if (!imageIds.length && !equipmentIds.length && !dailyLogIds.length) {
       ui.validationEl.classList.remove("error");
-      ui.validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @timesheet, @equipetecnica, @equip=ID, @descricaodia=ID, @descricaodia ou @conclusaogeral.";
+      ui.validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @tblequip, @timesheet, @equipetecnica, @equip=ID, @descricaodia=ID, @descricaodia ou @conclusaogeral.";
       quill.container.classList.remove("report-tag-editor-invalid");
       return;
     }

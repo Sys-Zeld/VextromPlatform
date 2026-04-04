@@ -49,13 +49,16 @@ Aplicacao: `http://localhost:3000`
 - `npm run module-spec:enable` / `npm run module-spec:disable`: habilita/desabilita o modulo Module Spec.
 - `npm run report-service:enable` / `npm run report-service:disable`: habilita/desabilita o modulo Report Service.
 - `npm run db:migrate`: aplica as migracoes do banco.
+- `npm run db:migrate:config`: aplica migracao dedicada do banco `configdb` (administracao de usuarios).
 - `npm run db:backup-database`: alias de `npm run db:backup:specflow` (backup isolado do banco `dbspeflow`).
 - `npm run db:backup:specflow`: backup apenas do banco `dbspeflow`.
+- `npm run db:backup:config`: backup apenas do banco `configdb`.
 - `npm run db:backup:module-spec`: backup apenas do banco `dbmodulespec`.
 - `npm run db:backup:report-service`: backup apenas do banco `reportservice`.
-- `npm run db:backup:all`: backup dos 3 bancos isolados.
+- `npm run db:backup:all`: backup dos 4 bancos isolados.
 - `npm run db:restore-database`: restaura o backup mais recente de `dados/backups` (limpa o schema `public` antes por padrao).
 - `npm run db:restore:specflow`: restaura backup do banco `dbspeflow`.
+- `npm run db:restore:config`: restaura backup do banco `configdb`.
 - `npm run db:restore:module-spec`: restaura backup do banco `dbmodulespec`.
 - `npm run db:restore:report-service`: restaura backup do banco `reportservice`.
 - `npm run db:seed`: executa seed dos modulos (specflow + report_service + module_spec quando habilitado).
@@ -117,6 +120,7 @@ npm run stress:report-service -- --count=300 --concurrency=15
 
 - Backup isolado por modulo:
   - `npm run db:backup:specflow`
+  - `npm run db:backup:config`
   - `npm run db:backup:module-spec`
   - `npm run db:backup:report-service`
 - Backup de todos os modulos:
@@ -127,6 +131,7 @@ npm run stress:report-service -- --count=300 --concurrency=15
   - `npm run db:restore-database`
 - Restore isolado por modulo:
   - `npm run db:restore:specflow -- "dados/backups/specflow-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
+  - `npm run db:restore:config -- "dados/backups/config-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
   - `npm run db:restore:module-spec -- "dados/backups/module-spec-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
   - `npm run db:restore:report-service -- "dados/backups/report-service-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
 - Restore de arquivo especifico:
@@ -208,7 +213,7 @@ npm run stress:report-service -- --count=300 --concurrency=15
 ## Tipografia por usuario
 
 - A selecao de fonte e feita em `/admin/maintenance/system`, no card **Tipografia por usuario**.
-- A preferencia de fonte e individual por conta e salva na tabela `admin_users` (coluna `ui_font`).
+- A preferencia de fonte e individual por conta e salva na tabela `admin_users` do banco `configdb` (coluna `ui_font`).
 - Fontes disponiveis:
   - `Inter` (atual)
   - `Manrope`

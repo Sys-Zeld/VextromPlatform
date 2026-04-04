@@ -41,6 +41,7 @@ backups/
 *.gif
 *.zip
 *.tar.gz
+!report_service/templates/email/*.html
 
 .vscode/
 .idea/

@@ -1,6 +1,18 @@
 const fs = require("fs");
 const PDFDocument = require("pdfkit");
 const { formatServiceOrderDisplay } = require("../utils/serviceOrderDisplay");
+const env = require("../../../specflow/config/env");
+
+function getPuppeteerOrNull() {
+  try {
+    // optional dependency in some environments
+    // eslint-disable-next-line global-require, import/no-extraneous-dependencies
+    return require("puppeteer");
+  } catch (err) {
+    if (err && err.code === "MODULE_NOT_FOUND") return null;
+    throw err;
+  }
+}
 
 function drawTitle(doc, text) {
   doc.font("Helvetica-Bold").fontSize(14).fillColor("#111").text(text || "-", { underline: false });
@@ -164,16 +176,22 @@ function htmlToPlainText(html) {
 }
 
 async function buildPdfBufferFromHtml(html, fallbackPayload) {
-  const puppeteer = require("puppeteer");
+  const puppeteer = getPuppeteerOrNull();
+  if (!puppeteer) {
+    return buildPdfBuffer(fallbackPayload || {});
+  }
   const path = require("path");
   const cssPreview = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-preview.css"), "utf8");
   const cssPrint = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-print.css"), "utf8");
   const paginationJs = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "js", "report-pagination.js"), "utf8");
+  const appBaseUrl = String(env.appBaseUrl || "http://localhost:3000").replace(/\/+$/, "") + "/";
 
   const fullHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <base href="${appBaseUrl}" />
   <style>${cssPreview}</style>
   <style>${cssPrint}</style>
 </head>
@@ -187,7 +205,77 @@ ${html}
   try {
     browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
     const page = await browser.newPage();
+    await page.setViewport({
+      width: 1240,
+      height: 1754,
+      deviceScaleFactor: 1
+    });
     await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+    await page.evaluate(async () => {
+      const images = Array.from(document.images || []);
+      await Promise.all(images.map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+      }));
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+    });
+    await page.waitForFunction(() => window.__reportPaginationDone === true, { timeout: 10000 }).catch(() => {});
+    const buffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: 0, right: 0, bottom: 0, left: 0 }
+    });
+    return Buffer.from(buffer);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
+async function buildPdfBufferFromUrl(url, options = {}) {
+  const puppeteer = getPuppeteerOrNull();
+  if (!puppeteer) {
+    const err = new Error("Puppeteer não está instalado no ambiente.");
+    err.code = "PUPPETEER_MISSING";
+    throw err;
+  }
+  const targetUrl = String(url || "").trim();
+  if (!targetUrl) {
+    throw new Error("URL invalida para gerar PDF.");
+  }
+
+  const cookieHeader = String(options.cookieHeader || "").trim();
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    const page = await browser.newPage();
+    await page.setViewport({
+      width: 1240,
+      height: 1754,
+      deviceScaleFactor: 1
+    });
+    if (cookieHeader) {
+      await page.setExtraHTTPHeaders({ Cookie: cookieHeader });
+    }
+    await page.goto(targetUrl, { waitUntil: "networkidle0" });
+    await page.evaluate(async () => {
+      const images = Array.from(document.images || []);
+      await Promise.all(images.map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        });
+      }));
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+    });
     await page.waitForFunction(() => window.__reportPaginationDone === true, { timeout: 10000 }).catch(() => {});
     const buffer = await page.pdf({
       format: "A4",
@@ -208,8 +296,34 @@ async function generatePdfToFile(payload, outputPath, htmlSource = "") {
   return outputPath;
 }
 
+async function buildAnalyticsPdfBufferFromHtml(html) {
+  const puppeteer = getPuppeteerOrNull();
+  if (!puppeteer) {
+    throw new Error("Puppeteer não está instalado. Instale puppeteer para gerar o PDF do dashboard.");
+  }
+  let browser;
+  try {
+    browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    // Wait for Chart.js to finish rendering all canvases
+    await page.waitForFunction(() => window.__analyticsPdfReady === true, { timeout: 15000 }).catch(() => {});
+    const buffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      margin: { top: "14mm", right: "12mm", bottom: "14mm", left: "12mm" }
+    });
+    return Buffer.from(buffer);
+  } finally {
+    if (browser) await browser.close();
+  }
+}
+
 module.exports = {
   buildPdfBuffer,
   buildPdfBufferFromHtml,
+  buildPdfBufferFromUrl,
+  buildAnalyticsPdfBufferFromHtml,
   generatePdfToFile
 };

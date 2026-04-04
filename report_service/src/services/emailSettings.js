@@ -27,12 +27,15 @@ function parsePortSetting(value, fallback = 587) {
   return parsed;
 }
 
+const VALID_PURPOSES = ["general", "nova_os", "relatorio_assinado", "envio_assinatura"];
+
 function normalizeTemplateRecord(input, index = 0) {
   const source = input && typeof input === "object" ? input : {};
   const id = String(source.id || "").trim() || `tpl_${index + 1}`;
   const name = String(source.name || "").trim() || `Modelo ${index + 1}`;
   const subject = String(source.subject || "").trim() || "Service Report";
   const html = String(source.html || "");
+  const purpose = VALID_PURPOSES.includes(source.purpose) ? source.purpose : "general";
   const createdAt = String(source.createdAt || source.created_at || "");
   const updatedAt = String(source.updatedAt || source.updated_at || "");
   return {
@@ -40,9 +43,19 @@ function normalizeTemplateRecord(input, index = 0) {
     name,
     subject,
     html,
+    purpose,
     createdAt,
     updatedAt
   };
+}
+
+function getTemplateByPurpose(templates, defaultTemplateId, purpose) {
+  const list = Array.isArray(templates) ? templates : [];
+  const byPurpose = list.find((t) => t.purpose === purpose);
+  if (byPurpose) return byPurpose;
+  const byDefault = list.find((t) => t.id === defaultTemplateId);
+  if (byDefault) return byDefault;
+  return list[0] || null;
 }
 
 function parseEmailTemplates(raw) {
@@ -175,7 +188,7 @@ async function saveReportServiceSmtpSettings({
   }
 }
 
-async function saveReportServiceEmailHtmlTemplate({ templateId = "", name, subject, html, setAsDefault = false }) {
+async function saveReportServiceEmailHtmlTemplate({ templateId = "", name, subject, html, purpose = "general", setAsDefault = false }) {
   const keys = [EMAIL_SETTING_KEYS.htmlTemplates, EMAIL_SETTING_KEYS.htmlDefaultTemplateId];
   const settings = await getSettingsMap(keys);
   const templates = parseEmailTemplates(settings[EMAIL_SETTING_KEYS.htmlTemplates]);
@@ -205,21 +218,25 @@ async function saveReportServiceEmailHtmlTemplate({ templateId = "", name, subje
   const existingIndex = normalizedId ? templates.findIndex((item) => item.id === normalizedId) : -1;
   if (existingIndex >= 0) {
     const current = templates[existingIndex];
+    const cleanPurpose = VALID_PURPOSES.includes(purpose) ? purpose : "general";
     savedTemplate = {
       ...current,
       id: current.id,
       name: cleanName,
       subject: cleanSubject,
       html: cleanHtml,
+      purpose: cleanPurpose,
       updatedAt: nowIso
     };
     templates[existingIndex] = savedTemplate;
   } else {
+    const cleanPurpose = VALID_PURPOSES.includes(purpose) ? purpose : "general";
     savedTemplate = {
       id: crypto.randomUUID(),
       name: cleanName,
       subject: cleanSubject,
       html: cleanHtml,
+      purpose: cleanPurpose,
       createdAt: nowIso,
       updatedAt: nowIso
     };
@@ -288,6 +305,7 @@ async function deleteReportServiceEmailHtmlTemplate(templateId) {
 
 module.exports = {
   getReportServiceEmailSettings,
+  getTemplateByPurpose,
   saveReportServiceEmailDefaultRecipients,
   saveReportServiceSmtpSettings,
   saveReportServiceEmailHtmlTemplate,

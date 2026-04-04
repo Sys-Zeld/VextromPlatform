@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title><%= pageTitle %></title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 11px; color: #1f2937; background: #f4f6f8; }
+
+  /* ── Page structure ── */
+  .page { padding: 0; }
+
+  /* ── Banner ── */
+  .banner {
+    background: linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.30) 55%, rgba(0,0,0,0.10) 100%) #4e8c38;
+    color: #fff;
+    padding: 18px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .banner-title { font-size: 17px; font-weight: 700; }
+  .banner-sub { font-size: 10px; opacity: 0.6; margin-top: 2px; }
+  .banner-meta { font-size: 10px; opacity: 0.65; text-align: right; }
+  .banner-meta strong { display: block; font-size: 11px; opacity: 1; }
+
+  /* ── Content wrapper ── */
+  .content { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
+
+  /* ── Section heading ── */
+  .section-heading {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #6b7280; border-bottom: 1px solid #d1d5db; padding-bottom: 5px; margin-bottom: 10px;
+  }
+
+  /* ── KPI grid ── */
+  .kpi-grid { display: grid; gap: 8px; }
+  .kpi-grid-9 { grid-template-columns: repeat(9, 1fr); }
+  .kpi-grid-6 { grid-template-columns: repeat(6, 1fr); }
+  .kpi {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 9px 10px; border-top: 3px solid #d1d5db;
+  }
+  .kpi-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-bottom: 4px; }
+  .kpi-value { font-size: 18px; font-weight: 700; line-height: 1; color: #111827; }
+  .kpi-sub { font-size: 8px; color: #9ca3af; margin-top: 2px; }
+
+  .kpi-blue   { border-top-color: #3b82f6; } .kpi-blue   .kpi-value { color: #2563eb; }
+  .kpi-green  { border-top-color: #22c55e; } .kpi-green  .kpi-value { color: #16a34a; }
+  .kpi-amber  { border-top-color: #f59e0b; } .kpi-amber  .kpi-value { color: #d97706; }
+  .kpi-orange { border-top-color: #f97316; } .kpi-orange .kpi-value { color: #ea580c; }
+  .kpi-emerald{ border-top-color: #10b981; } .kpi-emerald.kpi-value { color: #059669; }
+  .kpi-slate  { border-top-color: #64748b; } .kpi-slate  .kpi-value { color: #64748b; }
+  .kpi-red    { border-top-color: #ef4444; } .kpi-red    .kpi-value { color: #dc2626; }
+  .kpi-violet { border-top-color: #8b5cf6; } .kpi-violet .kpi-value { color: #7c3aed; }
+  .kpi-teal   { border-top-color: #14b8a6; } .kpi-teal   .kpi-value { color: #0d9488; }
+
+  /* ── Charts ── */
+  .chart-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .chart-grid-3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
+  .card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;
+  }
+  .card-header {
+    padding: 8px 12px; border-bottom: 1px solid #f0f0f0;
+    font-size: 10px; font-weight: 700; color: #374151;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .card-badge {
+    font-size: 8px; background: #f3f4f6; color: #6b7280;
+    padding: 2px 7px; border-radius: 20px;
+  }
+  .card-body { padding: 10px 12px; }
+  .chart-wrap { position: relative; }
+
+  /* ── Tables ── */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 10px; }
+  .tbl thead th {
+    font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #6b7280; background: #f9fafb; padding: 6px 8px;
+    border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+  }
+  .tbl tbody tr { border-bottom: 1px solid #f3f4f6; }
+  .tbl tbody tr:last-child { border-bottom: none; }
+  .tbl tbody tr:nth-child(even) { background: #fafafa; }
+  .tbl td { padding: 6px 8px; color: #374151; }
+  .tbl .num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tbl .rank { width: 22px; text-align: center; color: #9ca3af; font-size: 9px; }
+  .tbl .code { font-family: monospace; font-size: 9px; background: #eef2ff; color: #4f46e5; padding: 1px 4px; border-radius: 3px; }
+
+  /* ── Quality list ── */
+  .quality-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #f3f4f6; }
+  .quality-row:last-child { border-bottom: none; }
+  .quality-badge { font-size: 9px; font-weight: 700; padding: 2px 9px; border-radius: 20px; }
+  .badge-ok   { background: #dcfce7; color: #15803d; }
+  .badge-warn { background: #fef9c3; color: #a16207; }
+  .badge-bad  { background: #fee2e2; color: #b91c1c; }
+
+  /* ── Table grid ── */
+  .table-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .table-grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+
+  /* ── Filter bar ── */
+  .filter-bar {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
+    padding: 7px 12px; font-size: 9px; color: #6b7280;
+    display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .filter-item strong { color: #374151; }
+
+  @media print {
+    body { background: #fff; }
+    .page { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<%
+  function fmt(v) {
+    const n = Number(v || 0);
+    return Number.isFinite(n) ? n.toLocaleString("pt-BR") : "0";
+  }
+  function fmtH(v) {
+    const n = Number(v || 0);
+    return Number.isFinite(n) ? n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "0,00";
+  }
+  function fmtD(v) {
+    const n = Number(v || 0);
+    return Number.isFinite(n) ? n.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "0,0";
+  }
+  function pct(part, total) {
+    const t = Number(total || 0);
+    if (!t) return 0;
+    return Math.min(100, Math.round(Number(part || 0) / t * 100));
+  }
+  const kpis   = dashboard.kpis || {};
+  const tables = dashboard.tables || {};
+  const eq     = dashboard.equipmentStats || {};
+  const dq     = dashboard.dataQuality || {};
+  const mt     = dashboard.monthlyTrend || {};
+
+  const statusLabels = {
+    draft: "Rascunho", valid: "Válida", in_progress: "Em Execução",
+    waiting_review: "Aguard. Revisão", approved: "Aprovada",
+    issued: "Emitida", closed: "Encerrada", cancelled: "Cancelada"
+  };
+
+  const activeFilters = [];
+  if (filters.dateFrom)      activeFilters.push({ label: "De", value: filters.dateFrom });
+  if (filters.dateTo)        activeFilters.push({ label: "Até", value: filters.dateTo });
+  if (filters.orderStatus)   activeFilters.push({ label: "Status", value: statusLabels[filters.orderStatus] || filters.orderStatus });
+%>
+
+<div class="page">
+
+  <!-- Banner -->
+  <div class="banner">
+    <div>
+      <div class="banner-title">Relatório / Dashboard — Service Report</div>
+      <div class="banner-sub">Indicadores gerenciais e operacionais</div>
+    </div>
+    <div class="banner-meta">
+      <strong>Gerado em</strong>
+      <%= new Date(generatedAt).toLocaleString("pt-BR") %>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- Filtros ativos -->
+    <% if (activeFilters.length) { %>
+    <div class="filter-bar">
+      <span>Filtros aplicados:</span>
+      <% activeFilters.forEach((f) => { %><span><strong><%= f.label %>:</strong> <%= f.value %></span><% }) %>
+    </div>
+    <% } %>
+
+    <!-- KPIs: Ordens -->
+    <div>
+      <div class="section-heading">Ordens de Serviço</div>
+      <div class="kpi-grid kpi-grid-9">
+        <div class="kpi kpi-blue">
+          <div class="kpi-label">Total OS</div>
+          <div class="kpi-value"><%= fmt(kpis.total_os) %></div>
+        </div>
+        <div class="kpi kpi-slate">
+          <div class="kpi-label">Rascunho</div>
+          <div class="kpi-value"><%= fmt(kpis.total_draft) %></div>
+          <div class="kpi-sub"><%= pct(kpis.total_draft, kpis.total_os) %>%</div>
+        </div>
+        <div class="kpi kpi-blue">
+          <div class="kpi-label">Válidas</div>
+          <div class="kpi-value"><%= fmt(kpis.total_valid) %></div>
+          <div class="kpi-sub"><%= pct(kpis.total_valid, kpis.total_os) %>%</div>
+        </div>
+        <div class="kpi kpi-amber">
+          <div class="kpi-label">Em Execução</div>
+          <div class="kpi-value"><%= fmt(kpis.total_in_progress) %></div>
+          <div class="kpi-sub"><%= pct(kpis.total_in_progress, kpis.total_os) %>%</div>
+        </div>
+        <div class="kpi kpi-orange">
+          <div class="kpi-label">Ag. Revisão</div>
+          <div class="kpi-value"><%= fmt(kpis.total_waiting_review) %></div>
+          <div class="kpi-sub"><%= pct(kpis.total_waiting_review, kpis.total_os) %>%</div>
+        </div>
+        <div class="kpi kpi-green">
+          <div class="kpi-label">Aprovadas</div>
+          <div class="kpi-value"><%= fmt(kpis.total_approved) %></div>
+          <div class="kpi-sub"><%= pct(kpis.total_approved, kpis.total_os) %>%</div>
+        </div>
+        <div class="kpi kpi-emerald">
+          <div class="kpi-label">Emitidas</div>
+          <div class="kpi-value"><%= fmt(kpis.total_issued) %></div>
+          <div class="kpi-sub"><%= pct(kpis.total_issued, kpis.total_os) %>%</div>
+        </div>
+        <div class="kpi kpi-slate">
+          <div class="kpi-label">Encerradas</div>
+          <div class="kpi-value"><%= fmt(kpis.total_closed) %></div>
+          <div class="kpi-sub"><%= pct(kpis.total_closed, kpis.total_os) %>%</div>
+        </div>
+        <div class="kpi kpi-red">
+          <div class="kpi-label">Canceladas</div>
+          <div class="kpi-value"><%= fmt(kpis.total_cancelled) %></div>
+          <div class="kpi-sub"><%= pct(kpis.total_cancelled, kpis.total_os) %>%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs: Operacional -->
+    <div>
+      <div class="section-heading">Operacional</div>
+      <div class="kpi-grid kpi-grid-6">
+        <div class="kpi kpi-teal">
+          <div class="kpi-label">Horas Trabalhadas</div>
+          <div class="kpi-value"><%= fmtH(kpis.total_hours) %></div>
+          <div class="kpi-sub">h no período</div>
+        </div>
+        <div class="kpi kpi-violet">
+          <div class="kpi-label">Média Fechamento</div>
+          <div class="kpi-value"><%= fmtD(kpis.avg_close_days) %></div>
+          <div class="kpi-sub">dias</div>
+        </div>
+        <div class="kpi kpi-blue">
+          <div class="kpi-label">Equipamentos</div>
+          <div class="kpi-value"><%= fmt(eq.total_equipments) %></div>
+          <div class="kpi-sub"><%= fmt(eq.total_families) %> famílias</div>
+        </div>
+        <div class="kpi kpi-green">
+          <div class="kpi-label">Assinaturas OK</div>
+          <div class="kpi-value"><%= fmt(kpis.signed_count) %></div>
+        </div>
+        <div class="kpi kpi-amber">
+          <div class="kpi-label">Ag. Assinatura</div>
+          <div class="kpi-value"><%= fmt(kpis.pending_count) %></div>
+        </div>
+        <div class="kpi kpi-red">
+          <div class="kpi-label">Assin. Recusadas</div>
+          <div class="kpi-value"><%= fmt(kpis.cancelled_count) %></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos linha 1 -->
+    <div>
+      <div class="section-heading">Análises Gráficas</div>
+      <div class="chart-grid-3">
+        <div class="card">
+          <div class="card-header">Tendência Mensal <span class="card-badge">abertas vs. encerradas</span></div>
+          <div class="card-body"><div class="chart-wrap" style="height:160px;"><canvas id="pdf_monthlyTrend"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header">OS por Status</div>
+          <div class="card-body"><div class="chart-wrap" style="height:160px;"><canvas id="pdf_statusChart"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header">Assinaturas</div>
+          <div class="card-body"><div class="chart-wrap" style="height:160px;"><canvas id="pdf_signatureChart"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráficos linha 2 -->
+    <div class="chart-grid-2">
+      <div class="card">
+        <div class="card-header">Horas por Técnico <span class="card-badge">top 10</span></div>
+        <div class="card-body"><div class="chart-wrap" style="height:160px;"><canvas id="pdf_hoursChart"></canvas></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header">OS por Cliente <span class="card-badge">top 10</span></div>
+        <div class="card-body"><div class="chart-wrap" style="height:160px;"><canvas id="pdf_customerChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- Tabelas linha 1 -->
+    <div>
+      <div class="section-heading">Tabelas Detalhadas</div>
+      <div class="table-grid-3">
+
+        <div class="card">
+          <div class="card-header">OS por Técnico</div>
+          <div class="card-body" style="padding:0;">
+            <table class="tbl">
+              <thead><tr><th class="rank">#</th><th>Técnico</th><th class="num">OS</th></tr></thead>
+              <tbody>
+                <% (tables.ordersByTechnician || []).forEach((row, i) => { %>
+                <tr><td class="rank"><%= i+1 %></td><td><%= row.name %></td><td class="num"><%= fmt(row.os_qty) %></td></tr>
+                <% }) %>
+                <% if (!(tables.ordersByTechnician||[]).length) { %><tr><td colspan="3" style="text-align:center;padding:12px;color:#9ca3af;">Sem dados</td></tr><% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">Horas por Técnico</div>
+          <div class="card-body" style="padding:0;">
+            <table class="tbl">
+              <thead><tr><th class="rank">#</th><th>Técnico</th><th class="num">Horas</th></tr></thead>
+              <tbody>
+                <% (tables.hoursByTechnician || []).forEach((row, i) => { %>
+                <tr><td class="rank"><%= i+1 %></td><td><%= row.technician_name %></td><td class="num"><%= fmtH(row.total_hours) %></td></tr>
+                <% }) %>
+                <% if (!(tables.hoursByTechnician||[]).length) { %><tr><td colspan="3" style="text-align:center;padding:12px;color:#9ca3af;">Sem dados</td></tr><% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">OS com Mais Horas <span class="card-badge">top 15</span></div>
+          <div class="card-body" style="padding:0;">
+            <table class="tbl">
+              <thead><tr><th class="rank">#</th><th>OS</th><th class="num">h</th></tr></thead>
+              <tbody>
+                <% (tables.hoursByOrder || []).slice(0, 15).forEach((row, i) => { %>
+                <tr>
+                  <td class="rank"><%= i+1 %></td>
+                  <td><span class="code"><%= row.service_order_code %></span></td>
+                  <td class="num"><%= fmtH(row.total_hours) %></td>
+                </tr>
+                <% }) %>
+                <% if (!(tables.hoursByOrder||[]).length) { %><tr><td colspan="3" style="text-align:center;padding:12px;color:#9ca3af;">Sem dados</td></tr><% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Tabelas linha 2 -->
+    <div class="table-grid-3">
+
+      <div class="card">
+        <div class="card-header">Top Clientes</div>
+        <div class="card-body" style="padding:0;">
+          <table class="tbl">
+            <thead><tr><th class="rank">#</th><th>Cliente</th><th class="num">OS</th></tr></thead>
+            <tbody>
+              <% (tables.topCustomers || []).forEach((row, i) => { %>
+              <tr><td class="rank"><%= i+1 %></td><td><%= row.name %></td><td class="num"><%= fmt(row.os_qty) %></td></tr>
+              <% }) %>
+              <% if (!(tables.topCustomers||[]).length) { %><tr><td colspan="3" style="text-align:center;padding:12px;color:#9ca3af;">Sem dados</td></tr><% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">Top Sites</div>
+        <div class="card-body" style="padding:0;">
+          <table class="tbl">
+            <thead><tr><th class="rank">#</th><th>Site</th><th class="num">OS</th></tr></thead>
+            <tbody>
+              <% (tables.topSites || []).forEach((row, i) => { %>
+              <tr><td class="rank"><%= i+1 %></td><td><%= row.site_name %></td><td class="num"><%= fmt(row.os_qty) %></td></tr>
+              <% }) %>
+              <% if (!(tables.topSites||[]).length) { %><tr><td colspan="3" style="text-align:center;padding:12px;color:#9ca3af;">Sem dados</td></tr><% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">Equipamentos por Família</div>
+        <div class="card-body" style="padding:0;">
+          <table class="tbl">
+            <thead><tr><th class="rank">#</th><th>Família</th><th class="num">Qtd</th></tr></thead>
+            <tbody>
+              <% (eq.byFamily || []).forEach((row, i) => { %>
+              <tr><td class="rank"><%= i+1 %></td><td><%= row.model_family %></td><td class="num"><%= fmt(row.qty) %></td></tr>
+              <% }) %>
+              <% if (!(eq.byFamily||[]).length) { %><tr><td colspan="3" style="text-align:center;padding:12px;color:#9ca3af;">Sem dados</td></tr><% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Spare-parts + Qualidade -->
+    <div class="table-grid-2">
+
+      <div class="card">
+        <div class="card-header">Spare-Parts Mais Utilizados <span class="card-badge">top 20</span></div>
+        <div class="card-body" style="padding:0;">
+          <table class="tbl">
+            <thead><tr><th class="rank">#</th><th>Part Number</th><th>Descrição</th><th class="num">Qtd</th></tr></thead>
+            <tbody>
+              <% (tables.topSpareParts || []).slice(0, 20).forEach((row, i) => { %>
+              <tr>
+                <td class="rank"><%= i+1 %></td>
+                <td><span class="code"><%= row.part_number || '-' %></span></td>
+                <td><%= row.description || '-' %></td>
+                <td class="num"><%= fmt(row.qty_used) %></td>
+              </tr>
+              <% }) %>
+              <% if (!(tables.topSpareParts||[]).length) { %><tr><td colspan="4" style="text-align:center;padding:12px;color:#9ca3af;">Sem dados</td></tr><% } %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="card">
+          <div class="card-header">Qualidade de Preenchimento</div>
+          <div class="card-body">
+            <div class="quality-row"><span>Total de OS</span><span class="quality-badge badge-ok"><%= fmt(dq.total_orders) %></span></div>
+            <div class="quality-row"><span>Sem timesheet</span><span class="quality-badge <%= Number(dq.missing_timesheet) > 0 ? 'badge-bad' : 'badge-ok' %>"><%= fmt(dq.missing_timesheet) %></span></div>
+            <div class="quality-row"><span>Sem descrição diária</span><span class="quality-badge <%= Number(dq.missing_daily_description) > 0 ? 'badge-warn' : 'badge-ok' %>"><%= fmt(dq.missing_daily_description) %></span></div>
+            <div class="quality-row"><span>Sem conclusão geral</span><span class="quality-badge <%= Number(dq.missing_conclusion) > 0 ? 'badge-warn' : 'badge-ok' %>"><%= fmt(dq.missing_conclusion) %></span></div>
+            <div class="quality-row"><span>Sem assinatura cliente</span><span class="quality-badge <%= Number(dq.missing_signature) > 0 ? 'badge-bad' : 'badge-ok' %>"><%= fmt(dq.missing_signature) %></span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">Distribuição por Revisão</div>
+          <div class="card-body" style="padding:0;">
+            <table class="tbl">
+              <thead><tr><th>Revisão</th><th class="num">Qtd</th></tr></thead>
+              <tbody>
+                <% (tables.revisionDistribution || []).forEach((row) => { %>
+                <tr><td><span class="code"><%= row.revision %></span></td><td class="num"><%= fmt(row.qty) %></td></tr>
+                <% }) %>
+                <% if (!(tables.revisionDistribution||[]).length) { %><tr><td colspan="2" style="text-align:center;padding:10px;color:#9ca3af;">Sem dados</td></tr><% } %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /page -->
+
+<script>
+(function () {
+  var data = <%- JSON.stringify({
+    monthlyTrend: dashboard.monthlyTrend || {},
+    ordersByStatus: (dashboard.tables || {}).ordersByStatus || [],
+    signatureStatus: (dashboard.tables || {}).signatureStatus || [],
+    hoursByTechnician: ((dashboard.tables || {}).hoursByTechnician || []).slice(0, 10),
+    topCustomers: ((dashboard.tables || {}).topCustomers || []).slice(0, 10)
+  }).replace(/</g, "\\u003c") %>;
+
+  var statusColors = {
+    draft:"#94a3b8", valid:"#3b82f6", in_progress:"#f59e0b",
+    waiting_review:"#f97316", approved:"#22c55e",
+    issued:"#16a34a", closed:"#64748b", cancelled:"#ef4444"
+  };
+
+  // Monthly trend
+  (function() {
+    var opened = Array.isArray(data.monthlyTrend.opened) ? data.monthlyTrend.opened : [];
+    var closed  = Array.isArray(data.monthlyTrend.closed)  ? data.monthlyTrend.closed  : [];
+    var keys = {};
+    opened.forEach(function(r){ keys[r.month_ref] = true; });
+    closed.forEach(function(r){ keys[r.month_ref] = true; });
+    var labels = Object.keys(keys).sort();
+    var oMap = {}, cMap = {};
+    opened.forEach(function(r){ oMap[r.month_ref] = Number(r.qty||0); });
+    closed.forEach(function(r){ cMap[r.month_ref] = Number(r.qty||0); });
+    var canvas = document.getElementById("pdf_monthlyTrend");
+    if (!canvas || !labels.length) return;
+    new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          { label: "Abertas",   data: labels.map(function(l){ return oMap[l]||0; }), borderColor: "#256d3a", backgroundColor: "rgba(37,109,58,0.12)", tension: 0.3, fill: true, pointRadius: 3 },
+          { label: "Encerradas",data: labels.map(function(l){ return cMap[l]||0; }), borderColor: "#3b82f6", backgroundColor: "rgba(59,130,246,0.10)", tension: 0.3, fill: true, pointRadius: 3 }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", labels: { font: { size: 9 }, boxWidth: 10 } } }, scales: { y: { beginAtZero: true, ticks: { font: { size: 8 } } }, x: { ticks: { font: { size: 8 } } } } }
+    });
+  })();
+
+  // Status bar
+  (function() {
+    var rows = data.ordersByStatus;
+    var canvas = document.getElementById("pdf_statusChart");
+    if (!canvas || !rows.length) return;
+    new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: rows.map(function(r){ return r.status; }),
+        datasets: [{ data: rows.map(function(r){ return Number(r.qty||0); }), backgroundColor: rows.map(function(r){ return statusColors[r.status]||"#94a3b8"; }), borderRadius: 3 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { font: { size: 8 }, precision: 0 } }, x: { ticks: { font: { size: 8 } } } } }
+    });
+  })();
+
+  // Signature donut
+  (function() {
+    var rows = data.signatureStatus;
+    var canvas = document.getElementById("pdf_signatureChart");
+    if (!canvas || !rows.length) return;
+    new Chart(canvas, {
+      type: "doughnut",
+      data: { labels: rows.map(function(r){ return r.status; }), datasets: [{ data: rows.map(function(r){ return Number(r.qty||0); }), backgroundColor: ["#16a34a","#f59e0b","#ef4444","#64748b"] }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom", labels: { font: { size: 9 }, boxWidth: 10 } } } }
+    });
+  })();
+
+  // Hours by technician (horizontal bar)
+  (function() {
+    var rows = data.hoursByTechnician;
+    var canvas = document.getElementById("pdf_hoursChart");
+    if (!canvas || !rows.length) return;
+    new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: rows.map(function(r){ return r.technician_name; }),
+        datasets: [{ data: rows.map(function(r){ return Number(r.total_hours||0); }), backgroundColor: "rgba(20,184,166,0.75)", borderRadius: 3 }]
+      },
+      options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { font: { size: 8 } } }, y: { ticks: { font: { size: 8 } } } } }
+    });
+  })();
+
+  // Top customers (horizontal bar)
+  (function() {
+    var rows = data.topCustomers;
+    var canvas = document.getElementById("pdf_customerChart");
+    if (!canvas || !rows.length) return;
+    new Chart(canvas, {
+      type: "bar",
+      data: {
+        labels: rows.map(function(r){ return r.name; }),
+        datasets: [{ data: rows.map(function(r){ return Number(r.os_qty||0); }), backgroundColor: "rgba(139,92,246,0.75)", borderRadius: 3 }]
+      },
+      options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { font: { size: 8 }, precision: 0 } }, y: { ticks: { font: { size: 8 } } } } }
+    });
+  })();
+
+  // Signal Puppeteer that all charts are done
+  window.__analyticsPdfReady = true;
+})();
+</script>
+</body>
+</html>

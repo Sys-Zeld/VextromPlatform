@@ -8,6 +8,7 @@ function createReportPublicRouter(deps) {
 
   router.get("/sign/:token", asyncHandler(controller.clientSignPage));
   router.get("/sign/:token/report", asyncHandler(controller.clientSignedReportPage));
+  router.get("/signed/:token", asyncHandler(controller.clientSignedReportPage));
   router.post(
     "/sign/:token/verify-email",
     express.urlencoded({ extended: false, limit: "1mb" }),

@@ -3,6 +3,28 @@
 <link href="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.css" rel="stylesheet" />
 <link href="/public/css/report-editor.css" rel="stylesheet" />
 <%
+  function fmtDate(value) {
+    if (!value) return "-";
+    const raw = String(value).trim();
+    const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[3]}/${iso[2]}/${iso[1].slice(-2)}`;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return "-";
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getFullYear()).slice(-2)}`;
+  }
+  function fmtDateTime(value) {
+    if (!value) return "-";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "-";
+    const dd = String(d.getDate()).padStart(2,"0");
+    const mo = String(d.getMonth()+1).padStart(2,"0");
+    const yy = String(d.getFullYear()).slice(-2);
+    const hh = String(d.getHours()).padStart(2,"0");
+    const mi = String(d.getMinutes()).padStart(2,"0");
+    const ss = String(d.getSeconds()).padStart(2,"0");
+    return `${dd}/${mo}/${yy} ${hh}:${mi}:${ss}`;
+  }
+
   function extractImageFileName(filePath) {
     return String(filePath || "")
       .split(/[\\/]/)
@@ -46,11 +68,22 @@
       <div class="token-hero-actions">
         <span class="badge text-bg-secondary">Status: <%= order.status || "draft" %></span>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/analytics">Relatório/Dashboard</a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>">Editar OS</a>
-        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>/preview-html" target="_blank" rel="noopener">Preview HTML</a>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#tagsSupportModal">Tag's</button>
+        <a class="btn btn-outline-secondary btn-sm" href="<%= templatePreviewRoute || (`/admin/report-service/orders/${order.id}/preview-html/template/${templateKey || 'modern'}`) %>" target="_blank" rel="noopener">Preview HTML</a>
         <% if (String(order.status || "").toLowerCase() === "valid") { %>
           <a class="btn btn-outline-success btn-sm" href="/admin/report-service/orders/<%= order.id %>/sign-report">Assinar Relatorio</a>
         <% } %>
+        <button
+          class="btn btn-outline-primary btn-sm"
+          type="button"
+          id="openTranslateModalBtn"
+          data-bs-toggle="modal"
+          data-bs-target="#translateReportModal"
+        >
+          Traduzir
+        </button>
         <form method="post" action="/admin/report-service/orders/<%= order.id %>/validate-os">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <button class="btn btn-success btn-sm" type="submit">Validar OS</button>
@@ -60,15 +93,21 @@
   </div>
 
   <% if (saved) { %><div class="alert alert-success mb-0">Capitulo salvo com sucesso.</div><% } %>
-  <% if (editLocked) { %><div class="alert alert-warning mb-0">OS aprovada. Edicao bloqueada. Revalide a OS com senha na tela da OS para liberar.</div><% } %>
+  <% if (editLocked) { %><div class="alert alert-warning mb-0">OS aprovada. Edicao bloqueada. Revalide a OS na tela da OS para liberar.</div><% } %>
   <% if (revalidated) { %><div class="alert alert-success mb-0">OS revalidada com sucesso. Status atualizado para <strong>valid</strong>.</div><% } %>
-  <% if (revalidateError === 'invalid_password') { %><div class="alert alert-danger mb-0">Senha de revalidacao invalida.</div><% } %>
-  <% if (revalidateError === 'not_configured') { %><div class="alert alert-danger mb-0">Senha de revalidacao nao configurada no servidor.</div><% } %>
+  <% if (revalidateError === 'forbidden_admin') { %><div class="alert alert-warning mb-0">Somente usuario com perfil <strong>admin</strong> pode revalidar OS.</div><% } %>
   <% if (revalidateError === 'invalid_state') { %><div class="alert alert-warning mb-0">A OS precisa estar com status <strong>approved</strong> para revalidar.</div><% } %>
   <% if (signRequestUpdated) { %><div class="alert alert-success mb-0">Dados do signatario atualizados com sucesso.</div><% } %>
   <% if (signRequestEditBlocked) { %><div class="alert alert-warning mb-0">Nao e permitido editar links que ja foram assinados/cancelados.</div><% } %>
   <% if (emailSent) { %><div class="alert alert-success mb-0">Relatorio assinado enviado por e-mail com sucesso.</div><% } %>
   <% if (emailError) { %><div class="alert alert-danger mb-0"><%= emailError %></div><% } %>
+  <% if (translated) { %>
+    <div class="alert alert-success mb-0">
+      Relatorio traduzido com sucesso para
+      <strong><%= (reportLanguages && reportLanguages[translatedTo] && reportLanguages[translatedTo].label) || ((reportLanguages && reportLanguages[reportLanguage] && reportLanguages[reportLanguage].label) || "Idioma selecionado") %></strong>.
+    </div>
+  <% } %>
+  <% if (translationError) { %><div class="alert alert-danger mb-0"><%= translationError %></div><% } %>
   <% if (signLocked) { %><div class="alert alert-warning mb-0">Assinatura do relatorio liberada apenas para OS com status <strong>valid</strong>.</div><% } %>
   <% if (validationSuccess) { %><div class="alert alert-success mb-0">OS validada com sucesso. Status atualizado para <strong>valid</strong>.</div><% } %>
   <% if (validationError && osValidation && !osValidation.valid) { %>
@@ -82,6 +121,166 @@
     </div>
   <% } %>
 
+  <div class="modal fade" id="tagsSupportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Tabela de apoio de tags do relatório</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table table-sm app-table mb-0">
+              <thead>
+                <tr>
+                  <th style="white-space:nowrap;">Tag</th>
+                  <th>Descrição</th>
+                  <th>IDs/Valores registrados</th>
+                  <th>Exemplo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>@img=ID</code></td>
+                  <td>Renderiza uma imagem inline do banco de imagens</td>
+                  <td>
+                    <% const tagImageRegistryAll = getTagImageRegistry(); %>
+                    <% if (tagImageRegistryAll.length) { %>
+                      <% tagImageRegistryAll.forEach((item) => { %>
+                        <span class="badge text-bg-light border me-1 mb-1"><code><%= item.ref_id || item.id %></code></span>
+                      <% }) %>
+                    <% } else { %>
+                      <span class="text-muted">Nenhuma imagem registrada</span>
+                    <% } %>
+                  </td>
+                  <td><code>@img=3</code></td>
+                </tr>
+                <tr>
+                  <td><code>@equip=ID</code></td>
+                  <td>Exibe TAG ou tipo do equipamento pelo ID de referência da OS</td>
+                  <td>
+                    <% const tagEquipRegistry = (orderEquipments || []).filter((item) => Number.isInteger(Number(item && (item.ref_id || item.equipment_id)))); %>
+                    <% if (tagEquipRegistry.length) { %>
+                      <% tagEquipRegistry.forEach((item) => { %>
+                        <span class="badge text-bg-light border me-1 mb-1"><code><%= Number(item.ref_id || item.equipment_id) %></code></span>
+                      <% }) %>
+                    <% } else { %>
+                      <span class="text-muted">Nenhum equipamento vinculado</span>
+                    <% } %>
+                  </td>
+                  <td><code>@equip=1</code></td>
+                </tr>
+                <tr>
+                  <td><code>@descricaodia=ID</code></td>
+                  <td>Exibe um log diário específico pelo ID de sequência</td>
+                  <td>
+                    <% const tagDailyRegistry = (dailyLogs || []).filter((item) => String(item.notes || "").trim().toLowerCase() !== "conclusaogeral"); %>
+                    <% if (tagDailyRegistry.length) { %>
+                      <% tagDailyRegistry.forEach((item) => { %>
+                        <span class="badge text-bg-light border me-1 mb-1"><code><%= Number(item.order_seq || item.id) %></code></span>
+                      <% }) %>
+                    <% } else { %>
+                      <span class="text-muted">Nenhuma descrição diária registrada</span>
+                    <% } %>
+                  </td>
+                  <td><code>@descricaodia=2</code></td>
+                </tr>
+                <tr>
+                  <td><code>@descricaodia</code></td>
+                  <td>Exibe todas as descrições diárias (exceto conclusão geral)</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@descricaodia</code></td>
+                </tr>
+                <tr>
+                  <td><code>@conclusaogeral</code></td>
+                  <td>Exibe o bloco de conclusão geral</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@conclusaogeral</code></td>
+                </tr>
+                <tr>
+                  <td><code>@tblcmpr</code></td>
+                  <td>Tabela de componentes substituídos (categoria: replaced)</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@tblcmpr</code></td>
+                </tr>
+                <tr>
+                  <td><code>@tblcmpq</code></td>
+                  <td>Tabela de componentes necessários (categoria: required)</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@tblcmpq</code></td>
+                </tr>
+                <tr>
+                  <td><code>@tblcmps</code></td>
+                  <td>Tabela de componentes sobressalentes (categoria: spare)</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@tblcmps</code></td>
+                </tr>
+                <tr>
+                  <td><code>@tblequip</code></td>
+                  <td>Tabela completa dos equipamentos vinculados à OS (dados da tabela de equipamentos)</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@tblequip</code></td>
+                </tr>
+                <tr>
+                  <td><code>@timesheet</code></td>
+                  <td>Tabela de horas e horários do timesheet</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@timesheet</code></td>
+                </tr>
+                <tr>
+                  <td><code>@equipetecnica</code></td>
+                  <td>Tabela da equipe técnica (nome, função, empresa)</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@equipetecnica</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="translateReportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Tradução automática do relatório</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-2 small text-muted">
+            Idioma atual:
+            <strong><%= (reportLanguages && reportLanguages[reportLanguage] && reportLanguages[reportLanguage].label) || "Português" %></strong>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small mb-1" for="translateTargetLanguage">Traduzir para</label>
+            <select class="form-select form-select-sm" id="translateTargetLanguage">
+              <option value="pt" <%= reportLanguage === 'pt' ? 'selected' : '' %>>Português</option>
+              <option value="en" <%= reportLanguage === 'en' ? 'selected' : '' %>>Inglês</option>
+              <option value="es" <%= reportLanguage === 'es' ? 'selected' : '' %>>Espanhol</option>
+            </select>
+          </div>
+          <div id="translateProgressWrap" class="d-none">
+            <div class="d-flex justify-content-between small mb-1">
+              <span id="translateProgressLabel">Iniciando...</span>
+              <span id="translateProgressPercent">0%</span>
+            </div>
+            <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="translateProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%">0%</div>
+            </div>
+            <div id="translateProgressMessage" class="small text-muted mt-2">Preparando tradução com IA...</div>
+          </div>
+          <div id="translateErrorBox" class="alert alert-danger mt-3 d-none mb-0"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal" id="translateCloseBtn">Fechar</button>
+          <button type="button" class="btn btn-primary btn-sm" id="startTranslateJobBtn">Iniciar tradução</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="row g-3">
 
     <%# ===== CAPITULOS ===== %>
@@ -92,6 +291,7 @@
             <h2 class="h6 app-card-title mb-0">Capitulos editaveis do relatorio</h2>
             <form method="post" action="/admin/report-service/orders/<%= order.id %>/sections" class="d-flex gap-2 align-items-center">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+              <input type="hidden" name="return_to" value="report-editor" />
               <input class="form-control form-control-sm" name="section_title" placeholder="Titulo do novo capitulo" required />
               <button class="btn btn-outline-primary btn-sm" type="submit">Adicionar capitulo</button>
             </form>
@@ -106,6 +306,7 @@
                 data-section-key="<%= section.section_key %>"
               >
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <input type="hidden" name="return_to" value="report-editor" />
                 <input type="hidden" name="section_title" value="<%= section.section_title || '' %>" data-section-title-text />
                 <input type="hidden" name="section_title_delta_json" value='<%= JSON.stringify(section?.section_title_delta_json || { ops: [{ insert: "\\n" }] }) %>' data-section-title-delta />
                 <input type="hidden" name="section_title_html" value="<%= section ? section.section_title_html : '' %>" data-section-title-html />
@@ -203,6 +404,11 @@
                           <td><code>@tblcmps</code></td>
                         </tr>
                         <tr>
+                          <td><code>@tblequip</code></td>
+                          <td>Tabela completa dos equipamentos vinculados à OS (dados da tabela de equipamentos)</td>
+                          <td><code>@tblequip</code></td>
+                        </tr>
+                        <tr>
                           <td><code>@timesheet</code></td>
                           <td>Tabela de timesheet com datas e horários de entrada/saída</td>
                           <td><code>@timesheet</code></td>
@@ -287,6 +493,12 @@
           <% if (signedLinkCreated) { %>
             <div class="alert alert-success mb-3">Link de assinatura gerado com sucesso.</div>
           <% } %>
+          <% if (signLinkEmailSent) { %>
+            <div class="alert alert-success mb-3">E-mail enviado automaticamente para o signatário com o link de assinatura.</div>
+          <% } %>
+          <% if (signLinkEmailError) { %>
+            <div class="alert alert-warning mb-3"><%= signLinkEmailError %></div>
+          <% } %>
           <% if (signLinkBlocked && signRequestGuard && !signRequestGuard.allowed) { %>
             <div class="alert alert-warning mb-3">
               <div class="fw-semibold mb-1">Não foi possível gerar o link de assinatura eletrônica.</div>
@@ -320,7 +532,7 @@
                       var srStatus = sr.status;
                       var srBadge = srStatus === 'signed' ? 'bg-success' : 'bg-warning text-dark';
                       var srLabel = srStatus === 'signed' ? 'Assinado' : 'Aguardando';
-                      var expDate = sr.expires_at ? new Date(sr.expires_at).toLocaleDateString('pt-BR') : '-';
+                      var expDate = sr.expires_at ? fmtDate(sr.expires_at) : '-';
                       var signLink = '/r/sign/' + sr.token;
                     %>
                     <tr>
@@ -405,7 +617,7 @@
                     <tr>
                       <td><%= sr.signer_name || '-' %><% if (sr.signer_role) { %><br><small class="text-muted"><%= sr.signer_role %></small><% } %></td>
                       <td><%= sr.signer_company || '-' %></td>
-                      <td><%= sr.updated_at ? new Date(sr.updated_at).toLocaleString('pt-BR') : '-' %></td>
+                      <td><%= sr.updated_at ? fmtDateTime(sr.updated_at) : '-' %></td>
                       <td style="min-width:280px;">
                         <details>
                           <summary class="btn btn-outline-secondary btn-sm">Abrir motivo</summary>
@@ -432,6 +644,17 @@
               <summary class="fw-semibold" style="cursor:pointer;">Enviar relatorio assinado por e-mail</summary>
               <form method="post" action="/admin/report-service/orders/<%= order.id %>/send-signed-email" class="row g-2 mt-2">
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <div class="col-12 col-md-4">
+                  <label class="form-label mb-1 small">Template PDF</label>
+                  <select class="form-select form-select-sm" name="template_key" id="signedEmailTemplateKey">
+                    <% ((reportConfig && reportConfig.templateOptions) || []).forEach(function (item) { %>
+                      <option value="<%= item.key %>" <%= item.key === templateKey ? "selected" : "" %>><%= item.name %></option>
+                    <% }); %>
+                  </select>
+                </div>
+                <div class="col-12 col-md-8 d-flex align-items-end">
+                  <a class="btn btn-outline-secondary btn-sm" id="signedEmailTemplatePreviewLink" href="/admin/report-service/orders/<%= order.id %>/preview-html/template/<%= templateKey || 'modern' %>" target="_blank" rel="noopener">Abrir preview do template selecionado</a>
+                </div>
                 <div class="col-12 col-md-6">
                   <label class="form-label mb-1 small">Para <span class="text-danger">*</span></label>
                   <input class="form-control form-control-sm" name="to" type="text" placeholder="email@empresa.com; outro@empresa.com" required />
@@ -472,7 +695,7 @@
                       <td><%= sig.signer_name || '-' %></td>
                       <td><%= sig.signer_role || '-' %></td>
                       <td><%= sig.signer_company || '-' %></td>
-                      <td><%= sig.signed_at ? new Date(sig.signed_at).toLocaleString('pt-BR') : '-' %></td>
+                      <td><%= sig.signed_at ? fmtDateTime(sig.signed_at) : '-' %></td>
                       <td>
                         <form method="post" action="/admin/report-service/orders/<%= order.id %>/signatures/<%= sig.id %>/delete" class="m-0" onsubmit="return confirm('Excluir esta assinatura eletrônica?');">
                           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
@@ -504,12 +727,20 @@
                   <input class="form-control form-control-sm" name="signer_company" placeholder="Ex: Empresa Ltda." />
                 </div>
                 <div class="col-12 col-md-6">
-                  <label class="form-label mb-1 small">E-mail (opcional)</label>
-                  <input class="form-control form-control-sm" name="signer_email" type="email" placeholder="email@empresa.com" />
+                  <label class="form-label mb-1 small">E-mail <span class="text-danger">*</span></label>
+                  <input class="form-control form-control-sm" name="signer_email" type="email" placeholder="email@empresa.com" required />
                 </div>
                 <div class="col-12 col-md-6">
                   <label class="form-label mb-1 small">Observações</label>
                   <input class="form-control form-control-sm" name="notes" placeholder="Opcional" />
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label mb-1 small">Idioma do relatório para assinatura</label>
+                  <select class="form-select form-select-sm" name="document_language" required>
+                    <option value="pt" <%= reportLanguage === 'pt' ? 'selected' : '' %>>Português</option>
+                    <option value="en" <%= reportLanguage === 'en' ? 'selected' : '' %>>Inglês</option>
+                    <option value="es" <%= reportLanguage === 'es' ? 'selected' : '' %>>Espanhol</option>
+                  </select>
                 </div>
                 <div class="col-12">
                   <button class="btn btn-primary btn-sm" type="submit">Gerar link de assinatura</button>
@@ -537,6 +768,145 @@
 <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.min.js"></script>
 <script>
+  (function () {
+    var startBtn = document.getElementById("startTranslateJobBtn");
+    var closeBtn = document.getElementById("translateCloseBtn");
+    var langSelect = document.getElementById("translateTargetLanguage");
+    var progressWrap = document.getElementById("translateProgressWrap");
+    var progressBar = document.getElementById("translateProgressBar");
+    var progressPercent = document.getElementById("translateProgressPercent");
+    var progressMessage = document.getElementById("translateProgressMessage");
+    var progressLabel = document.getElementById("translateProgressLabel");
+    var errorBox = document.getElementById("translateErrorBox");
+    var csrfToken = "<%= csrfToken %>";
+    var orderId = <%= Number(order.id) %>;
+    if (!startBtn || !langSelect || !progressWrap || !progressBar || !progressPercent || !progressMessage || !progressLabel || !errorBox) return;
+
+    var pollTimer = null;
+    function stopPolling() {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    }
+    function setProgress(value, message) {
+      var safe = Math.max(0, Math.min(100, Number(value || 0)));
+      progressBar.style.width = safe + "%";
+      progressBar.textContent = safe + "%";
+      progressBar.setAttribute("aria-valuenow", String(safe));
+      progressPercent.textContent = safe + "%";
+      if (message) progressMessage.textContent = message;
+      if (safe >= 100) {
+        progressBar.classList.remove("progress-bar-animated");
+      } else {
+        progressBar.classList.add("progress-bar-animated");
+      }
+    }
+    function showError(message) {
+      errorBox.textContent = String(message || "Falha ao iniciar tradução.");
+      errorBox.classList.remove("d-none");
+    }
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.classList.add("d-none");
+    }
+    async function pollJob(jobId, targetLanguage) {
+      try {
+        var response = await fetch("/admin/report-service/orders/" + orderId + "/translate/jobs/" + encodeURIComponent(jobId), {
+          method: "GET",
+          credentials: "same-origin"
+        });
+        var payload = await response.json().catch(function () { return {}; });
+        if (!response.ok || !payload || !payload.ok) {
+          throw new Error(payload && payload.message ? payload.message : "Não foi possível consultar progresso.");
+        }
+        setProgress(payload.progress, payload.message || "Traduzindo...");
+        if (payload.status === "completed") {
+          progressLabel.textContent = "Concluído";
+          setProgress(100, payload.message || "Tradução concluída.");
+          stopPolling();
+          setTimeout(function () {
+            window.location.href = "/admin/report-service/orders/" + orderId + "/report-editor?translated=1&translated_to=" + encodeURIComponent(targetLanguage) + "&saved=1";
+          }, 800);
+          return;
+        }
+        if (payload.status === "failed") {
+          stopPolling();
+          progressLabel.textContent = "Falha";
+          showError(payload.error || payload.message || "Falha na tradução.");
+          startBtn.disabled = false;
+          if (closeBtn) closeBtn.disabled = false;
+          return;
+        }
+        pollTimer = setTimeout(function () {
+          pollJob(jobId, targetLanguage);
+        }, 1200);
+      } catch (err) {
+        stopPolling();
+        showError(err && err.message ? err.message : "Falha ao acompanhar progresso.");
+        startBtn.disabled = false;
+        if (closeBtn) closeBtn.disabled = false;
+      }
+    }
+
+    startBtn.addEventListener("click", async function () {
+      clearError();
+      stopPolling();
+      progressWrap.classList.remove("d-none");
+      progressLabel.textContent = "Processando";
+      setProgress(2, "Iniciando tradução com IA...");
+      startBtn.disabled = true;
+      if (closeBtn) closeBtn.disabled = true;
+      var targetLanguage = String(langSelect.value || "pt");
+      try {
+        var response = await fetch("/admin/report-service/orders/" + orderId + "/translate/start", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": csrfToken
+          },
+          credentials: "same-origin",
+          body: JSON.stringify({ target_language: targetLanguage })
+        });
+        var payload = await response.json().catch(function () { return {}; });
+        if (!response.ok || !payload || !payload.ok || !payload.jobId) {
+          throw new Error(payload && payload.message ? payload.message : "Falha ao iniciar job de tradução.");
+        }
+        setProgress(payload.progress || 5, "Job criado. Traduzindo conteúdo...");
+        pollJob(payload.jobId, targetLanguage);
+      } catch (err) {
+        showError(err && err.message ? err.message : "Falha ao iniciar tradução.");
+        startBtn.disabled = false;
+        if (closeBtn) closeBtn.disabled = false;
+      }
+    });
+
+    var modalEl = document.getElementById("translateReportModal");
+    if (modalEl) {
+      modalEl.addEventListener("hidden.bs.modal", function () {
+        stopPolling();
+        startBtn.disabled = false;
+        if (closeBtn) closeBtn.disabled = false;
+        progressWrap.classList.add("d-none");
+        progressLabel.textContent = "Iniciando...";
+        setProgress(0, "Preparando tradução com IA...");
+        clearError();
+      });
+    }
+  })();
+
+  </script>
+<script>
+  (function () {
+    var selector = document.getElementById("signedEmailTemplateKey");
+    var link = document.getElementById("signedEmailTemplatePreviewLink");
+    if (!selector || !link) return;
+    selector.addEventListener("change", function () {
+      var key = String(selector.value || "modern").trim() || "modern";
+      link.href = "/admin/report-service/orders/<%= order.id %>/preview-html/template/" + encodeURIComponent(key);
+    });
+  })();
+
   window.reportSectionToolbar = <%- JSON.stringify(quillSectionToolbar) %>;
   window.reportSectionTitleToolbar = <%- JSON.stringify(quillSectionTitleToolbar) %>;
   window.reportSectionFormats = <%- JSON.stringify(quillSectionFormats) %>;

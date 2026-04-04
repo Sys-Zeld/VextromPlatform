@@ -1,4 +1,4 @@
-const db = require("../db");
+const db = require("../../configdb/db");
 const DEFAULT_SYSTEM_FONT_KEY = "inter";
 
 const FONT_OPTIONS = [

@@ -1,6 +1,7 @@
 const db = require("./index");
 const env = require("../config/env");
 const { ensureDatabaseExists } = require("./ensure-database");
+const { migrateConfigDb } = require("../../configdb/migrate");
 const { migrateServiceReport } = require("../../report_service/migrate");
 const { migrateModuleSpec } = require("../../module_spec/migrate");
 
@@ -187,50 +188,6 @@ async function migrate() {
   await db.query(`ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`);
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_backup_files_path_unique ON backup_files (file_path);`);
   await db.query(`
-    CREATE TABLE IF NOT EXISTS admin_users (
-      id TEXT PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE,
-      role TEXT NOT NULL DEFAULT 'user',
-      module_access JSONB NOT NULL DEFAULT '["specflow","module-spec","report-service"]'::jsonb,
-      ui_font TEXT NOT NULL DEFAULT 'inter',
-      salt TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-  await db.query(`
-    ALTER TABLE admin_users
-    ADD COLUMN IF NOT EXISTS module_access JSONB NOT NULL DEFAULT '["specflow","module-spec","report-service"]'::jsonb;
-  `);
-  await db.query(`
-    ALTER TABLE admin_users
-    ADD COLUMN IF NOT EXISTS ui_font TEXT NOT NULL DEFAULT 'inter';
-  `);
-  await db.query(`
-    UPDATE admin_users
-    SET ui_font = lower(trim(coalesce(ui_font, 'inter')))
-    WHERE ui_font IS NULL
-      OR trim(coalesce(ui_font, '')) = ''
-      OR lower(trim(coalesce(ui_font, ''))) NOT IN ('inter', 'manrope', 'nunito', 'source-sans-3', 'ibm-plex-sans');
-  `);
-  await db.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'admin_users_ui_font_check'
-      ) THEN
-        ALTER TABLE admin_users
-        ADD CONSTRAINT admin_users_ui_font_check
-        CHECK (ui_font IN ('inter', 'manrope', 'nunito', 'source-sans-3', 'ibm-plex-sans'));
-      END IF;
-    END
-    $$;
-  `);
-  await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_username_unique ON admin_users (username);`);
-  await db.query(`
     CREATE TABLE IF NOT EXISTS public_token_links (
       id BIGSERIAL PRIMARY KEY,
       slug TEXT NOT NULL UNIQUE,
@@ -246,6 +203,7 @@ async function migrate() {
   await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_public_token_links_slug_unique ON public_token_links (slug);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_public_token_links_profile_id ON public_token_links (profile_id);`);
 
+  await migrateConfigDb();
   await migrateServiceReport();
 
   if (env.moduleSpecEnabled) {
