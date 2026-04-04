@@ -1,291 +1,289 @@
-# APP-FORM-UPS-IEC
+﻿# Vextrom Platform
 
-Projeto full-stack em Node.js (Express + EJS + PostgreSQL) para especificacao de UPS baseada no IEC 62040-3 (Anexo D), com:
+Guia tecnico para desenvolvimento e operacao da plataforma.
 
-- Campos dinamicos por secao
-- Campos habilitados por cliente/token
-- Perfis salvos de campos para reutilizacao
-- CRUD de campos (`text`, `number`, `enum`, `boolean`, `time`, `dimension`)
-- `hasDefault` + `defaultValue` por campo
-- Precedencia de valor no formulario: `salvo > default > vazio`
-- APIs de fields e specification
+## Visao geral
 
-## Estrutura Atual
+Aplicacao Node.js (Express + EJS + PostgreSQL) com arquitetura modular:
 
-- `src/app.js`: ponto de entrada (starter) da aplicacao na raiz.
-- `specflow/app.js`: logica principal do modulo SpecFlow (rotas, middlewares e bootstrap do modulo).
-- `specflow/config`, `specflow/db`, `specflow/services`, `specflow/views`, `specflow/public`: camadas compartilhadas usadas pelo SpecFlow.
-- `module_spec/`: modulo isolado de catalogo/filtro.
-- `report_service/`: modulo isolado de relatorios de servico.
+- `specflow`: formulario tecnico dinamico
+- `report_service`: OS, relatorio tecnico, assinatura e analytics
+- `module_spec`: catalogo/filtro de equipamentos
+- `configdb`: usuarios admin e configuracoes de aparencia por usuario
 
-## Requisitos
+## Arquitetura de runtime
+
+Entrada de processo:
+
+- `src/app.js` -> inicia `specflow/app.js`
+
+Composicao da aplicacao:
+
+- `specflow/app.js` monta middlewares globais (helmet, csrf, auth, i18n, tema)
+- `report_service/src/app.js` registra:
+  - `/api/report-service`
+  - `/admin/report-service`
+  - `/service-report`
+  - `/r` (rotas publicas de assinatura)
+- `module_spec/src/app.js` e carregado conforme flag de modulo
+
+Pastas principais:
+
+- `specflow/`: app base, hub e admin
+- `report_service/`: dominio de OS/relatorio
+- `module_spec/`: modulo de filtro
+- `configdb/`: migracao de banco de administracao
+- `scripts/`: automacoes de migrate/seed/backup/restore
+
+## Bancos de dados e isolamento
+
+Cada modulo possui banco dedicado:
+
+- `dbspeflow` (SpecFlow)
+- `reportservice` (Report Service)
+- `dbmodulespec` (Module Spec)
+- `configdb` (usuarios/admin UI)
+
+Resolucao de conexao:
+
+- `specflow/config/env.js` monta `env.databases.*`
+- migrate global em `specflow/db/migrate.js` executa:
+  - migrate SpecFlow
+  - migrate ConfigDB
+  - migrate Report Service
+  - migrate Module Spec (quando habilitado)
+
+## Rotas tecnicas
+
+### Report Service (Web Admin)
+
+Base: `/admin/report-service`
+
+Principais grupos:
+
+- OS: `/orders*`
+- Editor de relatorio: `/orders/:id/report-editor`
+- Preview/PDF:
+  - `/orders/:id/preview-html`
+  - `/orders/:id/preview-html/template/:templateKey`
+  - `/orders/:id/generate-pdf`
+- Assinatura tecnica: `/orders/:id/sign-report`
+- Analytics:
+  - `/analytics`
+  - `/analytics/data`
+  - `/analytics/export-pdf`
+
+### Report Service (Publico)
+
+Base: `/r`
+
+- `GET /r/sign/:token`
+- `POST /r/sign/:token`
+- `POST /r/sign/:token/refuse`
+- `GET /r/sign/:token/report`
+- `GET /r/signed/:token`
+
+### Report Service (API)
+
+Base: `/api/report-service`
+
+- escopos: `report-service:read`, `report-service:write`
+- recursos: orders, customers, sites, equipments, timesheet, reports, sections, components, signatures, pdf
+
+## Fluxos de negocio implementados (Report Service)
+
+- criacao/edicao de OS
+- validacao de OS restrita a perfil admin
+- revalidacao de OS restrita a perfil admin
+- controle de revisao de relatorio (A, B, C...)
+- assinatura tecnica interna
+- assinatura de cliente por token publico
+- envio de emails por templates HTML
+- traducao automatica PT/EN/ES com IA
+- dashboard gerencial com exportacao PDF
+
+## Tags de renderizacao do relatorio
+
+Suportadas no rich text:
+
+- `@img=ID`
+- `@equip=ID`
+- `@descricaodia=ID`
+- `@descricaodia`
+- `@conclusaogeral`
+- `@tblcmpr`
+- `@tblcmpq`
+- `@tblcmps`
+- `@tblequip` (tabela por equipamento, titulo = TAG)
+- `@timesheet`
+- `@equipetecnica`
+
+Implementacao de preview:
+
+- parser e injecao em `report_service/src/services/reportPreviewService.js`
+- estilos de saida em `specflow/public/css/report-preview.css`
+
+## Setup de desenvolvimento
+
+### Requisitos
 
 - Node.js 18+
 - PostgreSQL 14+
 
-## Execucao
+### Bootstrap local
 
 ```bash
 npm install
+cp .env.example .env
 npm run db:migrate
 npm run db:seed:default
 npm run dev
 ```
 
-Aplicacao: `http://localhost:3000`
+App local: `http://localhost:3000`
 
-## Bootstrap
+## Comandos de engenharia
 
-- O `npm run start` e `npm run dev` executam `src/app.js`.
-- `src/app.js` inicializa e sobe o servidor via `specflow/app.js`.
+### Execucao
 
-## Comandos de manutencao APP via NPM
+- `npm run dev`
+- `npm run start`
 
-- `npm run dev`: sobe a aplicacao em modo desenvolvimento (`nodemon`).
-- `npm run start`: sobe a aplicacao em modo normal.
-- `npm run modules:enable:all`: habilita todos os modulos (`specflow`, `module-spec`, `report-service`).
-- `npm run modules:disable:all`: desabilita todos os modulos.
-- `npm run specflow:enable` / `npm run specflow:disable`: habilita/desabilita o modulo SpecFlow.
-- `npm run module-spec:enable` / `npm run module-spec:disable`: habilita/desabilita o modulo Module Spec.
-- `npm run report-service:enable` / `npm run report-service:disable`: habilita/desabilita o modulo Report Service.
-- `npm run db:migrate`: aplica as migracoes do banco.
-- `npm run db:migrate:config`: aplica migracao dedicada do banco `configdb` (administracao de usuarios).
-- `npm run db:backup-database`: alias de `npm run db:backup:specflow` (backup isolado do banco `dbspeflow`).
-- `npm run db:backup:specflow`: backup apenas do banco `dbspeflow`.
-- `npm run db:backup:config`: backup apenas do banco `configdb`.
-- `npm run db:backup:module-spec`: backup apenas do banco `dbmodulespec`.
-- `npm run db:backup:report-service`: backup apenas do banco `reportservice`.
-- `npm run db:backup:all`: backup dos 4 bancos isolados.
-- `npm run db:restore-database`: restaura o backup mais recente de `dados/backups` (limpa o schema `public` antes por padrao).
-- `npm run db:restore:specflow`: restaura backup do banco `dbspeflow`.
-- `npm run db:restore:config`: restaura backup do banco `configdb`.
-- `npm run db:restore:module-spec`: restaura backup do banco `dbmodulespec`.
-- `npm run db:restore:report-service`: restaura backup do banco `reportservice`.
-- `npm run db:seed`: executa seed dos modulos (specflow + report_service + module_spec quando habilitado).
-- `npm run db:seed:specflow`: aplica seed do SpecFlow (campos Anexo D).
-- `npm run db:seed:module-spec`: executa seed do Module Spec.
-- `npm run db:seed:report-service`: executa seed do Report Service.
-- `npm run db:seed:default`: aplica `db:seed` + `node scripts/seed-profile-purchase.js`.
-- `npm run db:reset`: limpa tabelas principais e reinicia IDs.
-- `npm run db:reset-schema`: remove e recria o schema `public` (limpeza estrutural total para restore).
-- `npm run db:restore-clean`: executa `db:reset-schema` + `db:restore-database`.
-- `npm run db:reseed`: executa `db:reset` + `db:seed`.
-- `npm run api:key:create -- --name "integracao-x" --scopes "fields:read,spec:read,spec:write"`: cria API key.
-- `npm run api:key:list`: lista API keys cadastradas.
-- `npm run api:key:revoke -- 1`: revoga API key por ID.
-- `npm run api:key:delete -- 1`: deleta API key por ID.
-- `npm run admin:sessions:clear`: invalida todas as sessoes admin ativas.
-- `npm run admin:public-limit:reset`: reseta o contador de limite do modulo publico (IP/sessao navegador).
-- `npm run token:set-sent -- --token=<TOKEN>`: forca status do token para `send` (uso de teste).
-- `npm run token:set-draft -- --token=<TOKEN>`: forca status do token para `draft` (uso de teste).
-- `npm run stress:specflow`: stress de clientes no SpecFlow.
-- `npm run stress:specflow:profile`: stress de perfis de formulario do SpecFlow.
-- `npm run stress:module-spec`: stress do modulo Module Spec.
-- `npm run stress:report-service`: stress do modulo Report Service.
-- `npm run teste-cliente`: alias legado para `npm run stress:specflow`.
-- `npm run teste-perfil-form`: alias legado para `npm run stress:specflow:profile`.
+### Toggle de modulos
 
-### Painel de manutencao admin
+- `npm run modules:enable:all`
+- `npm run modules:disable:all`
+- `npm run specflow:enable` / `npm run specflow:disable`
+- `npm run report-service:enable` / `npm run report-service:disable`
+- `npm run module-spec:enable` / `npm run module-spec:disable`
 
-- Acesse `/admin/maintenance/system` para manutencao global do sistema (backup de todos os bancos, migrate/seed e links dos modulos).
-- Em `/admin/maintenance/system`, na secao **Backup e restore (SpecFlow)**, ficou apenas a opcao de **importar banco** (`.sql`).
-- Acesse `/admin/maintenance/specflow` (ou `/admin/maintenance`) para manutencao do SpecFlow (backup banco, reset/seed, links publicos, SMTP, templates e destinatarios padrao).
-- Acesse `/admin/maintenance/module-spec` para manutencao do Module Spec (backup do banco dedicado).
-- Acesse `/admin/maintenance/report-service` para manutencao do Report Service (backup, SMTP e templates dedicados).
-- Perfil `admin`: acesso completo a comandos, backup/restore, cards de modulos e gestao de usuarios.
-- Perfil `user`: acesso limitado em `/admin/maintenance/system` para:
-  - alterar a propria senha
-  - alterar a tipografia do proprio perfil
-- O cadastro e a gestao de usuarios adicionais ficam em `/admin/maintenance/system` (somente `admin`).
+### Migracoes
 
-## Exemplos CMD - stress por modulo
+- `npm run db:migrate`
+- `npm run db:migrate:specflow`
+- `npm run db:migrate:report-service`
+- `npm run db:migrate:config`
+- `npm run db:migrate:module-spec`
 
-```cmd
-npm run stress:specflow -- --count=500 --concurrency=20
-```
+### Seed
 
-```cmd
-npm run stress:specflow:profile -- --count=200 --concurrency=10 --with-field
-```
+- `npm run db:seed`
+- `npm run db:seed:default`
+- `npm run db:seed:specflow`
+- `npm run db:seed:report-service`
+- `npm run db:seed:module-spec`
 
-```cmd
-npm run stress:module-spec -- --count=300 --concurrency=15
-```
+### Backup/Restore
 
-```cmd
-npm run stress:report-service -- --count=300 --concurrency=15
-```
+- `npm run db:backup:specflow`
+- `npm run db:backup:report-service`
+- `npm run db:backup:config`
+- `npm run db:backup:module-spec`
+- `npm run db:backup:all`
+- `npm run db:restore:specflow`
+- `npm run db:restore:report-service`
+- `npm run db:restore:config`
+- `npm run db:restore:module-spec`
+- `npm run db:restore-database`
 
-## Backup e restore do banco
+### Operacao admin
 
-- Backup isolado por modulo:
-  - `npm run db:backup:specflow`
-  - `npm run db:backup:config`
-  - `npm run db:backup:module-spec`
-  - `npm run db:backup:report-service`
-- Backup de todos os modulos:
-  - `npm run db:backup:all`
-- Alias legado (SpecFlow):
-  - `npm run db:backup-database`
-- Restore do ultimo backup (mais recente, com limpeza automatica do schema `public`):
-  - `npm run db:restore-database`
-- Restore isolado por modulo:
-  - `npm run db:restore:specflow -- "dados/backups/specflow-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
-  - `npm run db:restore:config -- "dados/backups/config-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
-  - `npm run db:restore:module-spec -- "dados/backups/module-spec-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
-  - `npm run db:restore:report-service -- "dados/backups/report-service-backup-YYYY-MM-DDTHH-MM-SS-sssZ.sql"`
-- Restore de arquivo especifico:
-  - `npm run db:restore-database -- "dados/backups/db-backup-2026-03-07T03-43-17-589Z.sql"`
-- Importacao de arquivo `.sql` pela UI:
-  - Acesse `/admin/maintenance`
-  - Use o bloco **Importar arquivo .sql**
-  - O upload apenas importa o arquivo para `dados/backups` e atualiza o catalogo
-  - Depois execute o restore pelo botao **Restaurar** na lista de backups
-  - Limite atual: `50 MB`
-- Restore sem limpar schema antes (avancado):
-  - `npm run db:restore-database -- --no-clean`
-- Restore limpo (remove schema e depois restaura):
-  - `npm run db:restore-clean`
-- Timeout do restore:
-  - Variavel opcional `DB_RESTORE_TIMEOUT_MS` (padrao: `1200000`, 20 minutos)
+- `npm run admin:sessions:clear`
+- `npm run admin:public-limit:reset`
+- `npm run api:key:create`
+- `npm run api:key:list`
+- `npm run api:key:revoke -- <id>`
+- `npm run api:key:delete -- <id>`
 
-## Modelo de dados novo
+## Configuracoes de ambiente (chaves criticas)
 
-- `fields`: cadastro dinamico de campos (com secao, tipo, enum e default opcional)
-- `equipments`: registro do equipamento/token
-- `field_profiles` + `field_profile_fields`: perfis reutilizaveis com conjuntos de campos
-- `equipment_enabled_fields`: campos habilitados por equipamento/token
-- `equipment_field_values`: valores por equipamento e campo
-- `equipment_documents`: anexos PDF por equipamento/token
+### Core
 
-## Fluxo de cliente com perfil
+- `PORT`
+- `APP_BASE_URL`
+- `SPECFLOW_ENABLED`
+- `REPORT_SERVICE_ENABLED`
+- `MODULE_SPEC_ENABLED`
 
-1. Acesse `/admin/clients/new`.
-2. Informe nome e contato.
-3. Escolha um perfil salvo (opcional) para preencher os campos habilitados.
-4. Ajuste manualmente os checkboxes se necessario.
-5. Opcionalmente informe um nome em "Salvar selecao atual como novo perfil".
-6. Gere o token; o formulario desse cliente exibira somente os campos habilitados.
+### Databases
 
-## Gestao de perfis de formulario
+- `SPECFLOW_DATABASE_URL`
+- `REPORT_SERVICE_DATABASE_URL`
+- `CONFIG_DATABASE_URL`
+- `MODULE_SPEC_DATABASE_URL`
 
-- Acesse `/admin/profiles` para criar, editar e excluir perfis de anexo formulario.
-- Acesse `/admin/tokens/:id/config` para ajustar campos especificos de um cliente ja criado.
-- Um perfil pode ser aplicado por cliente e os campos habilitados podem ser personalizados por cliente.
-- Na tela de perfis, use o botao **Perfil com IA** para abrir a pagina dedicada `/admin/profiles/ai`.
-- Na pagina dedicada de IA, voce pode:
-  - Enviar documento `PDF`, `TXT` ou `Excel` (`.xlsx`/`.xls`)
-  - Informar um modelo JSON de perfil
-  - Informar instrucoes adicionais para a IA (opcional)
-  - Visualizar o prompt final enviado para a IA
-  - Gerar JSON com IA (OpenAI), baixar o arquivo ou importar direto para criar um novo perfil
-  - Limite de tamanho do documento para IA: `10MB`
-  - Em falha de parse JSON, a resposta da IA e exibida com bloco `debug` (payload bruto) para diagnostico
+### Admin/Auth
 
-### Variaveis de ambiente para IA (OpenAI)
+- `ADMIN_USER`
+- `ADMIN_PASS`
+- `ADMIN_SESSION_SECRET`
+- `ADMIN_SESSION_TTL_HOURS`
 
-- `OPENAI_API_KEY`: chave da API OpenAI (obrigatoria para o recurso de IA).
-- `OPENAI_MODEL`: modelo usado na geracao (padrao: `gpt-4.1-mini`).
-- `OPENAI_BASE_URL`: base da API (padrao: `https://api.openai.com/v1`).
-- `OPENAI_MAX_OUTPUT_TOKENS`: tokens de saida por tentativa (padrao: `8000`).
-- `OPENAI_MAX_OUTPUT_RETRIES`: tentativas adicionais em caso de truncamento por tokens (padrao: `2`).
-- `OPENAI_MAX_OUTPUT_TOKENS_CAP`: limite maximo de tokens por tentativa com escalonamento (padrao: `20000`).
+### SMTP
 
-## Anexos PDF
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
 
-- No final do formulario de especificacao, e possivel anexar PDFs (ex.: desenho unifilar e trifilar).
-- Limite: ate 10 documentos por token, com ate 10MB por arquivo.
-- Apenas PDF e aceito.
-- Os arquivos sao salvos em `dados/docs` (na raiz da aplicacao).
-- O sistema salva no banco o link externo do arquivo, baseado em `APP_BASE_URL`.
-- Em producao, use `APP_BASE_URL` sem porta interna (ex.: `https://form.seudominio.com`).
+### IA (traducao/revisao)
 
-## Temas visuais do formulario
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL` (padrao `gpt-4.1-mini`)
+- `OPENAI_BASE_URL`
+- `OPENAI_MAX_OUTPUT_TOKENS`
+- `OPENAI_MAX_OUTPUT_RETRIES`
+- `OPENAI_MAX_OUTPUT_TOKENS_CAP`
 
-- O projeto possui tres temas: `Soft`, `Vextrom` (padrao) e `XVextrom`.
-- A troca e feita no seletor `Tema` no topo da tela.
-- A preferencia fica salva em `localStorage` na chave `app_theme` (`soft`, `vextrom` ou `xvextrom`).
-- Os tokens visuais (cores, sombras, bordas, espacamentos) ficam centralizados em `specflow/public/css/app.css`:
-  - bloco `:root, :root[data-theme="soft"]`
-  - bloco `:root[data-theme="vextrom"]`
-  - bloco `:root[data-theme="xvextrom"]`
+### Storage
 
-## Tipografia por usuario
+- `DOCS_DIR`
 
-- A selecao de fonte e feita em `/admin/maintenance/system`, no card **Tipografia por usuario**.
-- A preferencia de fonte e individual por conta e salva na tabela `admin_users` do banco `configdb` (coluna `ui_font`).
-- Fontes disponiveis:
-  - `Inter` (atual)
-  - `Manrope`
-  - `Nunito`
-  - `Source Sans 3`
-  - `IBM Plex Sans`
+## UI, temas e preferencias
 
-## Navegacao dos modulos (icones)
+- temas: `soft`, `vextrom`, `xvextrom`
+- tokens visuais centralizados em `specflow/public/css/app.css`
+- tema salvo no browser em `localStorage` (`app_theme`)
+- fonte por usuario salva em `configdb` (`admin_users.ui_font`)
 
-- Os botoes de navegacao de modulos usam o mesmo padrao de icones do Hub:
-  - `/admin/hub` -> `build_circle`
-  - `module-spec` -> `tune`
-  - `report-service` (`orders/equipments/customers`) -> `monitoring`
+## Painel de manutencao
 
-## Seed do Anexo D
+- `/admin/maintenance/system`
+- `/admin/maintenance/specflow`
+- `/admin/maintenance/report-service`
+- `/admin/maintenance/module-spec`
 
-- O seed oficial esta em `specflow/schema/annexD.fields.seed.js`
-- `npm run db:seed:specflow` popula/atualiza todos os campos do Anexo D
-- o seed do SpecFlow tambem garante:
-  - perfil padrao `PADRAO CHLORIDE`
-  - cliente padrao `Cliente Padrao SpecFlow`
-- `npm run db:seed:report-service` garante dados padrao do modulo:
-  - cliente, site e equipamento padrao
-  - ordem de servico padrao
-  - relatorio padrao vinculado a ordem
-- `npm run db:seed:default` tambÃƒÂ©m cria/atualiza o perfil padrÃƒÂ£o `PADRÃƒO CHLORIDE`
-- O servidor tambem chama `seedAnnexDFields()` no startup para garantir estrutura base
+Recursos:
 
-## Como adicionar/editar campos
+- SMTP
+- templates de email
+- destinatarios padrao
+- backup/restore
+- gestao de usuarios admin
+- tipografia por usuario
 
-1. Acesse `/admin/fields`
-2. Crie ou edite o campo informando:
-   - `key` unica (slug)
-   - `section`
-   - `fieldType`
-   - `enumOptions` (se `enum`)
-   - toggle `Usar valor padrao` (`hasDefault=true`)
-   - `defaultValue`
-3. Salve. O campo aparece automaticamente no formulario de especificacao.
+## Troubleshooting tecnico
 
-## Regra de default no formulario
+### `Cannot GET /r/signed/<token>`
 
-No carregamento da especificacao:
+- validar `REPORT_SERVICE_ENABLED=true`
+- validar montagem de rota publica `/r` em `report_service/src/app.js`
+- validar existencia/estado do token no banco do report service
 
-1. Se existe valor salvo para `(equipmentId, fieldId)`, usa esse valor.
-2. Senao, se `hasDefault=true`, usa `defaultValue` e marca badge `padrao`.
-3. Senao, deixa vazio.
+### `Cannot find module 'puppeteer'`
 
-Ao salvar vazio, o valor salvo e removido e a regra volta para default/vazio.
+- executar `npm install`
+- validar dependencia `puppeteer` em `package.json`
+- reiniciar processo da aplicacao
 
-## APIs principais
+### PDF divergente do preview
 
-- `GET /fields?section=...`
-- `POST /fields`
-- `PUT /fields/:id`
-- `DELETE /fields/:id`
-- `GET /equipment/:id/specification`
-- `PUT /equipment/:id/specification`
+- comparar `/orders/:id/preview-html/template/:templateKey` com PDF gerado
+- validar carregamento de `specflow/public/css/report-preview.css`
+- validar template EJS selecionado em `report_service/templates/report/*`
 
-Autenticacao da API:
+## Licenca
 
-- Header: `Authorization: Bearer <API_KEY>` (ou `X-API-Key: <API_KEY>`).
-- Escopos:
-  - `fields:read`
-  - `fields:write`
-  - `spec:read`
-  - `spec:write`
-- Sessao admin valida tambem tem acesso (fallback para uso interno no painel).
-
-## Documentacao da API
-
-- Arquivo HTML da documentacao: `api.html`
-
-
-
+MIT
