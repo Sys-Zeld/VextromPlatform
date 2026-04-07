@@ -1023,19 +1023,40 @@ function parseImportedSubmissionPayload(input) {
     throw err;
   }
 
-  const values = {};
+  const valueItems = [];
   sections.forEach((section) => {
     const fields = Array.isArray(section && section.fields) ? section.fields : [];
     fields.forEach((field) => {
       const fieldId = Number(field && field.id);
-      if (!Number.isInteger(fieldId) || fieldId <= 0) return;
+      const fieldKey = sanitizeInput(field && field.key);
+      const hasFieldId = Number.isInteger(fieldId) && fieldId > 0;
+      if (!hasFieldId && !fieldKey) return;
       if (Object.prototype.hasOwnProperty.call(field, "value")) {
-        values[fieldId] = field.value;
+        valueItems.push({
+          fieldId: hasFieldId ? fieldId : null,
+          fieldKey: fieldKey || "",
+          value: field.value
+        });
       }
     });
   });
 
-  if (!Object.keys(values).length) {
+  // Backward compatibility: allow payload.values object (id/key -> value)
+  if (!valueItems.length && parsed.values && typeof parsed.values === "object" && !Array.isArray(parsed.values)) {
+    Object.entries(parsed.values).forEach(([rawKey, rawValue]) => {
+      const fieldId = Number(rawKey);
+      const fieldKey = sanitizeInput(rawKey);
+      const hasFieldId = Number.isInteger(fieldId) && fieldId > 0;
+      if (!hasFieldId && !fieldKey) return;
+      valueItems.push({
+        fieldId: hasFieldId ? fieldId : null,
+        fieldKey: hasFieldId ? "" : fieldKey,
+        value: rawValue
+      });
+    });
+  }
+
+  if (!valueItems.length) {
     const err = new Error("Nenhum campo valido foi encontrado no JSON.");
     err.statusCode = 422;
     throw err;
@@ -1057,13 +1078,112 @@ function parseImportedSubmissionPayload(input) {
         && Number(configuration.profileId ?? configuration.profile_id) > 0
         ? Number(configuration.profileId ?? configuration.profile_id)
         : null,
+      profileName: sanitizeInput(configuration.profileName ?? configuration.profile_name ?? ""),
       enabledFieldIds: Array.isArray(configuration.enabledFieldIds ?? configuration.enabled_field_ids)
         ? (configuration.enabledFieldIds ?? configuration.enabled_field_ids)
           .map((item) => Number(item))
           .filter((item) => Number.isInteger(item) && item > 0)
         : null
     },
-    values
+    valueItems
+  };
+}
+
+async function resolveImportedSubmissionValues(imported) {
+  const allFields = await listFields({ lang: "pt" });
+  const byId = new Map(allFields.map((field) => [Number(field.id), field]));
+  const byKey = new Map(
+    allFields
+      .map((field) => [sanitizeInput(field.key).toLowerCase(), field])
+      .filter(([key]) => Boolean(key))
+  );
+
+  const resolvedValues = {};
+  const unresolved = [];
+  (Array.isArray(imported && imported.valueItems) ? imported.valueItems : []).forEach((item) => {
+    const numericId = Number(item && item.fieldId);
+    const key = sanitizeInput(item && item.fieldKey).toLowerCase();
+    let targetField = null;
+    if (Number.isInteger(numericId) && numericId > 0 && byId.has(numericId)) {
+      targetField = byId.get(numericId);
+    } else if (key && byKey.has(key)) {
+      targetField = byKey.get(key);
+    }
+
+    if (!targetField) {
+      unresolved.push({
+        fieldId: Number.isInteger(numericId) && numericId > 0 ? numericId : null,
+        fieldKey: key || null
+      });
+      return;
+    }
+
+    resolvedValues[Number(targetField.id)] = item.value;
+  });
+
+  return {
+    values: resolvedValues,
+    unresolved
+  };
+}
+
+async function resolveImportedSubmissionConfiguration(imported, resolvedImport) {
+  const importedConfiguration = imported && imported.configuration && typeof imported.configuration === "object"
+    ? imported.configuration
+    : {};
+  const importedProfileId = Number(importedConfiguration.profileId);
+  const importedProfileName = sanitizeInput(importedConfiguration.profileName || "");
+  const hasProfileIdReference = Number.isInteger(importedProfileId) && importedProfileId > 0;
+  const hasProfileNameReference = Boolean(importedProfileName);
+  const hasProfileReference = hasProfileIdReference || hasProfileNameReference;
+
+  let resolvedProfileId = null;
+  if (hasProfileIdReference) {
+    const profileById = await getProfileById(importedProfileId);
+    if (profileById) {
+      resolvedProfileId = Number(profileById.id);
+    }
+  }
+
+  if (resolvedProfileId === null && hasProfileNameReference) {
+    const normalizedName = importedProfileName.toLowerCase();
+    const profiles = await listProfiles();
+    const profileByName = profiles.find((profile) => sanitizeInput(profile && profile.name).toLowerCase() === normalizedName);
+    if (profileByName) {
+      resolvedProfileId = Number(profileByName.id);
+    }
+  }
+
+  const importedEnabledFieldIds = importedConfiguration.enabledFieldIds;
+  const hasEnabledFieldIds = Array.isArray(importedEnabledFieldIds);
+  let resolvedEnabledFieldIds = null;
+  if (hasEnabledFieldIds) {
+    const allFields = await listFields({ lang: "pt" });
+    const validFieldIds = new Set(
+      allFields
+        .map((field) => Number(field.id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    );
+    const filteredImported = importedEnabledFieldIds
+      .map((id) => Number(id))
+      .filter((id) => Number.isInteger(id) && id > 0 && validFieldIds.has(id));
+    if (filteredImported.length > 0) {
+      resolvedEnabledFieldIds = Array.from(new Set(filteredImported));
+    } else {
+      const idsFromResolvedValues = Object.keys((resolvedImport && resolvedImport.values) || {})
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0 && validFieldIds.has(id));
+      if (idsFromResolvedValues.length > 0) {
+        resolvedEnabledFieldIds = Array.from(new Set(idsFromResolvedValues));
+      }
+    }
+  }
+
+  return {
+    hasProfileReference,
+    resolvedProfileId,
+    hasEnabledFieldIds,
+    resolvedEnabledFieldIds
   };
 }
 
@@ -1087,6 +1207,7 @@ function buildSubmissionExportPayload(equipment, specification, enabledFieldIds 
     },
     configuration: {
       profile_id: equipment.profileId || null,
+      profile_name: equipment.profileName || null,
       enabled_field_ids: Array.isArray(enabledFieldIds) ? enabledFieldIds : []
     },
     sections: specification.sections.map((section) => ({
@@ -1972,17 +2093,31 @@ app.post("/admin/tokens/import-json", csrfProtection, requireAdminAuth, asyncHan
   let imported;
   try {
     imported = parseImportedSubmissionPayload(rawPayload);
-  } catch (_err) {
+  } catch (parseErr) {
     await renderAdminTokensPage(req, res, {
       statusCode: 422,
       importJsonPayload: rawPayload,
       importJsonResult: {
         status: "error",
-        message: req.t("admin.tokenImportInvalid")
+        message: `${req.t("admin.tokenImportInvalid")} ${parseErr && parseErr.message ? `(${parseErr.message})` : ""}`.trim()
       }
     });
     return;
   }
+
+  const resolvedImport = await resolveImportedSubmissionValues(imported);
+  if (!Object.keys(resolvedImport.values).length) {
+    await renderAdminTokensPage(req, res, {
+      statusCode: 422,
+      importJsonPayload: rawPayload,
+      importJsonResult: {
+        status: "error",
+        message: `${req.t("admin.tokenImportInvalid")} (Nenhum campo do JSON foi mapeado com os campos atuais do sistema.)`
+      }
+    });
+    return;
+  }
+  const resolvedImportConfiguration = await resolveImportedSubmissionConfiguration(imported, resolvedImport);
 
   const existingEquipment = imported.token ? await getEquipmentByToken(imported.token) : null;
 
@@ -2001,26 +2136,33 @@ app.post("/admin/tokens/import-json", csrfProtection, requireAdminAuth, asyncHan
       return;
     }
 
-    const enabledFieldIds = Array.isArray(imported.configuration.enabledFieldIds)
-      ? imported.configuration.enabledFieldIds
+    const enabledFieldIds = resolvedImportConfiguration.hasEnabledFieldIds
+      ? (Array.isArray(resolvedImportConfiguration.resolvedEnabledFieldIds)
+        ? resolvedImportConfiguration.resolvedEnabledFieldIds
+        : await getEnabledFieldIdsForEquipment(existingEquipment.id))
       : await getEnabledFieldIdsForEquipment(existingEquipment.id);
+    const profileId = resolvedImportConfiguration.hasProfileReference
+      ? (resolvedImportConfiguration.resolvedProfileId === null
+        ? existingEquipment.profileId
+        : resolvedImportConfiguration.resolvedProfileId)
+      : existingEquipment.profileId;
 
     await updateEquipmentConfiguration(existingEquipment.id, {
       ...imported.clientData,
-      profileId: imported.configuration.profileId,
+      profileId,
       enabledFieldIds
     });
-    await saveEquipmentSpecification(existingEquipment.id, imported.values);
+    await saveEquipmentSpecification(existingEquipment.id, resolvedImport.values);
     return res.redirect(`/form/${existingEquipment.token}/specification?imported=1`);
   }
 
   if (importAction === "create_new") {
     const created = await createEquipment({
       ...imported.clientData,
-      profileId: imported.configuration.profileId,
-      enabledFieldIds: imported.configuration.enabledFieldIds
+      profileId: resolvedImportConfiguration.resolvedProfileId,
+      enabledFieldIds: resolvedImportConfiguration.resolvedEnabledFieldIds
     });
-    await saveEquipmentSpecification(created.id, imported.values);
+    await saveEquipmentSpecification(created.id, resolvedImport.values);
     return res.redirect(`/form/${created.token}/specification?imported=1`);
   }
 
@@ -4902,4 +5044,3 @@ if (require.main === module) {
       process.exit(1);
     });
 }
-

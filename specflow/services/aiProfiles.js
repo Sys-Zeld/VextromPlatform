@@ -221,11 +221,23 @@ async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType,
   throw err;
 }
 
+function stripQuillHtml(raw) {
+  return String(raw || "")
+    .replace(/\sclass="[^"]*"/gi, "")
+    .replace(/\sstyle="[^"]*"/gi, "")
+    .replace(/\sdata-[^=]+="[^"]*"/gi, "")
+    .replace(/<span>/gi, "")
+    .replace(/<\/span>/gi, "")
+    .replace(/(<br\s*\/?>\s*){2,}/gi, "<br>")
+    .trim();
+}
+
 async function reviseTextWithAi({
   text,
   html = "",
   prompt = "Revise o texto abaixo sem mudar muitas palavras",
-  preserveFormatting = false
+  preserveFormatting = false,
+  maxOutputTokens = null
 }) {
   if (!env.openai.apiKey) {
     const err = new Error("OPENAI_API_KEY nao configurada no ambiente.");
@@ -243,16 +255,20 @@ async function reviseTextWithAi({
 
   const instruction = String(prompt || "Revise o texto abaixo sem mudar muitas palavras").trim();
   const wantsHtml = Boolean(preserveFormatting);
-  const reviewTarget = wantsHtml && sourceHtml
-    ? `HTML:\n${sourceHtml}`
+  const cleanHtml = wantsHtml && sourceHtml ? stripQuillHtml(sourceHtml) : "";
+  const reviewTarget = wantsHtml && cleanHtml
+    ? `HTML:\n${cleanHtml}`
     : `Texto:\n${sourceText}`;
   const outputInstruction = wantsHtml
-    ? "Retorne somente HTML revisado, sem markdown, sem explicacoes e preservando a estrutura de formatacao."
+    ? "Retorne somente HTML revisado, sem markdown, sem explicacoes e preservando a estrutura de tags HTML."
     : "Retorne somente o texto revisado, sem explicacoes.";
+  const tokenCap = maxOutputTokens
+    ? Math.min(maxOutputTokens, env.openai.maxOutputTokensCap)
+    : Math.min(1200, env.openai.maxOutputTokensCap);
   const body = {
     model: env.openai.model,
     temperature: 0.2,
-    max_output_tokens: Math.min(1200, env.openai.maxOutputTokensCap),
+    max_output_tokens: tokenCap,
     input: [
       {
         role: "system",

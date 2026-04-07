@@ -26,16 +26,21 @@
 }
 
 .report-page {
+  position: relative;
   width: var(--report-a4-width);
   height: var(--report-a4-height);
   min-height: var(--report-a4-height);
   background: #fff;
   border: 1px solid #d6dfd8;
   border-radius: 12px;
-  padding: var(--report-page-pad-y) var(--report-page-pad-x);
+  padding: var(--report-page-pad-y) var(--report-page-pad-x) calc(var(--report-page-pad-y) + 28mm);
   box-shadow: 0 10px 24px rgba(24, 40, 31, 0.08);
   overflow: hidden;
   box-sizing: border-box;
+}
+
+.report-page.report-page-cover {
+  padding-bottom: var(--report-page-pad-y);
 }
 
 .report-page-content {
@@ -318,6 +323,7 @@
 
 .rich-output p {
   margin: 0 0 9px;
+  text-align: justify;
 }
 
 .rich-output strong,
@@ -831,12 +837,54 @@ blockquote {
 }
 
 .report-footer {
-  margin-top: 26px;
+  position: absolute;
+  bottom: var(--report-page-pad-y, 14mm);
+  left: var(--report-page-pad-x, 14mm);
+  right: var(--report-page-pad-x, 14mm);
   border-top: 1px solid #d6dfd8;
-  padding-top: 10px;
-  font-size: 0.78rem;
+  padding-top: 6px;
+  font-size: 0.7rem;
   color: #6e7e74;
-  text-align: center;
+  line-height: 1.6;
+}
+
+.report-footer-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.report-footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.report-footer-col-right {
+  text-align: right;
+  align-items: flex-end;
+}
+
+.report-footer-col span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.report-footer-col-right span {
+  flex-direction: row-reverse;
+}
+
+.rf-icon {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  color: #4f7d33;
+}
+
+.rf-icon-brand {
+  color: #0a66c2;
 }
 
 /* ---- Assinaturas eletrônicas ---- */

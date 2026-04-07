@@ -117,6 +117,7 @@ function createReportPublicController(deps) {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
 
+      const cv = Date.now();
       return res.send(`<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -157,6 +158,7 @@ function createReportPublicController(deps) {
 <body>
 <button class="report-print-btn" onclick="window.print()">Imprimir</button>
 ${reportHtml}
+<script src="/public/js/report-pagination.js?v=${cv}"></script>
 </body>
 </html>`);
     },

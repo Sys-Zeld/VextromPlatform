@@ -112,4 +112,22 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
+  /* Footer customizado (Config Report): manter layout de duas colunas no PDF */
+  .report-footer .footer-signature {
+    max-height: 300px !important;
+    padding: 14px 36px !important;
+  }
+
+  .report-footer .footer-signature .footer-content {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 40px !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .report-footer .footer-signature .footer-column-right {
+    max-width: 380px !important;
+  }
 }

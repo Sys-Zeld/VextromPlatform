@@ -30,9 +30,7 @@
 
     var onlyChild = flowEl.children.length === 1 ? flowEl.firstElementChild : null;
     if (onlyChild && onlyChild.tagName === "DIV" && onlyChild.classList.contains("ql-editor")) {
-      while (onlyChild.firstChild) {
-        flowEl.appendChild(onlyChild.firstChild);
-      }
+      while (onlyChild.firstChild) flowEl.appendChild(onlyChild.firstChild);
       flowEl.removeChild(onlyChild);
     }
 
@@ -116,22 +114,95 @@
     return pageEl ? pageEl.querySelector(".rich-output") : null;
   }
 
-  function cloneOverflowPage(sourcePage, sourceTopbar, sourceTitle, pageIndexLabel) {
+  function ensurePageHeader(pageEl) {
+    if (!pageEl) return null;
+    var contentWrap = pageEl.querySelector(".report-page-content");
+    if (!contentWrap) {
+      contentWrap = document.createElement("div");
+      contentWrap.className = "report-page-content";
+      pageEl.appendChild(contentWrap);
+    }
+    var title = contentWrap.querySelector(".section-title");
+    if (!title) {
+      title = document.createElement("div");
+      title.className = "section-title";
+      var number = document.createElement("span");
+      number.className = "section-title-number";
+      var rich = document.createElement("div");
+      rich.className = "report-section-title-rich";
+      title.appendChild(number);
+      title.appendChild(rich);
+      contentWrap.insertBefore(title, contentWrap.firstChild || null);
+    }
+    return title;
+  }
+
+  function setPageHeader(pageEl, sectionMeta, isContinuation) {
+    var title = ensurePageHeader(pageEl);
+    if (!title) return;
+    title.classList.toggle("section-title-continued", Boolean(isContinuation));
+
+    var numberEl = title.querySelector(".section-title-number");
+    if (numberEl) numberEl.textContent = String(sectionMeta && sectionMeta.numberLabel ? sectionMeta.numberLabel : "");
+
+    var richTitleEl = title.querySelector(".report-section-title-rich");
+    if (richTitleEl) {
+      if (isContinuation) {
+        richTitleEl.textContent = "(continua\u00e7\u00e3o...)";
+      } else {
+        richTitleEl.innerHTML = String(sectionMeta && sectionMeta.titleHtml ? sectionMeta.titleHtml : "CAPITULO");
+      }
+    }
+  }
+
+  function buildInlineSectionHeader(sectionMeta) {
+    var header = document.createElement("div");
+    header.className = "section-title";
+
+    var number = document.createElement("span");
+    number.className = "section-title-number";
+    number.textContent = String(sectionMeta && sectionMeta.numberLabel ? sectionMeta.numberLabel : "");
+    header.appendChild(number);
+
+    var rich = document.createElement("div");
+    rich.className = "report-section-title-rich";
+    rich.innerHTML = String(sectionMeta && sectionMeta.titleHtml ? sectionMeta.titleHtml : "CAPITULO");
+    header.appendChild(rich);
+
+    return header;
+  }
+
+  function cloneOverflowPage(sourcePage, sourceTopbar, sectionMeta, options) {
+    var opts = options || {};
+    var isContinuation = Boolean(opts.continuation);
     var overflowPage = sourcePage.cloneNode(false);
     overflowPage.removeAttribute("id");
     overflowPage.setAttribute("data-generated-overflow", "true");
     overflowPage.setAttribute("data-auto-paginate", "true");
+    overflowPage.setAttribute("data-page-section-anchor", String(sectionMeta && sectionMeta.anchorId ? sectionMeta.anchorId : ""));
+    overflowPage.setAttribute("data-page-section-continued", isContinuation ? "true" : "false");
 
     var topbar = sourceTopbar ? sourceTopbar.cloneNode(true) : document.createElement("div");
     var contentWrap = document.createElement("div");
     contentWrap.className = "report-page-content";
 
-    var title = sourceTitle ? sourceTitle.cloneNode(true) : document.createElement("div");
-    title.classList.add("section-title-continued");
-    var numberEl = title.querySelector(".section-title-number");
-    if (numberEl) numberEl.textContent = pageIndexLabel;
-    var richTitleEl = title.querySelector(".report-section-title-rich");
-    if (richTitleEl) richTitleEl.textContent = "(continuação...)";
+    var title = document.createElement("div");
+    title.className = "section-title";
+    if (isContinuation) title.classList.add("section-title-continued");
+
+    var numberEl = document.createElement("span");
+    numberEl.className = "section-title-number";
+    numberEl.textContent = String(sectionMeta && sectionMeta.numberLabel ? sectionMeta.numberLabel : "");
+    title.appendChild(numberEl);
+
+    var richTitleEl = document.createElement("div");
+    richTitleEl.className = "report-section-title-rich";
+    if (isContinuation) {
+      richTitleEl.textContent = "(continua\u00e7\u00e3o...)";
+    } else {
+      richTitleEl.innerHTML = String(sectionMeta && sectionMeta.titleHtml ? sectionMeta.titleHtml : "CAPITULO");
+    }
+    title.appendChild(richTitleEl);
 
     var flow = document.createElement("div");
     flow.className = "rich-output";
@@ -140,6 +211,11 @@
     contentWrap.appendChild(flow);
     overflowPage.appendChild(topbar);
     overflowPage.appendChild(contentWrap);
+
+    var sourceFooter = sourcePage ? sourcePage.querySelector(".report-footer") : null;
+    if (sourceFooter) {
+      overflowPage.appendChild(sourceFooter.cloneNode(true));
+    }
 
     return overflowPage;
   }
@@ -167,22 +243,13 @@
     var flow = getFlow(page);
     var titleHtml = page.getAttribute("data-source-title-html") || "";
     var flowHtml = page.getAttribute("data-source-flow-html") || "";
-
     if (title) title.innerHTML = titleHtml;
     if (flow) flow.innerHTML = flowHtml;
   }
 
-  function ensureNextPage(currentPage, reportDoc) {
-    var next = currentPage.nextElementSibling;
-    if (next && next.classList.contains("report-page") && next.getAttribute("data-generated-overflow") === "true") {
-      return next;
-    }
-
+  function ensureNextPageForSection(currentPage, reportDoc, sectionMeta, isContinuation) {
     var topbar = currentPage.querySelector(".topbar");
-    var title = currentPage.querySelector(".section-title");
-    var numberEl = title ? title.querySelector(".section-title-number") : null;
-    var label = numberEl ? numberEl.textContent : "";
-    var created = cloneOverflowPage(currentPage, topbar, title, label);
+    var created = cloneOverflowPage(currentPage, topbar, sectionMeta, { continuation: Boolean(isContinuation) });
     currentPage.after(created);
     return created;
   }
@@ -220,9 +287,9 @@
     return block.querySelector("p, li");
   }
 
-  function splitParagraphBlock(block, pageEl, reportDoc) {
+  function splitParagraphBlock(block, pageEl, reportDoc, sectionMeta) {
     var target = findParagraphTarget(block);
-    if (!target) return moveWholeBlockToNextPage(block, pageEl, reportDoc);
+    if (!target) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
 
     var text = String(target.textContent || "").trim();
     if (!text) return pageEl;
@@ -230,7 +297,7 @@
     var words = text.split(/\s+/);
     var firstPart = block.cloneNode(true);
     var firstTarget = findParagraphTarget(firstPart);
-    if (!firstTarget) return moveWholeBlockToNextPage(block, pageEl, reportDoc);
+    if (!firstTarget) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
 
     firstTarget.textContent = "";
     appendAndCheck(firstPart, pageEl);
@@ -238,7 +305,6 @@
     var low = 1;
     var high = words.length;
     var best = 0;
-
     while (low <= high) {
       var mid = Math.floor((low + high) / 2);
       firstTarget.textContent = words.slice(0, mid).join(" ");
@@ -253,7 +319,7 @@
 
     if (best === 0) {
       removeFromFlow(firstPart, pageEl);
-      return moveWholeBlockToNextPage(block, pageEl, reportDoc);
+      return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
     }
 
     firstTarget.textContent = words.slice(0, best).join(" ");
@@ -264,13 +330,13 @@
     var restTarget = findParagraphTarget(rest);
     if (!restTarget) return pageEl;
     restTarget.textContent = remaining;
-    var nextPage = ensureNextPage(pageEl, reportDoc);
-    return appendBlockWithPagination(rest, nextPage, reportDoc, null);
+    var nextPage = ensureNextPageForSection(pageEl, reportDoc, sectionMeta, true);
+    return appendBlockWithPagination(rest, nextPage, reportDoc, null, sectionMeta);
   }
 
-  function splitListBlock(block, pageEl, reportDoc) {
+  function splitListBlock(block, pageEl, reportDoc, sectionMeta) {
     var list = block.matches("ul, ol") ? block : block.querySelector("ul, ol");
-    if (!list) return moveWholeBlockToNextPage(block, pageEl, reportDoc);
+    if (!list) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
 
     var items = toArray(list.children);
     if (!items.length) return pageEl;
@@ -297,7 +363,7 @@
 
       if (used === 0) {
         removeFromFlow(chunk, currentPage);
-        currentPage = ensureNextPage(currentPage, reportDoc);
+        currentPage = ensureNextPageForSection(currentPage, reportDoc, sectionMeta, true);
         var forced = block.cloneNode(true);
         var forcedList = forced.matches("ul, ol") ? forced : forced.querySelector("ul, ol");
         if (!forcedList) return currentPage;
@@ -306,19 +372,22 @@
         start += 1;
       } else {
         start += used;
-        if (start < items.length) currentPage = ensureNextPage(currentPage, reportDoc);
+        if (start < items.length) currentPage = ensureNextPageForSection(currentPage, reportDoc, sectionMeta, true);
       }
     }
-
     return currentPage;
   }
 
-  function splitTableBlock(block, pageEl, reportDoc) {
+  function splitTableBlock(block, pageEl, reportDoc, sectionMeta) {
     var table = block.matches("table") ? block : block.querySelector("table");
-    if (!table) return moveWholeBlockToNextPage(block, pageEl, reportDoc);
+    if (!table) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
+
+    if (!block.matches("table") && block.querySelectorAll("table").length > 1) {
+      return splitRichBlockByChildren(block, pageEl, reportDoc, sectionMeta);
+    }
 
     var rows = toArray(table.querySelectorAll("tbody tr"));
-    if (!rows.length) return moveWholeBlockToNextPage(block, pageEl, reportDoc);
+    if (!rows.length) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
 
     var currentPage = pageEl;
     var rowIndex = 0;
@@ -343,7 +412,7 @@
 
       if (used === 0) {
         removeFromFlow(chunk, currentPage);
-        currentPage = ensureNextPage(currentPage, reportDoc);
+        currentPage = ensureNextPageForSection(currentPage, reportDoc, sectionMeta, true);
         var forced = block.cloneNode(true);
         var forcedTable = forced.matches("table") ? forced : forced.querySelector("table");
         var forcedBody = forcedTable ? forcedTable.querySelector("tbody") : null;
@@ -353,16 +422,15 @@
         rowIndex += 1;
       } else {
         rowIndex += used;
-        if (rowIndex < rows.length) currentPage = ensureNextPage(currentPage, reportDoc);
+        if (rowIndex < rows.length) currentPage = ensureNextPageForSection(currentPage, reportDoc, sectionMeta, true);
       }
     }
-
     return currentPage;
   }
 
-  function splitRichBlockByChildren(block, pageEl, reportDoc) {
+  function splitRichBlockByChildren(block, pageEl, reportDoc, sectionMeta) {
     var children = toArray(block.childNodes);
-    if (!children.length) return moveWholeBlockToNextPage(block, pageEl, reportDoc);
+    if (!children.length) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
 
     var first = block.cloneNode(false);
     appendAndCheck(first, pageEl);
@@ -379,21 +447,19 @@
 
     if (splitAt === 0) {
       removeFromFlow(first, pageEl);
-      return moveWholeBlockToNextPage(block, pageEl, reportDoc);
+      return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
     }
 
     if (splitAt >= children.length) return pageEl;
 
     var rest = block.cloneNode(false);
-    for (var j = splitAt; j < children.length; j += 1) {
-      rest.appendChild(children[j].cloneNode(true));
-    }
-    var nextPage = ensureNextPage(pageEl, reportDoc);
-    return appendBlockWithPagination(rest, nextPage, reportDoc, null);
+    for (var j = splitAt; j < children.length; j += 1) rest.appendChild(children[j].cloneNode(true));
+    var nextPage = ensureNextPageForSection(pageEl, reportDoc, sectionMeta, true);
+    return appendBlockWithPagination(rest, nextPage, reportDoc, null, sectionMeta);
   }
 
-  function moveWholeBlockToNextPage(block, pageEl, reportDoc) {
-    var nextPage = ensureNextPage(pageEl, reportDoc);
+  function moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta) {
+    var nextPage = ensureNextPageForSection(pageEl, reportDoc, sectionMeta, true);
     ensureImageSizeForPage(block, nextPage);
     appendAndCheck(block, nextPage);
     return nextPage;
@@ -419,19 +485,19 @@
     return fitBoth;
   }
 
-  function appendBlockWithPagination(block, pageEl, reportDoc, nextBlock) {
+  function appendBlockWithPagination(block, pageEl, reportDoc, nextBlock, sectionMeta) {
     if (!block) return pageEl;
     var currentPage = pageEl;
     var flow = getFlow(currentPage);
     if (!flow) return currentPage;
 
     if (block.classList && block.classList.contains("force-new-page") && flow.childElementCount > 0) {
-      currentPage = ensureNextPage(currentPage, reportDoc);
+      currentPage = ensureNextPageForSection(currentPage, reportDoc, sectionMeta, true);
       flow = getFlow(currentPage);
     }
 
     if (blockIsHeading(block) && !keepHeadingWithNext(currentPage, block, nextBlock) && flow.childElementCount > 0) {
-      currentPage = ensureNextPage(currentPage, reportDoc);
+      currentPage = ensureNextPageForSection(currentPage, reportDoc, sectionMeta, true);
       flow = getFlow(currentPage);
     }
 
@@ -441,15 +507,13 @@
 
     removeFromFlow(block, currentPage);
 
-    if (blockIsTable(block)) return splitTableBlock(block, currentPage, reportDoc);
-    if (blockIsList(block)) return splitListBlock(block, currentPage, reportDoc);
-    if (blockCanSplitAsParagraph(block) && !blockIsImage(block)) return splitParagraphBlock(block, currentPage, reportDoc);
-
+    if (blockIsTable(block)) return splitTableBlock(block, currentPage, reportDoc, sectionMeta);
+    if (blockIsList(block)) return splitListBlock(block, currentPage, reportDoc, sectionMeta);
+    if (blockCanSplitAsParagraph(block) && !blockIsImage(block)) return splitParagraphBlock(block, currentPage, reportDoc, sectionMeta);
     if ((block.classList && block.classList.contains("avoid-break")) || blockIsImage(block)) {
-      return moveWholeBlockToNextPage(block, currentPage, reportDoc);
+      return moveWholeBlockToNextPage(block, currentPage, reportDoc, sectionMeta);
     }
-
-    return splitRichBlockByChildren(block, currentPage, reportDoc);
+    return splitRichBlockByChildren(block, currentPage, reportDoc, sectionMeta);
   }
 
   function extractBlocksFromFlow(flowEl) {
@@ -482,58 +546,122 @@
         firstRealFound = true;
         continue;
       }
-      if (firstRealFound) {
-        excess.push(children[i]);
-      }
+      if (firstRealFound) excess.push(children[i]);
     }
     if (!excess.length) return;
 
     var ref = flow.firstChild;
     for (var j = 0; j < excess.length; j += 1) {
       titleRich.removeChild(excess[j]);
-      if (ref) {
-        flow.insertBefore(excess[j], ref);
-      } else {
-        flow.appendChild(excess[j]);
-      }
+      if (ref) flow.insertBefore(excess[j], ref); else flow.appendChild(excess[j]);
     }
+  }
+
+  function hasFlowContent(pageEl) {
+    var flow = getFlow(pageEl);
+    return Boolean(flow && flow.childNodes.length);
+  }
+
+  function captureSectionsCache(reportDoc) {
+    if (!reportDoc) return null;
+    if (reportDoc.__paginationSectionsCache) return reportDoc.__paginationSectionsCache;
+
+    var basePages = getBaseSectionPages(reportDoc);
+    if (!basePages.length) return null;
+
+    var sections = basePages.map(function (basePage, index) {
+      restoreSourceSnapshot(basePage);
+      moveExcessTitleToFlow(basePage);
+      var flow = getFlow(basePage);
+      var title = basePage.querySelector(".section-title");
+      var numberEl = title ? title.querySelector(".section-title-number") : null;
+      var richTitleEl = title ? title.querySelector(".report-section-title-rich") : null;
+
+      return {
+        anchorId: String(basePage.id || "").trim(),
+        numberLabel: String(numberEl ? numberEl.textContent : (index + 1 + ".")),
+        titleHtml: String(richTitleEl ? richTitleEl.innerHTML : "CAPITULO"),
+        blocks: extractBlocksFromFlow(flow)
+      };
+    });
+
+    var rootPage = basePages[0];
+    rootPage.setAttribute("data-pagination-root", "true");
+
+    for (var i = 1; i < basePages.length; i += 1) {
+      if (basePages[i].parentNode) basePages[i].parentNode.removeChild(basePages[i]);
+    }
+
+    reportDoc.__paginationSectionsCache = {
+      rootPage: rootPage,
+      sections: sections
+    };
+    return reportDoc.__paginationSectionsCache;
+  }
+
+  function clearRenderedPagination(reportDoc, rootPage) {
+    toArray(reportDoc.querySelectorAll(".report-page[data-generated-overflow='true']")).forEach(function (node) {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+    if (!rootPage) return;
+    rootPage.removeAttribute("id");
+    rootPage.removeAttribute("data-page-section-anchor");
+    rootPage.removeAttribute("data-page-section-continued");
+    var flow = getFlow(rootPage);
+    if (flow) flow.innerHTML = "";
   }
 
   function repaginateSections(reportDoc) {
     if (!reportDoc) return;
+    var cache = captureSectionsCache(reportDoc);
+    if (!cache || !cache.rootPage || !Array.isArray(cache.sections) || !cache.sections.length) return;
 
-    toArray(reportDoc.querySelectorAll(".report-page[data-generated-overflow='true']")).forEach(function (node) {
-      if (node.parentNode) node.parentNode.removeChild(node);
-    });
+    var rootPage = cache.rootPage;
+    clearRenderedPagination(reportDoc, rootPage);
 
-    var basePages = getBaseSectionPages(reportDoc);
-    basePages.forEach(function (basePage) {
-      restoreSourceSnapshot(basePage);
-      moveExcessTitleToFlow(basePage);
-      var sourceFlow = getFlow(basePage);
-      if (!sourceFlow) return;
+    var currentPage = rootPage;
+    var firstSection = cache.sections[0];
+    setPageHeader(currentPage, firstSection, false);
+    if (firstSection.anchorId) currentPage.id = firstSection.anchorId;
+    currentPage.setAttribute("data-page-section-anchor", firstSection.anchorId || "");
+    currentPage.setAttribute("data-page-section-continued", "false");
 
-      var blocks = extractBlocksFromFlow(sourceFlow);
-      sourceFlow.innerHTML = "";
+    for (var sectionIdx = 0; sectionIdx < cache.sections.length; sectionIdx += 1) {
+      var sectionMeta = cache.sections[sectionIdx];
+      var blocks = Array.isArray(sectionMeta.blocks) ? sectionMeta.blocks : [];
 
-      var currentPage = basePage;
-      for (var i = 0; i < blocks.length; i += 1) {
-        var current = blocks[i];
-        var next = blocks[i + 1] ? blocks[i + 1].cloneNode(true) : null;
-        currentPage = appendBlockWithPagination(current, currentPage, reportDoc, next);
+      if (sectionIdx > 0) {
+        if (!hasFlowContent(currentPage)) {
+          setPageHeader(currentPage, sectionMeta, false);
+          currentPage.removeAttribute("id");
+          if (sectionMeta.anchorId) currentPage.id = sectionMeta.anchorId;
+          currentPage.setAttribute("data-page-section-anchor", sectionMeta.anchorId || "");
+          currentPage.setAttribute("data-page-section-continued", "false");
+        } else {
+          var inlineHeader = buildInlineSectionHeader(sectionMeta);
+          var firstContentProbe = blocks.length ? blocks[0].cloneNode(true) : null;
+          var canStay = keepHeadingWithNext(currentPage, inlineHeader, firstContentProbe);
+          if (!canStay) {
+            currentPage = ensureNextPageForSection(currentPage, reportDoc, sectionMeta, false);
+            if (sectionMeta.anchorId) currentPage.id = sectionMeta.anchorId;
+          } else {
+            if (sectionMeta.anchorId) inlineHeader.id = sectionMeta.anchorId;
+            appendAndCheck(inlineHeader, currentPage);
+          }
+        }
       }
-    });
+
+      for (var blockIdx = 0; blockIdx < blocks.length; blockIdx += 1) {
+        var current = blocks[blockIdx].cloneNode(true);
+        var next = blocks[blockIdx + 1] ? blocks[blockIdx + 1].cloneNode(true) : null;
+        currentPage = appendBlockWithPagination(current, currentPage, reportDoc, next, sectionMeta);
+      }
+    }
   }
 
   function updateTocPages(reportDoc) {
     if (!reportDoc) return;
     var pages = toArray(reportDoc.querySelectorAll(".report-page"));
-    var pageByAnchorId = new Map();
-    pages.forEach(function (page, index) {
-      var id = String(page.id || "").trim();
-      if (!id) return;
-      if (!pageByAnchorId.has(id)) pageByAnchorId.set(id, index + 1);
-    });
 
     toArray(reportDoc.querySelectorAll(".report-toc li")).forEach(function (item) {
       var titleLink = item.querySelector(".report-toc-title, .report-toc-link");
@@ -542,8 +670,14 @@
       var href = String(titleLink.getAttribute("href") || "");
       if (!href || href.charAt(0) !== "#") return;
       var anchorId = href.slice(1);
-      var pageNumber = pageByAnchorId.get(anchorId);
-      if (!pageNumber) return;
+      if (!anchorId) return;
+
+      var anchorEl = document.getElementById(anchorId);
+      if (!anchorEl) return;
+      var pageEl = anchorEl.closest(".report-page");
+      if (!pageEl) return;
+      var pageNumber = pages.indexOf(pageEl) + 1;
+      if (pageNumber <= 0) return;
       pageLink.textContent = String(pageNumber);
     });
   }

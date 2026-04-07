@@ -28,7 +28,7 @@
       </div>
     </div>
     <div class="cover-center">
-      <img class="cover-logo-image" src="<%= brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Vextrom" />
+      <img class="cover-logo-image" src="<%= brandAssets?.logoCover || brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Vextrom" />
       <div class="cover-sub">classic report template</div>
       <div class="cover-title"><%= report?.title || "SERVICE REPORT" %></div>
       <div class="report-cover-subtitle"><strong>Cliente:</strong> <%= customer?.name || "-" %></div>
@@ -36,6 +36,7 @@
       <div class="report-cover-subtitle"><%= order?.service_order_display || "-" %></div>
       <div class="report-cover-subtitle"><strong>Relatorio:</strong> <%= report?.report_number || "-" %> / Rev. <%= report?.revision || "-" %></div>
     </div>
+    <% if (footerHtml) { %><div class="report-footer"><%- footerHtml %></div><% } %>
   </section>
 
   <section class="report-page">
@@ -52,19 +53,19 @@
       </div>
     </div>
 
-    <div class="report-section-title">METADADOS</div>
+    <div class="report-section-title"><%= uiLabels.metadata %></div>
     <div class="report-meta-grid">
-      <div class="report-meta-item"><strong>Executado por</strong><span><%= report?.prepared_by || "-" %></span></div>
-      <div class="report-meta-item"><strong>Revisao</strong><span><%= report?.revision || "-" %></span></div>
-      <div class="report-meta-item"><strong>OS</strong><span><%= order?.service_order_number || "-" %></span></div>
-      <div class="report-meta-item"><strong>Atualizado em</strong><span><%= formatClassicDateTime(report?.last_modified_at || generatedAt) %></span></div>
+      <div class="report-meta-item"><strong><%= uiLabels.preparedBy %></strong><span><%= report?.prepared_by || "-" %></span></div>
+      <div class="report-meta-item"><strong><%= uiLabels.revision %></strong><span><%= report?.revision || "-" %></span></div>
+      <div class="report-meta-item"><strong><%= uiLabels.os %></strong><span><%= order?.service_order_number || "-" %></span></div>
+      <div class="report-meta-item"><strong><%= uiLabels.updatedAt %></strong><span><%= formatClassicDateTime(report?.last_modified_at || generatedAt) %></span></div>
     </div>
 
-    <div class="report-section-title mt-4">SUMARIO</div>
+    <div class="report-section-title mt-4"><%= uiLabels.toc %></div>
     <ul class="report-toc">
       <% if (!toc || !toc.length) { %>
         <li>
-          <span>Sem capitulos.</span>
+          <span><%= uiLabels.tocEmpty %></span>
           <span class="report-toc-page">-</span>
         </li>
       <% } %>
@@ -76,13 +77,14 @@
         </li>
       <% }) %>
     </ul>
+    <% if (footerHtml) { %><div class="report-footer"><%- footerHtml %></div><% } %>
   </section>
 
+  <%
+    const validSigs = (signatures || []).filter(function(s) { return s.signer_name || s.signature_data; });
+  %>
+
   <% (orderedVisibleSections || []).forEach((section, index) => { %>
-    <%
-      const isLastSection = index === (orderedVisibleSections || []).length - 1;
-      const validSigs = isLastSection ? (signatures || []).filter(function(s) { return s.signer_name || s.signature_data; }) : [];
-    %>
     <section
       class="report-page"
       data-auto-paginate="true"
@@ -110,32 +112,73 @@
         </div>
         <div class="rich-output">
           <%- section.content_html_preview || section.content_html || "<p><br></p>" %>
-        </div>
-
-        <% if (validSigs.length > 0) { %>
-          <div class="report-signatures-block">
-            <div class="report-signatures-label">ASSINATURAS</div>
-            <div class="report-signatures-row">
-              <% validSigs.forEach(function(sig) { %>
-                <div class="report-signature-item">
-                  <div class="report-signature-canvas">
-                    <% if (sig.signature_data && sig.signature_data.indexOf('data:') === 0) { %>
-                      <img class="report-signature-img" src="<%= sig.signature_data %>" alt="Assinatura" />
-                    <% } %>
+          <% if (validSigs.length > 0 && index === (orderedVisibleSections.length - 1)) { %>
+            <div class="report-signatures-block avoid-break">
+              <div class="report-signatures-label"><%= uiLabels.signatures %></div>
+              <div class="report-signatures-row">
+                <% validSigs.forEach(function(sig) { %>
+                  <div class="report-signature-item">
+                    <div class="report-signature-canvas">
+                      <% if (sig.signature_data && sig.signature_data.indexOf('data:') === 0) { %>
+                        <img class="report-signature-img" src="<%= sig.signature_data %>" alt="Assinatura" />
+                      <% } %>
+                    </div>
+                    <div class="report-signature-line-hr"></div>
+                    <div class="report-signature-meta">
+                      <div class="report-signature-name"><%= sig.signer_name || '-' %></div>
+                      <% if (sig.signer_role) { %><div class="report-signature-detail"><%= sig.signer_role %></div><% } %>
+                      <% if (sig.signer_company) { %><div class="report-signature-detail"><%= sig.signer_company %></div><% } %>
+                      <% if (sig.signed_at) { %><div class="report-signature-date"><%= new Date(sig.signed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) %></div><% } %>
+                    </div>
                   </div>
-                  <div class="report-signature-line-hr"></div>
-                  <div class="report-signature-meta">
-                    <div class="report-signature-name"><%= sig.signer_name || '-' %></div>
-                    <% if (sig.signer_role) { %><div class="report-signature-detail"><%= sig.signer_role %></div><% } %>
-                    <% if (sig.signer_company) { %><div class="report-signature-detail"><%= sig.signer_company %></div><% } %>
-                    <% if (sig.signed_at) { %><div class="report-signature-date"><%= new Date(sig.signed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) %></div><% } %>
-                  </div>
-                </div>
-              <% }) %>
+                <% }) %>
+              </div>
             </div>
-          </div>
-        <% } %>
+          <% } %>
+        </div>
       </div>
+      <% if (footerHtml) { %><div class="report-footer"><%- footerHtml %></div><% } %>
     </section>
   <% }) %>
+
+  <% if (validSigs.length > 0 && !(orderedVisibleSections || []).length) { %>
+    <section class="report-page report-page-signatures">
+      <div class="topbar">
+        <div class="brand-left">
+          <img src="<%= brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Logo Vextrom" />
+        </div>
+        <div class="brand-right">
+          <% if (brandAssets?.logoChloride) { %>
+            <img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" />
+          <% } else { %>
+            <div class="report-brand-slot">Espaco para logo Chloride</div>
+          <% } %>
+        </div>
+      </div>
+      <div class="report-page-content">
+        <div class="report-signatures-block">
+          <div class="report-signatures-label"><%= uiLabels.signatures %></div>
+          <div class="report-signatures-row">
+            <% validSigs.forEach(function(sig) { %>
+              <div class="report-signature-item">
+                <div class="report-signature-canvas">
+                  <% if (sig.signature_data && sig.signature_data.indexOf('data:') === 0) { %>
+                    <img class="report-signature-img" src="<%= sig.signature_data %>" alt="Assinatura" />
+                  <% } %>
+                </div>
+                <div class="report-signature-line-hr"></div>
+                <div class="report-signature-meta">
+                  <div class="report-signature-name"><%= sig.signer_name || '-' %></div>
+                  <% if (sig.signer_role) { %><div class="report-signature-detail"><%= sig.signer_role %></div><% } %>
+                  <% if (sig.signer_company) { %><div class="report-signature-detail"><%= sig.signer_company %></div><% } %>
+                  <% if (sig.signed_at) { %><div class="report-signature-date"><%= new Date(sig.signed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) %></div><% } %>
+                </div>
+              </div>
+            <% }) %>
+          </div>
+        </div>
+      </div>
+      <% if (footerHtml) { %><div class="report-footer"><%- footerHtml %></div><% } %>
+    </section>
+  <% } %>
 </article>

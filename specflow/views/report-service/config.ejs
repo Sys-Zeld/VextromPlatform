@@ -103,6 +103,66 @@
         <div id="status-chloride" class="form-text">PNG, JPG ou SVG — max 5 MB. Ou informe uma URL/caminho publico.</div>
       </div>
 
+      <!-- Logo da Capa (cover-logo-image) -->
+      <div class="col-12 col-lg-4">
+        <label class="form-label">Logo da capa (cover-logo-image)</label>
+
+        <% if (reportConfig.logoCover) { %>
+          <div class="mb-2 p-2 border rounded text-center" style="background:var(--app-bg,#f8f9fa);min-height:60px">
+            <img id="preview-cover"
+                 src="<%= reportConfig.logoCover %>"
+                 alt="Logo da capa"
+                 style="max-height:56px;max-width:100%;object-fit:contain"
+                 onerror="this.style.display='none';document.getElementById('preview-cover-empty').style.display='block'" />
+            <span id="preview-cover-empty" class="text-muted small" style="display:none">Nao foi possivel carregar a imagem</span>
+          </div>
+        <% } else { %>
+          <div class="mb-2 p-2 border rounded text-center" style="background:var(--app-bg,#f8f9fa);min-height:60px">
+            <img id="preview-cover" src="" alt="" style="max-height:56px;max-width:100%;object-fit:contain;display:none" />
+            <span id="preview-cover-empty" class="text-muted small">Nenhuma logo definida</span>
+          </div>
+        <% } %>
+
+        <div class="input-group mb-1">
+          <input class="form-control form-control-sm" id="input-logo-cover" name="logo_cover"
+                 value="<%= reportConfig.logoCover || '' %>" placeholder="https://... ou /public/img/..." />
+          <label class="btn btn-outline-secondary btn-sm" for="file-cover" title="Importar arquivo de logo da capa">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+              <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+            </svg>
+            Importar
+          </label>
+          <input type="file" id="file-cover" accept=".svg,.png,.jpg,.jpeg" class="d-none"
+                 onchange="handleLogoUpload('cover', this)" />
+        </div>
+        <div id="status-cover" class="form-text">PNG, JPG ou SVG â€” max 5 MB. Ou informe uma URL/caminho publico.</div>
+      </div>
+
+      <!-- Rodape HTML -->
+      <div class="col-12">
+        <label class="form-label">Rodape do relatorio (HTML)</label>
+        <div class="mb-2 p-2 border rounded" style="background:#f8f9fa;font-size:0.75rem;color:#6b7280;">
+          O HTML abaixo e inserido no rodape de cada pagina do relatorio. Use as classes <code>report-footer-inner</code>, <code>report-footer-col</code> e <code>rf-icon</code> para manter o layout padrao em duas colunas.
+        </div>
+        <textarea
+          name="footer_html"
+          id="footer-html-input"
+          class="form-control form-control-sm font-monospace"
+          rows="10"
+          style="font-size:0.72rem;resize:vertical;"
+        ><%= reportConfig.footerHtml || '' %></textarea>
+        <div class="d-flex gap-2 mt-2">
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="previewFooter()">Previsualizar</button>
+          <button type="button" class="btn btn-outline-danger btn-sm" onclick="resetFooter()">Restaurar padrao</button>
+        </div>
+        <div id="footer-preview-wrap" class="mt-2" style="display:none;">
+          <div class="border rounded p-2" style="background:#fff;font-size:0.7rem;color:#6e7e74;">
+            <div id="footer-preview-content"></div>
+          </div>
+        </div>
+      </div>
+
       <div class="col-12 d-flex justify-content-end">
         <button class="btn btn-primary btn-sm" type="submit" id="btn-save">Salvar configuracao padrao</button>
       </div>
@@ -158,6 +218,25 @@ async function handleLogoUpload(brand, fileInput) {
     btnSave.disabled = false;
     fileInput.value = '';
   }
+}
+</script>
+
+<script>
+var DEFAULT_FOOTER_HTML = <%- JSON.stringify(reportConfig.defaultFooterHtml || '') %>;
+
+function previewFooter() {
+  var html = document.getElementById('footer-html-input').value;
+  var wrap = document.getElementById('footer-preview-wrap');
+  var content = document.getElementById('footer-preview-content');
+  content.innerHTML = html;
+  wrap.style.display = 'block';
+}
+
+function resetFooter() {
+  if (!confirm('Restaurar o rodape para o modelo padrao?')) return;
+  document.getElementById('footer-html-input').value = DEFAULT_FOOTER_HTML;
+  var wrap = document.getElementById('footer-preview-wrap');
+  wrap.style.display = 'none';
 }
 </script>
 

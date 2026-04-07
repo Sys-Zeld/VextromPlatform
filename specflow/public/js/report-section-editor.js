@@ -240,8 +240,10 @@
     var csrfToken = csrfInput ? csrfInput.value : "";
     if (!contentEditorEl || !titleEditorEl || !deltaField || !htmlField || !textField || !titleDeltaField || !titleHtmlField || !titlePlainField || !titleTextField) return;
     var actionMatch = String(formEl.getAttribute("action") || "").match(/\/admin\/report-service\/orders\/(\d+)\/sections\/[^/]+$/);
-    var sectionReviseEndpoint = actionMatch ? ("/admin/report-service/orders/" + actionMatch[1] + "/sections/revise-text") : "";
-    var imgUploadUrl = actionMatch ? ("/admin/report-service/orders/" + actionMatch[1] + "/images/import") : "";
+    var explicitSectionReviseEndpoint = String(formEl.getAttribute("data-ai-revise-endpoint") || "").trim();
+    var explicitImageUploadEndpoint = String(formEl.getAttribute("data-image-upload-endpoint") || "").trim();
+    var sectionReviseEndpoint = explicitSectionReviseEndpoint || (actionMatch ? ("/admin/report-service/orders/" + actionMatch[1] + "/sections/revise-text") : "");
+    var imgUploadUrl = explicitImageUploadEndpoint || (actionMatch ? ("/admin/report-service/orders/" + actionMatch[1] + "/images/import") : "");
 
     var contentModules = {
       toolbar: {
@@ -315,14 +317,47 @@
 
     if (aiReviseBtn) {
       aiReviseBtn.addEventListener("click", async function () {
-        var sourceText = contentQuill.getText().replace(/\s+/g, " ").trim();
-        var sourceHtml = String(contentQuill.root && contentQuill.root.innerHTML ? contentQuill.root.innerHTML : "").trim();
-        if (!sourceText) {
-          if (aiStatus) aiStatus.textContent = "Digite um texto no conteudo do capitulo para revisar com IA.";
-          return;
-        }
         if (!sectionReviseEndpoint) {
           if (aiStatus) aiStatus.textContent = "Nao foi possivel determinar endpoint de revisao.";
+          return;
+        }
+
+        function readEditorPayload(quill) {
+          return {
+            text: quill.getText().replace(/\s+/g, " ").trim(),
+            html: String(quill.root && quill.root.innerHTML ? quill.root.innerHTML : "").trim()
+          };
+        }
+
+        var contentPayload = readEditorPayload(contentQuill);
+        var titlePayload = readEditorPayload(titleQuill);
+        var activeEl = document.activeElement;
+        var isContentFocused = !!(contentEditorEl && activeEl && contentEditorEl.contains(activeEl));
+        var isTitleFocused = !!(titleEditorEl && activeEl && titleEditorEl.contains(activeEl));
+
+        var targetQuill = null;
+        var sourceText = "";
+        var sourceHtml = "";
+        if (isContentFocused && contentPayload.text) {
+          targetQuill = contentQuill;
+          sourceText = contentPayload.text;
+          sourceHtml = contentPayload.html;
+        } else if (isTitleFocused && titlePayload.text) {
+          targetQuill = titleQuill;
+          sourceText = titlePayload.text;
+          sourceHtml = titlePayload.html;
+        } else if (contentPayload.text) {
+          targetQuill = contentQuill;
+          sourceText = contentPayload.text;
+          sourceHtml = contentPayload.html;
+        } else if (titlePayload.text) {
+          targetQuill = titleQuill;
+          sourceText = titlePayload.text;
+          sourceHtml = titlePayload.html;
+        }
+
+        if (!targetQuill || !sourceText) {
+          if (aiStatus) aiStatus.textContent = "Digite um texto no editor para revisar com IA.";
           return;
         }
 
@@ -335,7 +370,7 @@
         userPrompt = String(userPrompt || "").trim() || defaultPrompt;
 
         aiReviseBtn.disabled = true;
-        if (aiStatus) aiStatus.textContent = "Revisando conteudo com IA...";
+        if (aiStatus) aiStatus.textContent = "Revisando texto com IA...";
         try {
           var response = await fetch(sectionReviseEndpoint, {
             method: "POST",
@@ -357,14 +392,14 @@
           }
           var revisedHtml = String(payload.revisedHtml || "").trim();
           if (revisedHtml) {
-            contentQuill.setText("");
-            contentQuill.clipboard.dangerouslyPasteHTML(revisedHtml);
-            if (aiStatus) aiStatus.textContent = "Conteudo revisado com IA mantendo formatacao.";
+            targetQuill.setText("");
+            targetQuill.clipboard.dangerouslyPasteHTML(revisedHtml);
+            if (aiStatus) aiStatus.textContent = "Texto revisado com IA mantendo formatacao.";
           } else {
             var revisedText = String(payload.revisedText || "").trim();
             if (!revisedText) throw new Error("A IA nao retornou texto revisado.");
-            contentQuill.setText(revisedText);
-            if (aiStatus) aiStatus.textContent = "Conteudo revisado com IA.";
+            targetQuill.setText(revisedText);
+            if (aiStatus) aiStatus.textContent = "Texto revisado com IA.";
           }
         } catch (err) {
           if (aiStatus) aiStatus.textContent = err && err.message ? err.message : "Falha ao revisar texto com IA.";

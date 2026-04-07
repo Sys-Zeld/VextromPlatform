@@ -3,6 +3,53 @@ const { SECTION_DEFINITIONS } = require("../constants");
 const sanitizeHtml = require("sanitize-html");
 const { withServiceOrderDisplay } = require("../utils/serviceOrderDisplay");
 
+const REPORT_UI_LABELS = {
+  pt: {
+    metadata: "METADADOS",
+    preparedBy: "Executado por",
+    revision: "Revisao",
+    os: "OS",
+    updatedAt: "Atualizado em",
+    toc: "SUMARIO",
+    tocEmpty: "Sem capitulos.",
+    signatures: "ASSINATURAS",
+    continuation: "(continuacao...)"
+  },
+  en: {
+    metadata: "METADATA",
+    preparedBy: "Prepared by",
+    revision: "Revision",
+    os: "Work Order",
+    updatedAt: "Updated at",
+    toc: "TABLE OF CONTENTS",
+    tocEmpty: "No chapters.",
+    signatures: "SIGNATURES",
+    continuation: "(continued...)"
+  },
+  es: {
+    metadata: "METADATOS",
+    preparedBy: "Ejecutado por",
+    revision: "Revision",
+    os: "Orden de Servicio",
+    updatedAt: "Actualizado en",
+    toc: "SUMARIO",
+    tocEmpty: "Sin capitulos.",
+    signatures: "FIRMAS",
+    continuation: "(continuacion...)"
+  },
+  fr: {
+    metadata: "METADONNEES",
+    preparedBy: "Execute par",
+    revision: "Revision",
+    os: "Ordre de service",
+    updatedAt: "Mis a jour le",
+    toc: "SOMMAIRE",
+    tocEmpty: "Pas de chapitres.",
+    signatures: "SIGNATURES",
+    continuation: "(suite...)"
+  }
+};
+
 function getSectionContent(sections, key) {
   const section = (sections || []).find((item) => item.section_key === key);
   const isVisible = section?.is_visible !== false;
@@ -75,7 +122,7 @@ function renderInlineImageCard(image, requestedId = null) {
     return `<figure class="report-inline-image-card"><div class="report-inline-image-missing">${escapeHtml(`ID ${requestedId || "-"}`)}</div><figcaption class="report-inline-image-caption">${caption}</figcaption></figure>`;
   }
   const safePath = escapeHtml(publicSrc);
-  return `<figure class="report-inline-image-card"><img class="report-inline-image" src="${safePath}" alt="${caption}" /><figcaption class="report-inline-image-caption">${caption}</figcaption></figure>`;
+  return `<figure class="report-inline-image-card"><img class="report-inline-image" src="${safePath}" alt="${caption}" width="250" height="250" style="object-fit:cover;width:250px;height:250px;display:block;" /><figcaption class="report-inline-image-caption">${caption}</figcaption></figure>`;
 }
 
 function formatComponentQuantity(value) {
@@ -475,7 +522,7 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
   const withTimesheet = withEquipmentTable.replace(timesheetTagPattern, () => renderTimesheetInlineTable(timesheetItems));
   const techTeamTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*equipetecnica/gi;
   const withTechTeam = withTimesheet.replace(techTeamTagPattern, () => renderTechTeamInlineTable(technicianItems));
-  if (!opts.expandDailyLogTags) return wrapImageCardsIntoRows(withTechTeam);
+  if (!opts.expandDailyLogTags) return withTechTeam;
 
   const nestedContext = {
     imageById,
@@ -671,14 +718,28 @@ function buildPreviewModel(payload, options = {}) {
   };
   const components = groupComponents(payload.components || []);
 
+  const documentLang = String(rawReport.document_language || "pt").trim().toLowerCase();
+  const uiLabels = REPORT_UI_LABELS[documentLang] || REPORT_UI_LABELS.pt;
+  const footerHtml = String(reportConfig && reportConfig.footerHtml != null ? reportConfig.footerHtml : "").trim();
+
   return {
     ...payload,
     report,
     order,
     orderedVisibleSections,
+    signatures: Array.isArray(payload.signatures) ? payload.signatures : [],
+    uiLabels,
+    footerHtml,
     brandAssets: {
       logoVextrom: String(reportConfig.logoVextrom || process.env.SERVICE_REPORT_LOGO_VEXTROM || "/public/img/logo-vextrom.svg"),
       logoChloride: String(reportConfig.logoChloride || process.env.SERVICE_REPORT_LOGO_CHLORIDE || "").trim(),
+      logoCover: String(
+        reportConfig.logoCover
+        || process.env.SERVICE_REPORT_LOGO_COVER
+        || reportConfig.logoVextrom
+        || process.env.SERVICE_REPORT_LOGO_VEXTROM
+        || "/public/img/logo-vextrom.svg"
+      ).trim(),
       chartMtbf: String(process.env.SERVICE_REPORT_CHART_MTBF || "").trim()
     },
     reportTemplateKey: templateKey || "modern",
@@ -696,4 +757,3 @@ function buildPreviewModel(payload, options = {}) {
 module.exports = {
   buildPreviewModel
 };
-

@@ -424,7 +424,13 @@ async function buildReportAggregate(serviceReportId) {
   const components = await repo.listComponents(serviceReportId);
   const signatures = await repo.listSignatures(serviceReportId);
   const instruments = await repo.listInstruments(serviceReportId);
-  const technicians = await repo.listTechnicians(serviceReportId);
+  // Equipe tecnica no fluxo atual e vinculada a OS (order-level).
+  // Mantemos fallback para o modelo legado por report_id para nao quebrar relatorios antigos.
+  const orderTechnicians = order ? await repo.listTechniciansByOrder(order.id) : [];
+  const legacyTechnicians = await repo.listTechnicians(serviceReportId);
+  const technicians = Array.isArray(orderTechnicians) && orderTechnicians.length
+    ? orderTechnicians
+    : legacyTechnicians;
   const images = await repo.listImages(serviceReportId);
   const timesheet = order ? await repo.listTimesheetByOrder(order.id) : [];
   const dailyLogs = order ? await repo.listDailyLogsByOrder(order.id) : [];

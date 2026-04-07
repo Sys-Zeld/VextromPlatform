@@ -86,7 +86,8 @@ function createReportWebController(deps) {
   const REPORT_LANGUAGES = Object.freeze({
     pt: { key: "pt", label: "Português" },
     en: { key: "en", label: "Inglês" },
-    es: { key: "es", label: "Espanhol" }
+    es: { key: "es", label: "Espanhol" },
+    fr: { key: "fr", label: "Francês" }
   });
   const REPORT_LANGUAGE_KEYS = Object.keys(REPORT_LANGUAGES);
   const translationJobs = new Map();
@@ -1487,15 +1488,17 @@ function createReportWebController(deps) {
       await saveReportConfigSettings({
         logoVextrom: sanitizeInput(req.body.logo_vextrom),
         logoChloride: sanitizeInput(req.body.logo_chloride),
-        templateKey: sanitizeInput(req.body.template_key)
+        logoCover: sanitizeInput(req.body.logo_cover),
+        templateKey: sanitizeInput(req.body.template_key),
+        footerHtml: req.body.footer_html !== undefined ? String(req.body.footer_html) : undefined
       });
       return res.redirect("/admin/report-service/config?saved=1");
     },
 
     async uploadConfigLogo(req, res) {
       const brand = String(req.headers["x-logo-brand"] || "").toLowerCase();
-      if (!["vextrom", "chloride"].includes(brand)) {
-        return res.status(400).json({ ok: false, error: "Brand invalido. Use 'vextrom' ou 'chloride'." });
+      if (!["vextrom", "chloride", "cover"].includes(brand)) {
+        return res.status(400).json({ ok: false, error: "Brand invalido. Use 'vextrom', 'chloride' ou 'cover'." });
       }
 
       let fileNameRaw = "logo";
@@ -1992,21 +1995,6 @@ function createReportWebController(deps) {
       const signerEmail = sanitizeInput(req.body.signer_email) || "";
       if (!isValidEmailAddress(signerEmail)) {
         return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?sign_link_email_error=invalid_signer_email`);
-      }
-      const requestedLanguage = normalizeReportLanguage(
-        req.body.document_language,
-        normalizeReportLanguage(data.report.document_language, "pt")
-      );
-      const reportLanguage = normalizeReportLanguage(data.report.document_language, "pt");
-      if (requestedLanguage !== reportLanguage) {
-        try {
-          await translatePersistedReportContent(orderId, requestedLanguage);
-          data = await loadOrderEditorData(orderId);
-          if (!data) return res.status(404).send("OS nao encontrada.");
-        } catch (err) {
-          const errorCode = err && (err.statusCode === 500 || err.statusCode === 503) ? "ai_unavailable" : "translate_failed";
-          return res.redirect(`/admin/report-service/orders/${orderId}/report-editor?sign_link_email_error=${errorCode}`);
-        }
       }
       const report = data.report;
       const token = uuidv4();

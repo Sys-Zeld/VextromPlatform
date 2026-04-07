@@ -259,6 +259,7 @@
               <option value="pt" <%= reportLanguage === 'pt' ? 'selected' : '' %>>Português</option>
               <option value="en" <%= reportLanguage === 'en' ? 'selected' : '' %>>Inglês</option>
               <option value="es" <%= reportLanguage === 'es' ? 'selected' : '' %>>Espanhol</option>
+              <option value="fr" <%= reportLanguage === 'fr' ? 'selected' : '' %>>Francês</option>
             </select>
           </div>
           <div id="translateProgressWrap" class="d-none">
@@ -304,6 +305,8 @@
                 class="report-section-card"
                 data-report-section-form
                 data-section-key="<%= section.section_key %>"
+                data-ai-revise-endpoint="/admin/report-service/orders/<%= order.id %>/sections/revise-text"
+                data-image-upload-endpoint="/admin/report-service/orders/<%= order.id %>/images/import"
               >
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
                 <input type="hidden" name="return_to" value="report-editor" />
@@ -327,6 +330,7 @@
                       <input class="form-check-input" type="checkbox" name="is_visible" value="true" <%= section?.is_visible === false ? "" : "checked" %> />
                       <label class="form-check-label">Exibir secao</label>
                     </div>
+                    <button class="btn btn-outline-secondary btn-sm" type="button" data-section-ai-revise-btn>Revisar com IA</button>
                     <button
                       class="btn btn-outline-danger btn-sm"
                       type="submit"
@@ -339,6 +343,7 @@
                     <button class="btn btn-outline-primary btn-sm" type="submit">Salvar capitulo</button>
                   </div>
                 </div>
+                <div class="small text-muted mb-1" data-section-ai-status></div>
 
                 <label class="form-label mb-1 small text-muted">Titulo do capitulo (rich text)</label>
                 <div class="small text-muted mb-2">
@@ -346,11 +351,7 @@
                 </div>
                 <div class="report-quill-title-editor mb-3" data-quill-title-editor></div>
 
-                <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
-                  <label class="form-label mb-0 small text-muted">Conteudo do capitulo</label>
-                  <button class="btn btn-outline-secondary btn-sm" type="button" data-section-ai-revise-btn>Revisar com IA</button>
-                </div>
-                <div class="small text-muted mb-1" data-section-ai-status></div>
+                <label class="form-label mb-0 small text-muted">Conteudo do capitulo</label>
                 <details class="mb-2">
                   <summary class="small text-muted" style="cursor:pointer;user-select:none;">Ver tags disponíveis</summary>
                   <div class="table-responsive mt-2">
@@ -460,20 +461,42 @@
 
           <div class="table-responsive mt-3">
             <table class="table table-sm app-table mb-0">
-              <thead><tr><th>ID</th><th>Arquivo</th><th>Legenda</th><th>Acoes</th></tr></thead>
+              <thead><tr><th>ID</th><th>Preview</th><th>Arquivo</th><th>Legenda</th><th>Acoes</th></tr></thead>
               <tbody>
                 <% const tagImageRegistry = getTagImageRegistry(); %>
-                <% if (!tagImageRegistry.length) { %><tr><td colspan="4" class="text-center text-muted py-3">Sem imagens cadastradas para tags.</td></tr><% } %>
+                <% if (!tagImageRegistry.length) { %><tr><td colspan="5" class="text-center text-muted py-3">Sem imagens cadastradas para tags.</td></tr><% } %>
                 <% tagImageRegistry.forEach((item) => { %>
+                  <% const imgSrc = "/docs/report/img/" + encodeURIComponent(extractImageFileName(item.file_path)); %>
+                  <% const imgCaption = item.caption || extractImageFileName(item.file_path); %>
                   <tr>
                     <td><code><%= item.ref_id || item.id %></code></td>
+                    <td>
+                      <img
+                        src="<%= imgSrc %>"
+                        alt="<%= imgCaption %>"
+                        data-preview-src="<%= imgSrc %>"
+                        data-preview-caption="<%= imgCaption %>"
+                        style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;cursor:pointer;"
+                        onclick="openImagePreviewModal(this.dataset.previewSrc, this.dataset.previewCaption)"
+                        title="Clique para ampliar"
+                      />
+                    </td>
                     <td><code><%= extractImageFileName(item.file_path) %></code></td>
                     <td><%= item.caption || "-" %></td>
                     <td>
-                      <form method="post" action="/admin/report-service/orders/<%= order.id %>/images/<%= (item.ref_id || item.id) %>/delete" class="m-0" onsubmit="return confirm('Excluir esta imagem do banco de tags?');">
-                        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                        <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
-                      </form>
+                      <div class="d-flex gap-1">
+                        <button
+                          class="btn btn-outline-secondary btn-sm"
+                          type="button"
+                          data-preview-src="<%= imgSrc %>"
+                          data-preview-caption="<%= imgCaption %>"
+                          onclick="openImagePreviewModal(this.dataset.previewSrc, this.dataset.previewCaption)"
+                        >Ver</button>
+                        <form method="post" action="/admin/report-service/orders/<%= order.id %>/images/<%= (item.ref_id || item.id) %>/delete" class="m-0" onsubmit="return confirm('Excluir esta imagem do banco de tags?');">
+                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                          <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
+                        </form>
+                      </div>
                     </td>
                   </tr>
                 <% }) %>
@@ -734,14 +757,6 @@
                   <label class="form-label mb-1 small">Observações</label>
                   <input class="form-control form-control-sm" name="notes" placeholder="Opcional" />
                 </div>
-                <div class="col-12 col-md-4">
-                  <label class="form-label mb-1 small">Idioma do relatório para assinatura</label>
-                  <select class="form-select form-select-sm" name="document_language" required>
-                    <option value="pt" <%= reportLanguage === 'pt' ? 'selected' : '' %>>Português</option>
-                    <option value="en" <%= reportLanguage === 'en' ? 'selected' : '' %>>Inglês</option>
-                    <option value="es" <%= reportLanguage === 'es' ? 'selected' : '' %>>Espanhol</option>
-                  </select>
-                </div>
                 <div class="col-12">
                   <button class="btn btn-primary btn-sm" type="submit">Gerar link de assinatura</button>
                   <span class="text-muted small ms-2">O link expira em 30 dias.</span>
@@ -992,6 +1007,93 @@
   })();
 </script>
 <script src="/public/js/report-section-editor.js"></script>
+
+<div class="modal fade" id="aiReviseModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title mb-0">Revisar com IA</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div>
+          <label class="form-label small text-muted mb-1" for="aiReviseComplementInput">Instrução para a IA</label>
+          <textarea
+            id="aiReviseComplementInput"
+            class="form-control form-control-sm"
+            rows="4"
+            placeholder="Ex: Revise o texto mantendo a formatação, corrija erros gramaticais, use linguagem mais formal..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="aiReviseModalCancelBtn" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="aiReviseModalConfirmBtn">Revisar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    var _aiReviseCallback = null;
+    var modalEl = document.getElementById("aiReviseModal");
+    var input = document.getElementById("aiReviseComplementInput");
+    var confirmBtn = document.getElementById("aiReviseModalConfirmBtn");
+    var cancelBtn = document.getElementById("aiReviseModalCancelBtn");
+    var bsModal = new bootstrap.Modal(modalEl);
+
+    function cleanup() {
+      _aiReviseCallback = null;
+      if (input) input.value = "";
+    }
+
+    modalEl.addEventListener("hidden.bs.modal", function () {
+      if (_aiReviseCallback) { _aiReviseCallback(null); }
+      cleanup();
+    });
+
+    if (confirmBtn) {
+      confirmBtn.addEventListener("click", function () {
+        var cb = _aiReviseCallback;
+        cleanup();
+        bsModal.hide();
+        if (cb) cb(String(input ? input.value : "").trim());
+      });
+    }
+
+    window.openAiReviseModal = function (callback) {
+      if (input) input.value = "";
+      _aiReviseCallback = callback;
+      bsModal.show();
+      setTimeout(function () { if (input) input.focus(); }, 300);
+    };
+  })();
+</script>
+
+<div class="modal fade" id="imagePreviewModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title mb-0" id="imagePreviewModalLabel">Preview da imagem</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body text-center p-3">
+        <img id="imagePreviewModalImg" src="" alt="" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:6px;" />
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  function openImagePreviewModal(src, caption) {
+    var img = document.getElementById("imagePreviewModalImg");
+    var label = document.getElementById("imagePreviewModalLabel");
+    img.src = src;
+    img.alt = caption || "";
+    label.textContent = caption || "Preview da imagem";
+    var modal = new bootstrap.Modal(document.getElementById("imagePreviewModal"));
+    modal.show();
+  }
+</script>
 
 <%- include("../partials/footer") %>
 

@@ -377,5 +377,8 @@ function printSignedReport() {
   window.addEventListener("resize", resizeCanvas);
 })();
 </script>
+<% if (reportHtml) { %>
+<script src="/public/js/report-pagination.js"></script>
+<% } %>
 </body>
 </html>
