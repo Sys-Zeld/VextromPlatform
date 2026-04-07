@@ -1,8 +1,8 @@
 const fs = require("fs");
 const path = require("path");
-const db = require("../db");
+const db = require("../../configdb/db");
 
-const BACKUP_FILE_NAME_REGEX = /^db-backup-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.sql$/i;
+const BACKUP_FILE_NAME_REGEX = /-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.sql$/i;
 let backupCatalogEnsured = false;
 let backupCatalogEnsurePromise = null;
 
@@ -82,6 +82,7 @@ function normalizeBackupRow(row) {
 function parseTimestampFromBackupName(fileName) {
   const match = String(fileName || "").match(BACKUP_FILE_NAME_REGEX);
   if (!match) return null;
+  // match indices: [1]=year [2]=month [3]=day [4]=hour [5]=min [6]=sec [7]=ms
   const parsed = Date.parse(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.${match[7]}Z`);
   if (!Number.isFinite(parsed)) return null;
   return new Date(parsed);

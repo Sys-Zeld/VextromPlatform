@@ -168,26 +168,6 @@ async function migrate() {
   `);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_api_keys_active_hash ON api_keys (is_active, key_hash);`);
   await db.query(`
-    CREATE TABLE IF NOT EXISTS backup_files (
-      id BIGSERIAL PRIMARY KEY,
-      file_name TEXT NOT NULL,
-      file_path TEXT NOT NULL UNIQUE,
-      folder_path TEXT NOT NULL,
-      size_bytes BIGINT NOT NULL DEFAULT 0,
-      backup_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-  await db.query(`ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS file_name TEXT NOT NULL DEFAULT '';`);
-  await db.query(`ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS file_path TEXT NOT NULL DEFAULT '';`);
-  await db.query(`ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS folder_path TEXT NOT NULL DEFAULT '';`);
-  await db.query(`ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS size_bytes BIGINT NOT NULL DEFAULT 0;`);
-  await db.query(`ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS backup_timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW();`);
-  await db.query(`ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`);
-  await db.query(`ALTER TABLE backup_files ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`);
-  await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_backup_files_path_unique ON backup_files (file_path);`);
-  await db.query(`
     CREATE TABLE IF NOT EXISTS public_token_links (
       id BIGSERIAL PRIMARY KEY,
       slug TEXT NOT NULL UNIQUE,

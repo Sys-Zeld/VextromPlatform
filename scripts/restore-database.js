@@ -5,6 +5,7 @@ const { Pool } = require("pg");
 const env = require("../specflow/config/env");
 const { resolvePostgresCommand, buildNotFoundHint } = require("./utils/postgres-cli");
 const DEFAULT_RESTORE_TIMEOUT_MS = 20 * 60 * 1000;
+const DEFAULT_SQL_SCAN_BYTES = 8 * 1024 * 1024;
 
 const MODULE_CONFIG = {
   specflow: {
@@ -26,10 +27,34 @@ const MODULE_CONFIG = {
 };
 
 const MODULE_FILE_PREFIXES = {
-  specflow: ["db-backup-", "specflow-backup-", "db-import-"],
+  specflow: ["db-backup-", "specflow-backup-"],
   config: ["config-backup-"],
   "module-spec": ["module-spec-backup-"],
   "report-service": ["report-service-backup-"]
+};
+
+const MODULE_SQL_SIGNATURES = {
+  specflow: [
+    "create table public.fields",
+    "create table public.equipments",
+    "create table public.equipment_field_values",
+    "create table public.public_token_links"
+  ],
+  config: [
+    "create table public.admin_users"
+  ],
+  "module-spec": [
+    "create table public.equipment_families",
+    "create table public.equipment_models",
+    "create table public.equipment_variants",
+    "create table public.profile_filter_mappings"
+  ],
+  "report-service": [
+    "create table public.service_report_orders",
+    "create table public.service_report_reports",
+    "create table public.service_report_sections",
+    "create table public.service_report_app_settings"
+  ]
 };
 
 function normalizeModuleName(value) {
@@ -46,10 +71,19 @@ function resolveModuleFromFlag() {
 
 function resolveModuleFromFileName(filePath) {
   const fileName = path.basename(String(filePath || "")).toLowerCase();
-  const matchedModule = Object.keys(MODULE_FILE_PREFIXES).find((moduleName) => (
+  const startsWithMatch = Object.keys(MODULE_FILE_PREFIXES).find((moduleName) => (
     MODULE_FILE_PREFIXES[moduleName].some((prefix) => fileName.startsWith(prefix))
   ));
-  return matchedModule || "";
+  if (startsWithMatch) return startsWithMatch;
+
+  if (fileName.startsWith("db-import-")) {
+    const importEmbeddedMatch = Object.keys(MODULE_FILE_PREFIXES).find((moduleName) => (
+      MODULE_FILE_PREFIXES[moduleName].some((prefix) => fileName.includes(`-${prefix}`))
+    ));
+    if (importEmbeddedMatch) return importEmbeddedMatch;
+  }
+
+  return "";
 }
 
 function resolveTargetModule({ moduleFromFlag, backupFilePath, strict = true }) {
@@ -90,6 +124,136 @@ function resolveBackupFileFromArgs() {
   return resolved;
 }
 
+function resolveSqlScanBytes() {
+  const raw = Number(process.env.DB_RESTORE_SCAN_BYTES || DEFAULT_SQL_SCAN_BYTES);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_SQL_SCAN_BYTES;
+  return Math.floor(raw);
+}
+
+function readSqlSample(filePath, maxBytes) {
+  const fd = fs.openSync(filePath, "r");
+  try {
+    const stat = fs.fstatSync(fd);
+    const bytesToRead = Math.max(1024, Math.min(maxBytes, stat.size));
+    const buffer = Buffer.alloc(bytesToRead);
+    const bytesRead = fs.readSync(fd, buffer, 0, bytesToRead, 0);
+    return buffer.toString("utf8", 0, bytesRead).toLowerCase();
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function detectModuleFromSqlFile(filePath) {
+  const scanBytes = resolveSqlScanBytes();
+  const sample = readSqlSample(filePath, scanBytes);
+  const hits = Object.fromEntries(
+    Object.keys(MODULE_SQL_SIGNATURES).map((moduleName) => [moduleName, 0])
+  );
+
+  for (const [moduleName, signatures] of Object.entries(MODULE_SQL_SIGNATURES)) {
+    for (const signature of signatures) {
+      if (sample.includes(signature)) {
+        hits[moduleName] += 1;
+      }
+    }
+  }
+
+  const hasReportService = hits["report-service"] >= 1;
+  const hasModuleSpec = hits["module-spec"] >= 1;
+  const hasSpecflow = hits.specflow >= 2;
+  const hasConfigOnly = hits.config >= 1 && !hasReportService && !hasModuleSpec && !hasSpecflow;
+  const detectedModules = [];
+
+  if (hasSpecflow) detectedModules.push("specflow");
+  if (hasConfigOnly) detectedModules.push("config");
+  if (hasModuleSpec) detectedModules.push("module-spec");
+  if (hasReportService) detectedModules.push("report-service");
+
+  if (detectedModules.length === 1) {
+    return {
+      module: detectedModules[0],
+      hits,
+      mixed: false
+    };
+  }
+
+  return {
+    module: "",
+    hits,
+    mixed: detectedModules.length > 1,
+    detectedModules
+  };
+}
+
+function validateRestoreModule({ moduleFromFlag, targetModule, backupFilePath }) {
+  const moduleByFileName = resolveModuleFromFileName(backupFilePath);
+  const signatureResult = detectModuleFromSqlFile(backupFilePath);
+  const moduleBySqlSignature = signatureResult.module;
+  const normalizedFlag = normalizeModuleName(moduleFromFlag);
+  const displayName = path.basename(backupFilePath);
+
+  if (signatureResult.mixed) {
+    const targetIsPresent = signatureResult.detectedModules.includes(targetModule);
+    const hasExplicitModule = Boolean(normalizedFlag || moduleByFileName);
+
+    if (!targetIsPresent) {
+      throw new Error(
+        `Backup misto detectado em ${displayName}: assinaturas de ${signatureResult.detectedModules.join(", ")}. `
+        + `O modulo alvo (${targetModule}) nao foi encontrado no arquivo.`
+      );
+    }
+
+    if (!hasExplicitModule) {
+      throw new Error(
+        `Backup misto detectado em ${displayName}: assinaturas de ${signatureResult.detectedModules.join(", ")}. `
+        + "Use --module=specflow|config|module-spec|report-service para identificar o modulo alvo."
+      );
+    }
+
+    // eslint-disable-next-line no-console
+    console.warn(
+      `Aviso: backup misto em ${displayName} contem tabelas de: ${signatureResult.detectedModules.join(", ")}. `
+      + `Restaurando apenas para o banco ${targetModule}. `
+      + "Para dumps separados por modulo use: npm run db:backup:<modulo>"
+    );
+    return;
+  }
+
+  if (moduleByFileName && moduleBySqlSignature && moduleByFileName !== moduleBySqlSignature) {
+    throw new Error(
+      `Arquivo de backup inconsistente (${displayName}): prefixo indica ${moduleByFileName}, `
+      + `mas o conteudo SQL parece ${moduleBySqlSignature}.`
+    );
+  }
+
+  if (moduleBySqlSignature && moduleBySqlSignature !== targetModule) {
+    throw new Error(
+      `Restore bloqueado: arquivo ${displayName} parece ser ${moduleBySqlSignature}, `
+      + `mas o destino selecionado e ${targetModule}.`
+    );
+  }
+
+  if (normalizedFlag && moduleBySqlSignature && normalizedFlag !== moduleBySqlSignature) {
+    throw new Error(
+      `Conflito de modulo: --module=${normalizedFlag}, mas o SQL parece ${moduleBySqlSignature} (${displayName}).`
+    );
+  }
+
+  if (!moduleBySqlSignature) {
+    if (!moduleByFileName && !normalizedFlag) {
+      throw new Error(
+        `Nao foi possivel identificar o modulo de ${displayName} pelo conteudo SQL nem pelo nome do arquivo. `
+        + "Use --module=specflow|config|module-spec|report-service."
+      );
+    }
+    // eslint-disable-next-line no-console
+    console.warn(
+      `Aviso: assinaturas SQL nao encontradas em ${displayName} (banco vazio ou scan insuficiente). `
+      + `Prosseguindo com modulo identificado por ${normalizedFlag ? "--module" : "nome do arquivo"}: ${targetModule}.`
+    );
+  }
+}
+
 function shouldSkipClean() {
   return process.argv.includes("--no-clean");
 }
@@ -114,7 +278,7 @@ function findLatestBackup(targetModule) {
       const fullPath = path.join(backupDir, file);
       const stat = fs.statSync(fullPath);
       const match = file.match(
-        /^db-backup-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.sql$/i
+        /-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.sql$/i
       );
       const nameDateMs = match
         ? Date.parse(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}.${match[7]}Z`)
@@ -266,6 +430,12 @@ async function run() {
   }
 
   const skipClean = shouldSkipClean();
+
+  validateRestoreModule({
+    moduleFromFlag,
+    targetModule,
+    backupFilePath: backupFile
+  });
 
   if (!skipClean) {
     // eslint-disable-next-line no-console

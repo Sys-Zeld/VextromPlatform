@@ -3,6 +3,8 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 const env = require("../specflow/config/env");
+const db = require("../configdb/db");
+const { upsertBackupFileRecord } = require("../specflow/services/backups");
 const { resolvePostgresCommand, buildNotFoundHint } = require("./utils/postgres-cli");
 
 const MODULE_CONFIG = {
@@ -87,8 +89,16 @@ async function run() {
     }
     const outputFile = buildBackupPath(config.filePrefix);
     await runPgDump(config.dbUrl, outputFile);
-    // eslint-disable-next-line no-console
-    console.log(`Backup ${target} concluido: ${outputFile}`);
+    try {
+      const backupRow = await upsertBackupFileRecord(outputFile, { backupTimestamp: new Date() });
+      // eslint-disable-next-line no-console
+      console.log(`Backup ${target} concluido: ${outputFile} (catalogo id=${backupRow.id})`);
+    } catch (catalogErr) {
+      // eslint-disable-next-line no-console
+      console.log(`Backup ${target} concluido: ${outputFile}`);
+      // eslint-disable-next-line no-console
+      console.warn(`Aviso: falha ao registrar no catalogo: ${catalogErr.message}`);
+    }
   }
 }
 
@@ -96,4 +106,10 @@ run().catch((err) => {
   // eslint-disable-next-line no-console
   console.error("Falha no backup por modulo:", err.message);
   process.exit(1);
+}).finally(async () => {
+  try {
+    await db.end();
+  } catch (_err) {
+    // noop
+  }
 });

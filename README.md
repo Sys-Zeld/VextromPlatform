@@ -186,6 +186,13 @@ App local: `http://localhost:3000`
 - `npm run db:restore:module-spec`
 - `npm run db:restore-database`
 
+Validacao de seguranca no restore:
+
+- o restore valida o modulo por prefixo do arquivo **e** assinaturas de tabelas dentro do `.sql`
+- se houver conflito (ex: arquivo `specflow-*` com tabelas `service_report_*`), o restore e bloqueado
+- backups mistos (mais de um modulo no mesmo dump) sao bloqueados para evitar restore no banco errado
+- ajuste opcional de leitura para validacao: `DB_RESTORE_SCAN_BYTES` (padrao `8388608`)
+
 ### Operacao admin
 
 - `npm run admin:sessions:clear`

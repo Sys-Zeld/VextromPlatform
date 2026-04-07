@@ -656,7 +656,12 @@ function resolveRestoreModuleFromBackupPath(backupFilePath) {
   if (fileName.startsWith("module-spec-backup-")) return "module-spec";
   if (fileName.startsWith("report-service-backup-")) return "report-service";
   if (fileName.startsWith("config-backup-")) return "config";
-  if (fileName.startsWith("specflow-backup-") || fileName.startsWith("db-backup-") || fileName.startsWith("db-import-")) {
+  if (fileName.startsWith("specflow-backup-") || fileName.startsWith("db-backup-")) return "specflow";
+  if (fileName.startsWith("db-import-")) {
+    // O nome original do arquivo fica embutido apos o timestamp: db-import-<ts>-<nome-original>
+    if (fileName.includes("-module-spec-backup-")) return "module-spec";
+    if (fileName.includes("-report-service-backup-")) return "report-service";
+    if (fileName.includes("-config-backup-")) return "config";
     return "specflow";
   }
   return "";
@@ -3296,8 +3301,8 @@ app.post(["/admin/maintenance/system/admin-users/:id/delete", "/admin/maintenanc
     try {
       const deleted = await deleteAdminUser(id);
       userDeleteResult = { ok: true, message: `Usuario removido: ${deleted.username} (${deleted.role})` };
-    } catch (_err) {
-      userDeleteResult = { ok: false, message: getStandardStatusMessage(req, 404) };
+    } catch (deleteErr) {
+      userDeleteResult = { ok: false, message: sanitizeInput(deleteErr?.message || "") || getStandardStatusMessage(req, 404) };
     }
   }
 
