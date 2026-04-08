@@ -36,6 +36,8 @@
     "db:backup:module-spec": "node scripts/backup-module-database.js module-spec",
     "db:backup:report-service": "node scripts/backup-module-database.js report-service",
     "db:backup:all": "node scripts/backup-module-database.js all",
+    "assets:backup": "node scripts/backup-assets.js",
+    "assets:restore": "node scripts/restore-assets.js",
     "db:restore-database": "node scripts/restore-database.js",
     "db:restore:specflow": "node scripts/restore-database.js --module=specflow",
     "db:restore:config": "node scripts/restore-database.js --module=config",
@@ -75,6 +77,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "archiver": "^7.0.1",
     "cookie-parser": "^1.4.7",
     "csurf": "^1.11.0",
     "dayjs": "^1.11.13",
@@ -89,6 +92,7 @@
     "puppeteer": "^24.40.0",
     "qrcode": "^1.5.4",
     "sanitize-html": "^2.14.0",
+    "unzipper": "^0.12.3",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

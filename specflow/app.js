@@ -227,6 +227,8 @@ const DEFAULT_NEW_CLIENT_PROFILE_NAME = "PADRÃO CHLORIDE";
 const MAINTENANCE_MAX_OUTPUT_CHARS = 16000;
 const MAINTENANCE_IMPORT_MAX_SQL_BYTES = 50 * 1024 * 1024;
 const MAINTENANCE_IMPORT_RAW_LIMIT = "55mb";
+const MAINTENANCE_IMPORT_MAX_ZIP_BYTES = 200 * 1024 * 1024;
+const MAINTENANCE_IMPORT_ZIP_RAW_LIMIT = "210mb";
 const PROFILE_AI_MAX_FILE_BYTES = 10 * 1024 * 1024;
 const packageMeta = require("../package.json");
 const moduleVersions = packageMeta.moduleVersions || {};
@@ -243,6 +245,10 @@ const MODULE_ACCESS_SET = new Set(MODULE_ACCESS_KEYS);
 const maintenanceImportRawParser = express.raw({
   type: "application/octet-stream",
   limit: MAINTENANCE_IMPORT_RAW_LIMIT
+});
+const maintenanceImportZipRawParser = express.raw({
+  type: "application/octet-stream",
+  limit: MAINTENANCE_IMPORT_ZIP_RAW_LIMIT
 });
 
 function resolveLanguage(req) {
@@ -694,6 +700,60 @@ function buildImportedBackupFilePath(originalFileName) {
   const backupDir = getBackupDirectoryPath();
   fs.mkdirSync(backupDir, { recursive: true });
   return path.join(backupDir, `db-import-${timestamp}-${safeName}`);
+}
+
+function sanitizeImportedAssetsZipFileName(fileName) {
+  const base = path.basename(String(fileName || "").trim() || "assets-import.zip");
+  const normalized = base
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^[-_.]+|[-_.]+$/g, "");
+  const withExt = normalized.toLowerCase().endsWith(".zip") ? normalized : `${normalized || "assets-import"}.zip`;
+  return withExt;
+}
+
+function buildImportedAssetsZipFilePath(originalFileName) {
+  const safeName = sanitizeImportedAssetsZipFileName(originalFileName);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupDir = getBackupDirectoryPath();
+  fs.mkdirSync(backupDir, { recursive: true });
+  return path.join(backupDir, `assets-import-${timestamp}-${safeName}`);
+}
+
+function resolveImportedZipBuffer(req) {
+  const payload = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
+  if (!payload.length) {
+    throw new Error("Arquivo ZIP nao recebido.");
+  }
+  if (payload.length > MAINTENANCE_IMPORT_MAX_ZIP_BYTES) {
+    throw new Error(`Arquivo ZIP excede limite de ${(MAINTENANCE_IMPORT_MAX_ZIP_BYTES / (1024 * 1024)).toFixed(0)} MB.`);
+  }
+  const fileNameHeaderRaw = String(req.headers["x-zip-file-name"] || "").trim();
+  if (!fileNameHeaderRaw || !fileNameHeaderRaw.toLowerCase().endsWith(".zip")) {
+    throw new Error("Somente arquivos .zip sao permitidos.");
+  }
+  const fileName = sanitizeImportedAssetsZipFileName(fileNameHeaderRaw);
+  return { buffer: payload, fileName };
+}
+
+function extractAssetsZipPathFromOutput(output) {
+  const lines = String(output || "").split("\n");
+  for (const line of lines) {
+    const match = line.match(/assets(?:-backup|-import)-[^\s]+\.zip/i);
+    if (match) return match[0];
+  }
+  return "";
+}
+
+function findLatestAssetsZipInBackupDir() {
+  const backupDir = getBackupDirectoryPath();
+  if (!fs.existsSync(backupDir)) return "";
+  const files = fs.readdirSync(backupDir)
+    .filter((f) => /^assets-(?:backup|import)-.*\.zip$/i.test(f))
+    .map((f) => ({ name: f, mtime: fs.statSync(path.join(backupDir, f)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime);
+  return files.length ? files[0].name : "";
 }
 
 function resolveImportedSqlBuffer(req) {
@@ -2420,6 +2480,25 @@ app.post("/admin/maintenance/system/command", csrfProtection, requireAdminAuth, 
         : `npm run db:restore-database -- "${latest.filePath}"`;
       execution = await runNodeScripts([{ script: "scripts/restore-database.js", args: restoreCommand.args }]);
     }
+  } else if (action === "assets_backup") {
+    label = "npm run assets:backup";
+    execution = await runNodeScripts([{ script: "scripts/backup-assets.js" }]);
+    if (execution.ok) {
+      const zipName = extractAssetsZipPathFromOutput(execution.output) || findLatestAssetsZipInBackupDir();
+      if (zipName) {
+        downloadPath = `/admin/assets-backup/download?filename=${encodeURIComponent(zipName)}`;
+      }
+    }
+  } else if (action === "assets_restore") {
+    label = "npm run assets:restore";
+    const latestZip = findLatestAssetsZipInBackupDir();
+    if (!latestZip) {
+      execution = { ok: false, code: -1, output: "Nenhum arquivo assets-backup-*.zip encontrado em dados/backups." };
+    } else {
+      const zipPath = path.join(getBackupDirectoryPath(), latestZip);
+      execution = await runNodeScripts([{ script: "scripts/restore-assets.js", args: [`--file=${zipPath}`] }]);
+      label = `npm run assets:restore -- --file="${latestZip}"`;
+    }
   }
 
   await renderSystemMaintenancePage(req, res, {
@@ -3217,6 +3296,54 @@ app.get("/admin/backups/:id/download", requireAdminAuth, requireMaintenanceAdmin
 
   return res.download(backup.filePath, backup.fileName || path.basename(backup.filePath));
 }));
+
+app.get("/admin/assets-backup/download", requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
+  const fileName = sanitizeImportedAssetsZipFileName(String(req.query.filename || ""));
+  if (!fileName || !/^assets-(?:backup|import)-.*\.zip$/i.test(fileName)) {
+    return sendStandardError(req, res, 400);
+  }
+  const filePath = path.join(getBackupDirectoryPath(), fileName);
+  if (!fs.existsSync(filePath)) {
+    return sendStandardError(req, res, 404);
+  }
+  return res.download(filePath, fileName);
+}));
+
+app.post(
+  "/admin/maintenance/system/assets-restore-import",
+  requireAdminAuth,
+  requireMaintenanceAdmin,
+  maintenanceImportZipRawParser,
+  asyncHandler(async (req, res) => {
+    try {
+      const imported = resolveImportedZipBuffer(req);
+      const outputPath = buildImportedAssetsZipFilePath(imported.fileName);
+      fs.writeFileSync(outputPath, imported.buffer);
+      const restoreExecution = await runNodeScripts([
+        { script: "scripts/restore-assets.js", args: [`--file=${outputPath}`] }
+      ]);
+      if (!restoreExecution.ok) {
+        return res.status(422).json({
+          ok: false,
+          code: restoreExecution.code,
+          output: restoreExecution.output || "Falha ao restaurar assets do ZIP importado."
+        });
+      }
+      return res.status(200).json({
+        ok: true,
+        output: `Arquivo importado e restaurado com sucesso: ${path.basename(outputPath)}\n\n${restoreExecution.output || ""}`.trim(),
+        importedFileName: path.basename(outputPath),
+        importedFilePath: outputPath
+      });
+    } catch (err) {
+      return res.status(422).json({
+        ok: false,
+        code: -1,
+        output: err && err.message ? err.message : "Falha ao importar arquivo ZIP de assets."
+      });
+    }
+  })
+);
 
 app.post(["/admin/maintenance/system/admin-users/create", "/admin/maintenance/admin-users/create"], csrfProtection, requireAdminAuth, requireMaintenanceAdmin, asyncHandler(async (req, res) => {
   const username = sanitizeInput(req.body.username);
@@ -4982,6 +5109,16 @@ app.use((err, req, res, next) => {
     });
   }
   if (
+    req.path.includes("/admin/maintenance/system/assets-restore-import")
+    && err.type === "entity.too.large"
+  ) {
+    return res.status(413).json({
+      ok: false,
+      code: -1,
+      output: `Arquivo ZIP excede limite de ${(MAINTENANCE_IMPORT_MAX_ZIP_BYTES / (1024 * 1024)).toFixed(0)} MB.`
+    });
+  }
+  if (
     err.statusCode &&
     (
       req.path.startsWith("/fields")
@@ -4991,6 +5128,7 @@ app.use((err, req, res, next) => {
       || req.path.includes("/docs/upload")
       || req.path.includes("/admin/maintenance/restore-import")
       || req.path.includes("/admin/maintenance/system/restore-import")
+      || req.path.includes("/admin/maintenance/system/assets-restore-import")
     )
   ) {
     const message = getStandardStatusMessage(req, err.statusCode);
@@ -5010,6 +5148,7 @@ app.use((err, req, res, next) => {
     || req.path.includes("/docs/upload")
     || req.path.includes("/admin/maintenance/restore-import")
     || req.path.includes("/admin/maintenance/system/restore-import")
+    || req.path.includes("/admin/maintenance/system/assets-restore-import")
   ) {
     return res.status(err.statusCode || 500).json({
       error: getStandardStatusMessage(req, err.statusCode || 500),
