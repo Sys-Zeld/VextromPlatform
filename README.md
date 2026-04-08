@@ -185,6 +185,9 @@ App local: `http://localhost:3000`
 - `npm run db:restore:config`
 - `npm run db:restore:module-spec`
 - `npm run db:restore-database`
+- `npm run assets:backup`
+- `npm run assets:clean`
+- `npm run assets:restore`
 
 Validacao de seguranca no restore:
 

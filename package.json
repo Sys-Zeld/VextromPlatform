@@ -37,6 +37,7 @@
     "db:backup:report-service": "node scripts/backup-module-database.js report-service",
     "db:backup:all": "node scripts/backup-module-database.js all",
     "assets:backup": "node scripts/backup-assets.js",
+    "assets:clean": "node scripts/clean-assets.js",
     "assets:restore": "node scripts/restore-assets.js",
     "db:restore-database": "node scripts/restore-database.js",
     "db:restore:specflow": "node scripts/restore-database.js --module=specflow",
