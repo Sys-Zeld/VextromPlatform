@@ -2,6 +2,11 @@
   var rafToken = null;
   var resizeTimer = null;
 
+  function getContinuationLabel() {
+    var doc = document.getElementById("report-pages");
+    return (doc && doc.getAttribute("data-continuation-label")) || "(continuacao...)";
+  }
+
   function schedule(fn) {
     if (rafToken) window.cancelAnimationFrame(rafToken);
     rafToken = window.requestAnimationFrame(function () {
@@ -148,7 +153,7 @@
     var richTitleEl = title.querySelector(".report-section-title-rich");
     if (richTitleEl) {
       if (isContinuation) {
-        richTitleEl.textContent = "(continua\u00e7\u00e3o...)";
+        richTitleEl.textContent = getContinuationLabel();
       } else {
         richTitleEl.innerHTML = String(sectionMeta && sectionMeta.titleHtml ? sectionMeta.titleHtml : "CAPITULO");
       }
@@ -198,7 +203,7 @@
     var richTitleEl = document.createElement("div");
     richTitleEl.className = "report-section-title-rich";
     if (isContinuation) {
-      richTitleEl.textContent = "(continua\u00e7\u00e3o...)";
+      richTitleEl.textContent = getContinuationLabel();
     } else {
       richTitleEl.innerHTML = String(sectionMeta && sectionMeta.titleHtml ? sectionMeta.titleHtml : "CAPITULO");
     }

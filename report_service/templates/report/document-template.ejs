@@ -13,7 +13,7 @@
   }
 %>
 
-<article class="report-doc" id="report-pages">
+<article class="report-doc" id="report-pages" data-continuation-label="<%= uiLabels && uiLabels.continuation ? uiLabels.continuation : '(continuacao...)' %>">
   <section class="report-page report-page-cover">
     <div class="topbar">
       <div class="brand-left">
@@ -23,7 +23,7 @@
         <% if (brandAssets?.logoChloride) { %>
           <img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" />
         <% } else { %>
-          <div class="report-brand-slot">Espaco para logo Chloride</div>
+          <div class="report-brand-slot"><%= uiLabels?.logoPlaceholder || "Espaco para logo" %></div>
         <% } %>
       </div>
     </div>
@@ -31,10 +31,10 @@
       <img class="cover-logo-image" src="<%= brandAssets?.logoCover || brandAssets?.logoVextrom || '/public/img/logo-vextrom.svg' %>" alt="Vextrom" />
       <div class="cover-sub">atmosferas sob controle</div>
       <div class="cover-title"><%= report?.title || "SERVICE REPORT" %></div>
-      <div class="report-cover-subtitle"><strong>Cliente:</strong> <%= customer?.name || "-" %></div>
-      <div class="report-cover-subtitle"><strong>Site:</strong> <%= site?.site_name || "-" %></div>
+      <div class="report-cover-subtitle"><strong><%= uiLabels?.customer || "Cliente" %>:</strong> <%= customer?.name || "-" %></div>
+      <div class="report-cover-subtitle"><strong><%= uiLabels?.site || "Site" %>:</strong> <%= site?.site_name || "-" %></div>
       <div class="report-cover-subtitle"><%= order?.service_order_display || "-" %></div>
-      <div class="report-cover-subtitle"><strong>Relatorio:</strong> <%= report?.report_number || "-" %> / Rev. <%= report?.revision || "-" %></div>
+      <div class="report-cover-subtitle"><strong><%= uiLabels?.reportLabel || "Relatorio" %>:</strong> <%= report?.report_number || "-" %> / <%= uiLabels?.rev || "Rev." %> <%= report?.revision || "-" %></div>
     </div>
     <% if (footerHtml) { %><div class="report-footer"><%- footerHtml %></div><% } %>
   </section>
@@ -48,7 +48,7 @@
         <% if (brandAssets?.logoChloride) { %>
           <img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" />
         <% } else { %>
-          <div class="report-brand-slot">Espaco para logo Chloride</div>
+          <div class="report-brand-slot"><%= uiLabels?.logoPlaceholder || "Espaco para logo" %></div>
         <% } %>
       </div>
     </div>
@@ -98,7 +98,7 @@
           <% if (brandAssets?.logoChloride) { %>
             <img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" />
           <% } else { %>
-            <div class="report-brand-slot">Espaco para logo Chloride</div>
+            <div class="report-brand-slot"><%= uiLabels?.logoPlaceholder || "Espaco para logo" %></div>
           <% } %>
         </div>
       </div>
@@ -107,7 +107,7 @@
         <div class="section-title">
           <span class="section-title-number"><%= index + 1 %>.</span>
           <div class="report-section-title-rich">
-            <%- section.section_title_html_preview || section.section_title_html || section.section_title || "CAPITULO" %>
+            <%- section.section_title_html_preview || section.section_title_html || section.section_title || uiLabels?.chapter || "CAPITULO" %>
           </div>
         </div>
         <div class="rich-output">
@@ -120,7 +120,7 @@
                   <div class="report-signature-item">
                     <div class="report-signature-canvas">
                       <% if (sig.signature_data && sig.signature_data.indexOf('data:') === 0) { %>
-                        <img class="report-signature-img" src="<%= sig.signature_data %>" alt="Assinatura" />
+                        <img class="report-signature-img" src="<%= sig.signature_data %>" alt="<%= uiLabels?.signatureAlt || 'Assinatura' %>" />
                       <% } %>
                     </div>
                     <div class="report-signature-line-hr"></div>
@@ -128,7 +128,7 @@
                       <div class="report-signature-name"><%= sig.signer_name || '-' %></div>
                       <% if (sig.signer_role) { %><div class="report-signature-detail"><%= sig.signer_role %></div><% } %>
                       <% if (sig.signer_company) { %><div class="report-signature-detail"><%= sig.signer_company %></div><% } %>
-                      <% if (sig.signed_at) { %><div class="report-signature-date"><%= new Date(sig.signed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) %></div><% } %>
+                      <% if (sig.signed_at) { %><div class="report-signature-date"><%= new Date(sig.signed_at).toLocaleDateString(uiLabels?.dateLocale || 'pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) %></div><% } %>
                     </div>
                   </div>
                 <% }) %>
@@ -151,7 +151,7 @@
           <% if (brandAssets?.logoChloride) { %>
             <img src="<%= brandAssets.logoChloride %>" alt="Logo Chloride" />
           <% } else { %>
-            <div class="report-brand-slot">Espaco para logo Chloride</div>
+            <div class="report-brand-slot"><%= uiLabels?.logoPlaceholder || "Espaco para logo" %></div>
           <% } %>
         </div>
       </div>

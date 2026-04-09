@@ -261,6 +261,7 @@
           <form method="post" action="/admin/report-service/orders/<%= order.id %>/daily-logs" class="row g-2" id="daily-log-form">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
             <input type="hidden" name="daily_log_id" value="" data-daily-log-id />
+            <input type="hidden" name="notes" value="" data-daily-log-notes />
             <div class="col-12 col-md-3"><input class="form-control" type="date" name="activity_date" value="<%= todayIso %>" data-default-today required /></div>
             <div class="col-12 col-md-5"><input class="form-control" name="title" placeholder="Titulo opcional" /></div>
             <div class="col-12 col-md-2"><input class="form-control" name="sort_order" placeholder="Ordem" /></div>
@@ -719,7 +720,8 @@
       activityDate: item.activity_date || "",
       title: item.title || "",
       sortOrder: Number(item.sort_order || 0),
-      content: item.content || ""
+      content: item.content || "",
+      notes: item.notes || ""
     }))
   ) %>;
 </script>
@@ -730,6 +732,7 @@
 
     var dateInput = dailyLogForm.querySelector("input[data-default-today]");
     var idInput = dailyLogForm.querySelector("input[data-daily-log-id]");
+    var notesInput = dailyLogForm.querySelector("input[data-daily-log-notes]");
     var titleInput = dailyLogForm.querySelector('input[name="title"]');
     var sortOrderInput = dailyLogForm.querySelector('input[name="sort_order"]');
     var submitBtn = document.getElementById("dailyLogSubmitBtn");
@@ -800,6 +803,7 @@
 
     function resetFormToCreate() {
       if (idInput) idInput.value = "";
+      if (notesInput) notesInput.value = "";
       if (titleInput) titleInput.value = "";
       if (sortOrderInput) sortOrderInput.value = "";
       if (dateInput) {
@@ -826,6 +830,7 @@
         var item = logsById.get(logId);
         if (!item) return;
         if (idInput) idInput.value = String(item.id || "");
+        if (notesInput) notesInput.value = item.notes || "";
         if (dateInput) dateInput.value = String(item.activityDate || "").slice(0, 10);
         if (titleInput) titleInput.value = item.title || "";
         if (sortOrderInput) sortOrderInput.value = Number(item.sortOrder || 0) ? String(item.sortOrder) : "";

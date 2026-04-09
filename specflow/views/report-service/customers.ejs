@@ -47,20 +47,20 @@
     <div class="card-body token-hero-body">
       <div class="token-hero-copy">
         <span class="token-hero-eyebrow">SERVICE REPORT</span>
-        <h1 class="h4 app-card-title mb-1">Clientes e Sites</h1>
-        <p class="text-muted mb-0">Cadastro modular de cliente, tipo e sites atendidos.</p>
+        <h1 class="h4 app-card-title mb-1"><%= t("rs.customers.pageTitle") %></h1>
+        <p class="text-muted mb-0"><%= t("rs.customers.pageSubtitle") %></p>
       </div>
       <div class="token-hero-actions">
         <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
-        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders"><%= t("rs.orders.pageTitle") %></a>
       </div>
     </div>
   </div>
 
-  <% if (created) { %><div class="alert alert-success mb-0">Cadastro salvo com sucesso.</div><% } %>
-  <% if (saved) { %><div class="alert alert-success mb-0">Registro atualizado com sucesso.</div><% } %>
-  <% if (deleted) { %><div class="alert alert-success mb-0">Registro excluido com sucesso.</div><% } %>
-  <% if (deleteBlocked) { %><div class="alert alert-danger mb-0">Site cadastrado em OS, não é possível excluir.</div><% } %>
+  <% if (created) { %><div class="alert alert-success mb-0"><%= t("rs.savedSuccess") %></div><% } %>
+  <% if (saved) { %><div class="alert alert-success mb-0"><%= t("rs.savedSuccess") %></div><% } %>
+  <% if (deleted) { %><div class="alert alert-success mb-0"><%= t("rs.deletedSuccess") %></div><% } %>
+  <% if (deleteBlocked) { %><div class="alert alert-danger mb-0"><%= t("rs.customers.siteInUse") %></div><% } %>
 
   <!-- Modal editar cliente -->
   <div class="modal fade" id="editCustomerModal" tabindex="-1">
@@ -69,11 +69,11 @@
         <form method="post" id="editCustomerForm" class="modal-form">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <div class="modal-header">
-            <h5 class="modal-title">Editar cliente</h5>
+            <h5 class="modal-title"><%= t("rs.customers.editCustomerTitle") %></h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body row g-2">
-            <div class="col-12"><input class="form-control" name="name" id="editCustomerName" placeholder="Nome do cliente" required /></div>
+            <div class="col-12"><input class="form-control" name="name" id="editCustomerName" placeholder="<%= t('rs.customers.customerNamePh') %>" required /></div>
             <div class="col-12">
               <select class="form-select" name="customer_type" id="editCustomerType">
                 <% ["offshore","onshore","others"].forEach((type) => { %>
@@ -81,11 +81,11 @@
                 <% }) %>
               </select>
             </div>
-            <div class="col-12"><textarea class="form-control" name="notes" id="editCustomerNotes" rows="2" placeholder="Observacoes"></textarea></div>
+            <div class="col-12"><textarea class="form-control" name="notes" id="editCustomerNotes" rows="2" placeholder="<%= t('rs.observations') %>"></textarea></div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-            <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><%= t("rs.cancel") %></button>
+            <button type="submit" class="btn btn-primary btn-sm"><%= t("rs.save") %></button>
           </div>
         </form>
       </div>
@@ -99,33 +99,33 @@
         <form method="post" id="editSiteForm" class="modal-form">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <div class="modal-header">
-            <h5 class="modal-title">Editar site</h5>
+            <h5 class="modal-title"><%= t("rs.customers.editSiteTitle") %></h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body row g-2">
-            <div class="col-12"><input class="form-control" name="site_name" id="editSiteName" placeholder="Nome do site" required /></div>
-            <div class="col-12 col-md-6"><input class="form-control" name="site_code" id="editSiteCode" placeholder="Codigo do site" /></div>
+            <div class="col-12"><input class="form-control" name="site_name" id="editSiteName" placeholder="<%= t('rs.customers.siteNamePh') %>" required /></div>
+            <div class="col-12 col-md-6"><input class="form-control" name="site_code" id="editSiteCode" placeholder="<%= t('rs.customers.siteCodePh') %>" /></div>
             <div class="col-12">
               <div class="d-flex gap-2">
-                <input class="form-control" name="location" id="editSiteLocation" placeholder="Descricao da localizacao" />
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="editOpenMapsBtn" style="white-space:nowrap">Ver no Maps</button>
+                <input class="form-control" name="location" id="editSiteLocation" placeholder="<%= t('rs.customers.locationPh') %>" />
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="editOpenMapsBtn" style="white-space:nowrap"><%= t("rs.customers.viewMaps") %></button>
               </div>
             </div>
             <div class="col-12">
               <div class="d-flex align-items-center gap-2 mb-1">
                 <label class="form-label mb-0 small text-muted">Coordenadas (opcional)</label>
-                <span class="form-text text-muted mb-0">— Clique com botao direito no Maps e copie as coordenadas.</span>
+                <span class="form-text text-muted mb-0">— <%= t("rs.customers.mapsHelp") %></span>
               </div>
               <div class="d-flex gap-2">
                 <input class="form-control form-control-sm" name="latitude" id="editSiteLatitude" placeholder="Latitude" />
                 <input class="form-control form-control-sm" name="longitude" id="editSiteLongitude" placeholder="Longitude" />
               </div>
             </div>
-            <div class="col-12"><textarea class="form-control" name="notes" id="editSiteNotes" rows="2" placeholder="Observacoes"></textarea></div>
+            <div class="col-12"><textarea class="form-control" name="notes" id="editSiteNotes" rows="2" placeholder="<%= t('rs.observations') %>"></textarea></div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-            <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><%= t("rs.cancel") %></button>
+            <button type="submit" class="btn btn-primary btn-sm"><%= t("rs.save") %></button>
           </div>
         </form>
       </div>
@@ -136,10 +136,10 @@
     <div class="col-12 col-xl-6">
       <div class="card app-card">
         <div class="card-body">
-          <h2 class="h6 app-card-title mb-3">Novo cliente</h2>
+          <h2 class="h6 app-card-title mb-3"><%= t("rs.customers.newCustomerTitle") %></h2>
           <form method="post" action="/admin/report-service/customers" class="row g-2">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-            <div class="col-12"><input class="form-control" name="name" placeholder="Nome do cliente" required /></div>
+            <div class="col-12"><input class="form-control" name="name" placeholder="<%= t('rs.customers.customerNamePh') %>" required /></div>
             <div class="col-12">
               <select class="form-select" name="customer_type">
                 <% ["offshore","onshore","others"].forEach((type) => { %>
@@ -147,8 +147,8 @@
                 <% }) %>
               </select>
             </div>
-            <div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="Observacoes"></textarea></div>
-            <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit">Salvar cliente</button></div>
+            <div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="<%= t('rs.observations') %>"></textarea></div>
+            <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit"><%= t("rs.customers.registerCustomer") %></button></div>
           </form>
         </div>
       </div>
@@ -157,35 +157,35 @@
     <div class="col-12 col-xl-6">
       <div class="card app-card">
         <div class="card-body">
-          <h2 class="h6 app-card-title mb-3">Novo site</h2>
+          <h2 class="h6 app-card-title mb-3"><%= t("rs.customers.newSiteTitle") %></h2>
           <form method="post" action="/admin/report-service/sites" class="row g-2">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
             <div class="col-12">
               <select class="form-select" name="customer_id" required>
-                <option value="">Selecione cliente</option>
+                <option value=""><%= t("rs.select") %></option>
                 <% customers.forEach((customer) => { %><option value="<%= customer.id %>"><%= customer.name %></option><% }) %>
               </select>
             </div>
-            <div class="col-12"><input class="form-control" name="site_name" placeholder="Nome do site" required /></div>
-            <div class="col-12"><input class="form-control" name="site_code" placeholder="Codigo do site" /></div>
+            <div class="col-12"><input class="form-control" name="site_name" placeholder="<%= t('rs.customers.siteNamePh') %>" required /></div>
+            <div class="col-12"><input class="form-control" name="site_code" placeholder="<%= t('rs.customers.siteCodePh') %>" /></div>
             <div class="col-12">
               <div class="d-flex gap-2">
-                <input class="form-control" name="location" id="siteLocation" placeholder="Descricao da localizacao (ex: Rio de Janeiro, RJ)" autocomplete="off" />
-                <button type="button" class="btn btn-outline-secondary btn-sm" id="openGoogleMapsBtn" style="white-space:nowrap">Ver no Maps</button>
+                <input class="form-control" name="location" id="siteLocation" placeholder="<%= t('rs.customers.locationPh') %>" autocomplete="off" />
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="openGoogleMapsBtn" style="white-space:nowrap"><%= t("rs.customers.viewMaps") %></button>
               </div>
             </div>
             <div class="col-12">
               <div class="d-flex align-items-center gap-2 mb-1">
                 <label class="form-label mb-0 small text-muted">Coordenadas (opcional)</label>
-                <span class="form-text text-muted mb-0">— No Google Maps, clique com o botao direito no local e copie as coordenadas.</span>
+                <span class="form-text text-muted mb-0">— <%= t("rs.customers.mapsHelp") %></span>
               </div>
               <div class="d-flex gap-2">
                 <input class="form-control form-control-sm" name="latitude" id="siteLatitude" placeholder="Latitude (ex: -22.9068)" />
                 <input class="form-control form-control-sm" name="longitude" id="siteLongitude" placeholder="Longitude (ex: -43.1729)" />
               </div>
             </div>
-            <div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="Observacoes"></textarea></div>
-            <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit">Salvar site</button></div>
+            <div class="col-12"><textarea class="form-control" name="notes" rows="2" placeholder="<%= t('rs.observations') %>"></textarea></div>
+            <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary btn-sm" type="submit"><%= t("rs.customers.registerSite") %></button></div>
           </form>
         </div>
       </div>
@@ -212,6 +212,34 @@
 <script>
   (function () {
     var csrfToken = <%- JSON.stringify(csrfToken || "") %>;
+    var i18n = {
+      edit:                   <%- JSON.stringify(t("rs.edit")) %>,
+      delete:                 <%- JSON.stringify(t("rs.delete")) %>,
+      confirmDeleteCustomer:  <%- JSON.stringify(t("rs.customers.confirmDeleteCustomer")) %>,
+      confirmDeleteSite:      <%- JSON.stringify(t("rs.customers.confirmDeleteSite")) %>,
+      noCustomers:            <%- JSON.stringify(t("rs.noRecords")) %>,
+      noSites:                <%- JSON.stringify(t("rs.noRecords")) %>,
+      searchPh:               <%- JSON.stringify(t("rs.searchPlaceholder")) %>,
+      loading:                <%- JSON.stringify(t("rs.loading")) %>,
+      noRecords:              <%- JSON.stringify(t("rs.noRecords")) %>,
+      error:                  <%- JSON.stringify(t("rs.error")) %>,
+      previous:               <%- JSON.stringify(t("admin.grid.paginationPrevious")) %>,
+      next:                   <%- JSON.stringify(t("admin.grid.paginationNext")) %>,
+      showing:                <%- JSON.stringify(t("admin.grid.paginationShowing")) %>,
+      of:                     <%- JSON.stringify(t("admin.grid.paginationOf")) %>,
+      to:                     <%- JSON.stringify(t("admin.grid.paginationTo")) %>,
+      results:                <%- JSON.stringify(t("admin.grid.paginationResults")) %>,
+      colId:      "ID",
+      colName:    <%- JSON.stringify(t("rs.name")) %>,
+      colType:    "Tipo",
+      colNotes:   <%- JSON.stringify(t("rs.observations")) %>,
+      colActions: <%- JSON.stringify(t("rs.actions")) %>,
+      colCustomer:<%- JSON.stringify(t("rs.customer")) %>,
+      colSite:    <%- JSON.stringify(t("rs.site")) %>,
+      colCode:    <%- JSON.stringify(t("rs.code")) %>,
+      colLocal:   "Local",
+      colCoords:  "Coordenadas"
+    };
 
     var customers = <%- JSON.stringify((customers || []).map(function(c) {
       return { id: c.id, name: c.name, type: c.customer_type, notes: c.notes || "" };
@@ -236,10 +264,10 @@
         + " data-name=\"" + escAttr(c.name) + "\""
         + " data-type=\"" + escAttr(c.type) + "\""
         + " data-notes=\"" + escAttr(c.notes) + "\""
-        + ">Editar</button>";
-      var delForm = "<form method=\"post\" action=\"/admin/report-service/customers/" + c.id + "/delete\" class=\"m-0\" onsubmit=\"return confirm('Excluir cliente?')\">"
+        + ">" + escHtml(i18n.edit) + "</button>";
+      var delForm = "<form method=\"post\" action=\"/admin/report-service/customers/" + c.id + "/delete\" class=\"m-0\" onsubmit=\"return confirm(" + JSON.stringify(i18n.confirmDeleteCustomer) + ")\">"
         + "<input type=\"hidden\" name=\"_csrf\" value=\"" + escHtml(csrfToken) + "\" />"
-        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">Excluir</button>"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">" + escHtml(i18n.delete) + "</button>"
         + "</form>";
       return "<div style=\"display:flex;gap:4px\">" + editBtn + delForm + "</div>";
     }
@@ -254,41 +282,41 @@
         + " data-lat=\"" + (s.lat != null ? s.lat : "") + "\""
         + " data-lng=\"" + (s.lng != null ? s.lng : "") + "\""
         + " data-notes=\"" + escAttr(s.notes) + "\""
-        + ">Editar</button>";
-      var delForm = "<form method=\"post\" action=\"/admin/report-service/sites/" + s.id + "/delete\" class=\"m-0\" onsubmit=\"return confirm('Excluir site?')\">"
+        + ">" + escHtml(i18n.edit) + "</button>";
+      var delForm = "<form method=\"post\" action=\"/admin/report-service/sites/" + s.id + "/delete\" class=\"m-0\" onsubmit=\"return confirm(" + JSON.stringify(i18n.confirmDeleteSite) + ")\">"
         + "<input type=\"hidden\" name=\"_csrf\" value=\"" + escHtml(csrfToken) + "\" />"
-        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">Excluir</button>"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"submit\">" + escHtml(i18n.delete) + "</button>"
         + "</form>";
       return "<div style=\"display:flex;gap:4px\">" + editBtn + delForm + "</div>";
     }
 
     var gridLang = {
-      search: { placeholder: "Buscar..." },
-      sort: { sortAsc: "Crescente", sortDesc: "Decrescente" },
+      search: { placeholder: i18n.searchPh },
+      sort: { sortAsc: i18n.sortAsc, sortDesc: i18n.sortDesc },
       pagination: {
-        previous: "Anterior", next: "Proximo",
-        navigate: function(p, t) { return "Pagina " + p + " de " + t; },
-        page: function(p) { return "Pagina " + p; },
-        showing: "Mostrando", of: "de", to: "a", results: "resultados"
+        previous: i18n.previous, next: i18n.next,
+        navigate: function(p, tot) { return i18n.navigate ? i18n.navigate.replace("{page}", p).replace("{pages}", tot) : p + "/" + tot; },
+        page: function(p) { return i18n.page ? i18n.page.replace("{page}", p) : p; },
+        showing: i18n.showing, of: i18n.of, to: i18n.to, results: i18n.results
       },
-      loading: "Carregando...",
-      noRecordsFound: "Nenhum registro encontrado.",
-      error: "Falha ao carregar dados."
+      loading: i18n.loading,
+      noRecordsFound: i18n.noRecords,
+      error: i18n.error
     };
 
     // Grid clientes
     var customersTarget = document.getElementById("customersGrid");
     if (customersTarget && window.gridjs) {
       if (!customers.length) {
-        customersTarget.innerHTML = "<div class=\"text-center text-muted py-4\">Sem clientes cadastrados.</div>";
+        customersTarget.innerHTML = "<div class=\"text-center text-muted py-4\">" + escHtml(i18n.noCustomers) + "</div>";
       } else {
         new window.gridjs.Grid({
           columns: [
-            { id: "id", name: "ID", width: "60px" },
-            { id: "name", name: "Nome" },
-            { id: "type", name: "Tipo" },
-            { id: "notes", name: "Notas" },
-            { id: "actions", name: "Acoes", sort: false, formatter: function(cell) { return window.gridjs.html(cell); } }
+            { id: "id", name: i18n.colId, width: "60px" },
+            { id: "name", name: i18n.colName },
+            { id: "type", name: i18n.colType },
+            { id: "notes", name: i18n.colNotes },
+            { id: "actions", name: i18n.colActions, sort: false, formatter: function(cell) { return window.gridjs.html(cell); } }
           ],
           data: customers.map(function(c) {
             return { id: c.id, name: escHtml(c.name), type: escHtml(c.type), notes: escHtml(c.notes) || "-", actions: customerActions(c) };
@@ -304,17 +332,17 @@
     var sitesTarget = document.getElementById("sitesGrid");
     if (sitesTarget && window.gridjs) {
       if (!sites.length) {
-        sitesTarget.innerHTML = "<div class=\"text-center text-muted py-4\">Sem sites cadastrados.</div>";
+        sitesTarget.innerHTML = "<div class=\"text-center text-muted py-4\">" + escHtml(i18n.noSites) + "</div>";
       } else {
         new window.gridjs.Grid({
           columns: [
-            { id: "id", name: "ID", width: "60px" },
-            { id: "customer", name: "Cliente" },
-            { id: "name", name: "Site" },
-            { id: "code", name: "Codigo" },
-            { id: "location", name: "Local" },
-            { id: "coords", name: "Coordenadas", sort: false, formatter: function(cell) { return window.gridjs.html(cell); } },
-            { id: "actions", name: "Acoes", sort: false, formatter: function(cell) { return window.gridjs.html(cell); } }
+            { id: "id", name: i18n.colId, width: "60px" },
+            { id: "customer", name: i18n.colCustomer },
+            { id: "name", name: i18n.colSite },
+            { id: "code", name: i18n.colCode },
+            { id: "location", name: i18n.colLocal },
+            { id: "coords", name: i18n.colCoords, sort: false, formatter: function(cell) { return window.gridjs.html(cell); } },
+            { id: "actions", name: i18n.colActions, sort: false, formatter: function(cell) { return window.gridjs.html(cell); } }
           ],
           data: sites.map(function(s) {
             var coords = "-";

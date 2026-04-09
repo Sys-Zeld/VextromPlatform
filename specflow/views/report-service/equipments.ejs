@@ -104,28 +104,28 @@
     <div class="card-body token-hero-body">
       <div class="token-hero-copy">
         <span class="token-hero-eyebrow">SERVICE REPORT</span>
-        <h1 class="h4 app-card-title mb-1">Equipamentos</h1>
-        <p class="text-muted mb-0">Base de equipamentos vinculada a cliente/site e pronta para associacao em OS.</p>
+        <h1 class="h4 app-card-title mb-1"><%= t("rs.equip.pageTitle") %></h1>
+        <p class="text-muted mb-0"><%= t("rs.equip.pageSubtitle") %></p>
       </div>
       <div class="token-hero-actions">
         <a class="btn btn-outline-secondary btn-sm" href="/admin/hub">Service Hub</a>
-        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders"><%= t("rs.orders.pageTitle") %></a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/spare-parts">Spare-Parts</a>
       </div>
     </div>
   </div>
 
-  <% if (created) { %><div class="alert alert-success mb-0">Equipamento salvo com sucesso.</div><% } %>
-  <% if (updated) { %><div class="alert alert-success mb-0">Equipamento atualizado com sucesso.</div><% } %>
+  <% if (created) { %><div class="alert alert-success mb-0"><%= t("rs.equip.savedSuccess") %></div><% } %>
+  <% if (updated) { %><div class="alert alert-success mb-0"><%= t("rs.equip.updatedSuccess") %></div><% } %>
 
   <div class="card app-card">
     <div class="card-body">
       <div class="d-flex justify-content-between align-items-center mb-3 gap-2 flex-wrap">
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          <h2 class="h6 app-card-title mb-0">Base de equipamentos</h2>
+          <h2 class="h6 app-card-title mb-0"><%= t("rs.equip.listTitle") %></h2>
           <span class="badge text-bg-secondary" id="equipment-count">Total: 0</span>
         </div>
-        <button class="btn btn-primary btn-sm" type="button" id="add-inline-equipment">Incluir novo</button>
+        <button class="btn btn-primary btn-sm" type="button" id="add-inline-equipment"><%= t("rs.equip.addNew") %></button>
       </div>
       <div class="equipments-grid-wrap">
         <div id="equipmentsGrid"></div>
@@ -140,6 +140,27 @@
 <script>
   (function () {
     var csrfToken = <%- JSON.stringify(csrfToken || "") %>;
+    var i18n = {
+      btnCreate:    <%- JSON.stringify(t("rs.equip.btnCreate")) %>,
+      btnSave:      <%- JSON.stringify(t("rs.equip.btnSave")) %>,
+      btnRemove:    <%- JSON.stringify(t("rs.remove")) %>,
+      selectClient: <%- JSON.stringify(t("rs.equip.selectClient")) %>,
+      noSite:       <%- JSON.stringify(t("rs.equip.noSiteForClient")) %>,
+      selectFirst:  <%- JSON.stringify(t("rs.orders.selectClientFirst")) %>,
+      colActions:   <%- JSON.stringify(t("rs.actions")) %>,
+      colCreated:   <%- JSON.stringify(t("admin.grid.updatedAt") || "Criado em") %>,
+      colUpdated:   <%- JSON.stringify(t("rs.updatedAt") || "Atualizado em") %>,
+      searchPh:     <%- JSON.stringify(t("rs.searchPlaceholder")) %>,
+      loading:      <%- JSON.stringify(t("rs.loading")) %>,
+      noRecords:    <%- JSON.stringify(t("rs.noRecords")) %>,
+      error:        <%- JSON.stringify(t("rs.error")) %>,
+      previous:     <%- JSON.stringify(t("admin.grid.paginationPrevious")) %>,
+      next:         <%- JSON.stringify(t("admin.grid.paginationNext")) %>,
+      showing:      <%- JSON.stringify(t("admin.grid.paginationShowing")) %>,
+      of:           <%- JSON.stringify(t("admin.grid.paginationOf")) %>,
+      to:           <%- JSON.stringify(t("admin.grid.paginationTo")) %>,
+      results:      <%- JSON.stringify(t("admin.grid.paginationResults")) %>
+    };
     var customers = <%- JSON.stringify((customers || []).map(function (item) {
       return { id: item.id, name: item.name || "-" };
     })).replace(/</g, "\\u003c") %>;
@@ -207,7 +228,7 @@
 
     function buildCustomerOptions(currentValue) {
       var normalizedCurrent = String(currentValue || "");
-      var base = "<option value=\"\">Selecione o cliente</option>";
+      var base = "<option value=\"\">" + escapeHtml(i18n.selectClient) + "</option>";
       var options = customers.map(function (item) {
         var value = String(item.id || "");
         var selected = value === normalizedCurrent ? " selected" : "";
@@ -222,9 +243,9 @@
       var filteredSites = Number.isInteger(normalizedCustomerId) && normalizedCustomerId > 0
         ? sites.filter(function (item) { return Number(item.customer_id) === normalizedCustomerId; })
         : [];
-      var baseLabel = "Selecione o cliente primeiro";
+      var baseLabel = i18n.selectFirst;
       if (normalizedCustomerId > 0) {
-        baseLabel = filteredSites.length ? "Selecione o site" : "Nenhum site para este cliente";
+        baseLabel = filteredSites.length ? i18n.selectClient : i18n.noSite;
       }
       var base = "<option value=\"\">" + escapeHtml(baseLabel) + "</option>";
       var options = filteredSites.map(function (item) {
@@ -237,12 +258,12 @@
 
     function buildActionsHtml(row) {
       var idSafe = escapeHtml(row.id);
-      var primaryLabel = row.__isNew ? "Criar" : "Salvar";
+      var primaryLabel = row.__isNew ? i18n.btnCreate : i18n.btnSave;
       var isNewAttr = row.__isNew ? "1" : "0";
       return ""
         + "<div class=\"equipments-actions\" data-new-row=\"" + isNewAttr + "\">"
         + "<button class=\"btn btn-outline-primary btn-sm\" type=\"button\" data-save-equipment=\"" + idSafe + "\">" + primaryLabel + "</button>"
-        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"button\" data-remove-equipment=\"" + idSafe + "\">Remover</button>"
+        + "<button class=\"btn btn-outline-danger btn-sm\" type=\"button\" data-remove-equipment=\"" + idSafe + "\">" + escapeHtml(i18n.btnRemove) + "</button>"
         + "</div>";
     }
 
@@ -496,32 +517,29 @@
             { id: "manufacturer", name: "Manufacturer", formatter: function (cell) { return window.gridjs.html(cell); } },
             { id: "modelFamily", name: "Model Family", formatter: function (cell) { return window.gridjs.html(cell); } },
             { id: "notes", name: "Notes", formatter: function (cell) { return window.gridjs.html(cell); } },
-            { id: "createdAt", name: "Criado em" },
-            { id: "updatedAt", name: "Atualizado em" },
-            { id: "actions", name: "Acoes", sort: false, formatter: function (cell) { return window.gridjs.html(cell); } }
+            { id: "createdAt", name: i18n.colCreated },
+            { id: "updatedAt", name: i18n.colUpdated },
+            { id: "actions", name: i18n.colActions, sort: false, formatter: function (cell) { return window.gridjs.html(cell); } }
           ],
           data: data,
           search: true,
           sort: true,
           language: {
-            search: { placeholder: "Digite uma palavra-chave..." },
-            sort: {
-              sortAsc: "Ordenar coluna em ordem crescente",
-              sortDesc: "Ordenar coluna em ordem decrescente"
-            },
+            search: { placeholder: i18n.searchPh },
+            sort: { sortAsc: i18n.sortAsc, sortDesc: i18n.sortDesc },
             pagination: {
-              previous: "Anterior",
-              next: "Proximo",
-              navigate: function (page, pages) { return "Pagina " + page + " de " + pages; },
-              page: function (page) { return "Pagina " + page; },
-              showing: "Mostrando",
-              of: "de",
-              to: "a",
-              results: "resultados"
+              previous: i18n.previous,
+              next: i18n.next,
+              navigate: function (page, pages) { return i18n.navigate ? i18n.navigate.replace("{page}", page).replace("{pages}", pages) : page + "/" + pages; },
+              page: function (page) { return i18n.page ? i18n.page.replace("{page}", page) : page; },
+              showing: i18n.showing,
+              of: i18n.of,
+              to: i18n.to,
+              results: i18n.results
             },
-            loading: "Carregando...",
-            noRecordsFound: "Nenhum registro encontrado.",
-            error: "Falha ao carregar dados."
+            loading: i18n.loading,
+            noRecordsFound: i18n.noRecords,
+            error: i18n.error
           },
           pagination: {
             limit: 20,
