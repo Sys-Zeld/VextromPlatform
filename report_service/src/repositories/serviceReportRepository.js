@@ -1898,6 +1898,13 @@ async function createImage(payload) {
   return result.rows[0];
 }
 
+async function updateImageCaption(imageId, caption) {
+  await db.query(
+    `UPDATE service_report_images SET caption = $1, updated_at = NOW() WHERE id = $2`,
+    [String(caption || ""), Number(imageId)]
+  );
+}
+
 async function deleteImageByRefId(serviceReportId, imageRefId) {
   const result = await db.query(
     `
@@ -2039,6 +2046,7 @@ module.exports = {
   deleteTechnician,
   listImages,
   createImage,
+  updateImageCaption,
   deleteImageByRefId,
   deleteImagesBySection,
   replaceSectionImages,

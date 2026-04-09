@@ -236,6 +236,7 @@ async function reviseTextWithAi({
   text,
   html = "",
   prompt = "Revise o texto abaixo sem mudar muitas palavras",
+  systemInstruction = null,
   preserveFormatting = false,
   maxOutputTokens = null
 }) {
@@ -253,43 +254,64 @@ async function reviseTextWithAi({
     throw err;
   }
 
-  const instruction = String(prompt || "Revise o texto abaixo sem mudar muitas palavras").trim();
-  const wantsHtml = Boolean(preserveFormatting);
-  const cleanHtml = wantsHtml && sourceHtml ? stripQuillHtml(sourceHtml) : "";
-  const reviewTarget = wantsHtml && cleanHtml
-    ? `HTML:\n${cleanHtml}`
-    : `Texto:\n${sourceText}`;
-  const outputInstruction = wantsHtml
-    ? "Retorne somente HTML revisado, sem markdown, sem explicacoes e preservando a estrutura de tags HTML."
-    : "Retorne somente o texto revisado, sem explicacoes.";
   const tokenCap = maxOutputTokens
     ? Math.min(maxOutputTokens, env.openai.maxOutputTokensCap)
     : Math.min(1200, env.openai.maxOutputTokensCap);
-  const body = {
-    model: env.openai.model,
-    temperature: 0.2,
-    max_output_tokens: tokenCap,
-    input: [
-      {
-        role: "system",
-        content: [
-          {
-            type: "input_text",
-            text: "Voce revisa textos tecnicos em portugues mantendo o sentido e alterando o minimo possivel."
-          }
-        ]
-      },
-      {
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: `${instruction}\n\n${reviewTarget}\n\n${outputInstruction}`
-          }
-        ]
-      }
-    ]
-  };
+
+  let body;
+  if (systemInstruction) {
+    // Modo traducao: instrucao no system message, apenas o texto na mensagem de usuario
+    body = {
+      model: env.openai.model,
+      temperature: 0.2,
+      max_output_tokens: tokenCap,
+      input: [
+        {
+          role: "system",
+          content: [{ type: "input_text", text: String(systemInstruction).trim() }]
+        },
+        {
+          role: "user",
+          content: [{ type: "input_text", text: sourceText }]
+        }
+      ]
+    };
+  } else {
+    const instruction = String(prompt || "Revise o texto abaixo sem mudar muitas palavras").trim();
+    const wantsHtml = Boolean(preserveFormatting);
+    const cleanHtml = wantsHtml && sourceHtml ? stripQuillHtml(sourceHtml) : "";
+    const reviewTarget = wantsHtml && cleanHtml
+      ? `HTML:\n${cleanHtml}`
+      : `Texto:\n${sourceText}`;
+    const outputInstruction = wantsHtml
+      ? "Retorne somente HTML revisado, sem markdown, sem explicacoes e preservando a estrutura de tags HTML."
+      : "Retorne somente o texto revisado, sem explicacoes.";
+    body = {
+      model: env.openai.model,
+      temperature: 0.2,
+      max_output_tokens: tokenCap,
+      input: [
+        {
+          role: "system",
+          content: [
+            {
+              type: "input_text",
+              text: "Voce revisa textos tecnicos em portugues mantendo o sentido e alterando o minimo possivel."
+            }
+          ]
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `${instruction}\n\n${reviewTarget}\n\n${outputInstruction}`
+            }
+          ]
+        }
+      ]
+    };
+  }
 
   const payload = await callOpenAiResponsesApi(body);
   const revised = stripJsonCodeFence(extractOutputText(payload)).trim();
@@ -300,7 +322,7 @@ async function reviseTextWithAi({
     throw err;
   }
 
-  if (wantsHtml) {
+  if (!systemInstruction && Boolean(preserveFormatting)) {
     return {
       revisedHtml: revised,
       revisedText: revised,

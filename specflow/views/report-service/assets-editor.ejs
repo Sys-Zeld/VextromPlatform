@@ -18,10 +18,10 @@
       <div class="token-hero-copy">
         <span class="token-hero-eyebrow">SERVICE REPORT</span>
         <h1 class="h4 app-card-title mb-1"><%= order.service_order_display || "-" %></h1>
-        <p class="text-muted mb-0">Equipe Tecnica e Instrumentos da OS</p>
+        <p class="text-muted mb-0"><%= t("rs.assets.pageSubtitle") %></p>
       </div>
       <div class="token-hero-actions">
-        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders">Ordens</a>
+        <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders"><%= t("rs.orders.pageTitle") %></a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>">Editar OS</a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders/<%= order.id %>/report-editor">Editar Relatorio</a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/assets">Cadastro Global</a>
@@ -29,7 +29,7 @@
     </div>
   </div>
 
-  <% if (saved) { %><div class="alert alert-success mb-0">Dados salvos com sucesso.</div><% } %>
+  <% if (saved) { %><div class="alert alert-success mb-0"><%= t("rs.assets.savedSuccess") %></div><% } %>
 
   <div class="row g-3 mt-0">
 
@@ -37,33 +37,33 @@
     <div class="col-12 col-xl-6">
       <div class="card app-card">
         <div class="card-body">
-          <h2 class="h6 app-card-title mb-3">Equipe Tecnica</h2>
+          <h2 class="h6 app-card-title mb-3"><%= t("rs.assets.techTeamTitle") %></h2>
 
           <% if (allTechnicians.length) { %>
             <form method="post" action="/admin/report-service/orders/<%= order.id %>/assets/technicians/link" class="d-flex gap-2 mb-3">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
               <select class="form-select form-select-sm" name="technician_id" required>
-                <option value="">Selecione para vincular...</option>
+                <option value=""><%= t("rs.assets.selectToLink") %></option>
                 <% allTechnicians.forEach((t) => { %>
                   <% if (!linkedTechSet.has(t.id)) { %>
                     <option value="<%= t.id %>"><%= t.name %><% if (t.role) { %> — <%= t.role %><% } %><% if (t.company) { %> (<%= t.company %>)<% } %></option>
                   <% } %>
                 <% }) %>
               </select>
-              <button class="btn btn-primary btn-sm text-nowrap" type="submit">Vincular</button>
+              <button class="btn btn-primary btn-sm text-nowrap" type="submit"><%= t("rs.assets.linkBtn") %></button>
             </form>
           <% } else { %>
-            <p class="small text-muted mb-3">Nenhum tecnico no cadastro global. <a href="/admin/report-service/assets">Cadastrar agora</a>.</p>
+            <p class="small text-muted mb-3"><%= t("rs.assets.noTechnicians") %> <a href="/admin/report-service/assets"><%= t("rs.assets.registerNow") %></a>.</p>
           <% } %>
 
           <div class="table-responsive">
             <table class="table table-sm app-table mb-0">
               <thead>
-                <tr><th>Nome</th><th>Funcao</th><th>Empresa</th><th>Lider</th><th></th></tr>
+                <tr><th><%= t("rs.name") %></th><th><%= t("rs.assets.colRole") %></th><th><%= t("rs.assets.colCompany") %></th><th><%= t("rs.assets.colLeader") %></th><th></th></tr>
               </thead>
               <tbody>
                 <% if (!linkedTechs.length) { %>
-                  <tr><td colspan="5" class="text-center text-muted py-3">Nenhum tecnico vinculado a esta OS.</td></tr>
+                  <tr><td colspan="5" class="text-center text-muted py-3"><%= t("rs.assets.noTechLinked") %></td></tr>
                 <% } %>
                 <% linkedTechs.forEach((t) => { %>
                   <tr>
@@ -76,9 +76,9 @@
                     <td><%= t.company || "-" %></td>
                     <td><%= t.is_lead ? "Sim" : "-" %></td>
                     <td>
-                      <form method="post" action="/admin/report-service/orders/<%= order.id %>/assets/technicians/<%= t.id %>/unlink" class="m-0" onsubmit="return confirm('Desvincular tecnico desta OS?');">
+                      <form method="post" action="/admin/report-service/orders/<%= order.id %>/assets/technicians/<%= t.id %>/unlink" class="m-0" onsubmit="return confirm('<%= t('rs.assets.confirmUnlinkTech') %>');">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                        <button class="btn btn-outline-danger btn-sm" type="submit">Desvincular</button>
+                        <button class="btn btn-outline-danger btn-sm" type="submit"><%= t("rs.assets.unlinkBtn") %></button>
                       </form>
                     </td>
                   </tr>
@@ -94,33 +94,33 @@
     <div class="col-12 col-xl-6">
       <div class="card app-card">
         <div class="card-body">
-          <h2 class="h6 app-card-title mb-3">Instrumentos</h2>
+          <h2 class="h6 app-card-title mb-3"><%= t("rs.assets.instrumentsTitle") %></h2>
 
           <% if (allInstruments.length) { %>
             <form method="post" action="/admin/report-service/orders/<%= order.id %>/assets/instruments/link" class="d-flex gap-2 mb-3">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
               <select class="form-select form-select-sm" name="instrument_id" required>
-                <option value="">Selecione para vincular...</option>
+                <option value=""><%= t("rs.assets.selectToLink") %></option>
                 <% allInstruments.forEach((instr) => { %>
                   <% if (!linkedInstrSet.has(instr.id)) { %>
                     <option value="<%= instr.id %>"><%= instr.name %><% if (instr.model) { %> — <%= instr.model %><% } %><% if (instr.serial_number) { %> (<%= instr.serial_number %>)<% } %></option>
                   <% } %>
                 <% }) %>
               </select>
-              <button class="btn btn-primary btn-sm text-nowrap" type="submit">Vincular</button>
+              <button class="btn btn-primary btn-sm text-nowrap" type="submit"><%= t("rs.assets.linkBtn") %></button>
             </form>
           <% } else { %>
-            <p class="small text-muted mb-3">Nenhum instrumento no cadastro global. <a href="/admin/report-service/assets">Cadastrar agora</a>.</p>
+            <p class="small text-muted mb-3"><%= t("rs.assets.noInstruments") %> <a href="/admin/report-service/assets"><%= t("rs.assets.registerNow") %></a>.</p>
           <% } %>
 
           <div class="table-responsive">
             <table class="table table-sm app-table mb-0">
               <thead>
-                <tr><th>Nome</th><th>Modelo</th><th>Serie</th><th>Val. Calibracao</th><th></th></tr>
+                <tr><th><%= t("rs.name") %></th><th><%= t("rs.assets.colModel") %></th><th><%= t("rs.assets.colSerial") %></th><th><%= t("rs.assets.colCalibration") %></th><th></th></tr>
               </thead>
               <tbody>
                 <% if (!linkedInstrs.length) { %>
-                  <tr><td colspan="5" class="text-center text-muted py-3">Nenhum instrumento vinculado a esta OS.</td></tr>
+                  <tr><td colspan="5" class="text-center text-muted py-3"><%= t("rs.assets.noInstrumentLinked") %></td></tr>
                 <% } %>
                 <% linkedInstrs.forEach((instr) => { %>
                   <tr>
@@ -132,9 +132,9 @@
                     <td><%= instr.serial_number || "-" %></td>
                     <td><%= formatDateOnly(instr.calibration_due_date) %></td>
                     <td>
-                      <form method="post" action="/admin/report-service/orders/<%= order.id %>/assets/instruments/<%= instr.id %>/unlink" class="m-0" onsubmit="return confirm('Desvincular instrumento desta OS?');">
+                      <form method="post" action="/admin/report-service/orders/<%= order.id %>/assets/instruments/<%= instr.id %>/unlink" class="m-0" onsubmit="return confirm('<%= t('rs.assets.confirmUnlinkInstrument') %>');">
                         <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                        <button class="btn btn-outline-danger btn-sm" type="submit">Desvincular</button>
+                        <button class="btn btn-outline-danger btn-sm" type="submit"><%= t("rs.assets.unlinkBtn") %></button>
                       </form>
                     </td>
                   </tr>

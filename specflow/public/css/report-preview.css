@@ -159,7 +159,7 @@
 }
 
 .section-title.section-title-continued .report-section-title-rich::after {
-  content: " (continuacao)";
+ 
   font-size: 0.82em;
   color: #5b6b61;
 }

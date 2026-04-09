@@ -8,45 +8,85 @@ const REPORT_UI_LABELS = {
     metadata: "METADADOS",
     preparedBy: "Executado por",
     revision: "Revisao",
+    lastRevision: "Ultima revisao",
     os: "OS",
     updatedAt: "Atualizado em",
     toc: "SUMARIO",
     tocEmpty: "Sem capitulos.",
     signatures: "ASSINATURAS",
-    continuation: "(continuacao...)"
+    signatureAlt: "Assinatura",
+    continuation: "(continuacao...)",
+    chapter: "CAPITULO",
+    image: "Imagem",
+    customer: "Cliente",
+    site: "Site",
+    reportLabel: "Relatorio",
+    rev: "Rev.",
+    logoPlaceholder: "Espaco para logo",
+    dateLocale: "pt-BR"
   },
   en: {
     metadata: "METADATA",
     preparedBy: "Prepared by",
     revision: "Revision",
+    lastRevision: "Last revision",
     os: "Work Order",
     updatedAt: "Updated at",
     toc: "TABLE OF CONTENTS",
     tocEmpty: "No chapters.",
     signatures: "SIGNATURES",
-    continuation: "(continued...)"
+    signatureAlt: "Signature",
+    continuation: "(continued...)",
+    chapter: "CHAPTER",
+    image: "Image",
+    customer: "Client",
+    site: "Site",
+    reportLabel: "Report",
+    rev: "Rev.",
+    logoPlaceholder: "Logo space",
+    dateLocale: "en-US"
   },
   es: {
     metadata: "METADATOS",
     preparedBy: "Ejecutado por",
     revision: "Revision",
+    lastRevision: "Ultima revision",
     os: "Orden de Servicio",
     updatedAt: "Actualizado en",
     toc: "SUMARIO",
     tocEmpty: "Sin capitulos.",
     signatures: "FIRMAS",
-    continuation: "(continuacion...)"
+    signatureAlt: "Firma",
+    continuation: "(continuacion...)",
+    chapter: "CAPITULO",
+    image: "Imagen",
+    customer: "Cliente",
+    site: "Site",
+    reportLabel: "Informe",
+    rev: "Rev.",
+    logoPlaceholder: "Espacio para logo",
+    dateLocale: "es-ES"
   },
   fr: {
     metadata: "METADONNEES",
     preparedBy: "Execute par",
     revision: "Revision",
+    lastRevision: "Derniere revision",
     os: "Ordre de service",
     updatedAt: "Mis a jour le",
     toc: "SOMMAIRE",
     tocEmpty: "Pas de chapitres.",
     signatures: "SIGNATURES",
-    continuation: "(suite...)"
+    signatureAlt: "Signature",
+    continuation: "(suite...)",
+    chapter: "CHAPITRE",
+    image: "Image",
+    customer: "Client",
+    site: "Site",
+    reportLabel: "Rapport",
+    rev: "Rev.",
+    logoPlaceholder: "Espace logo",
+    dateLocale: "fr-FR"
   }
 };
 
@@ -114,8 +154,8 @@ function toImagePublicSrc(filePath) {
   return `/docs/report/img/${encodeURIComponent(fileName)}`;
 }
 
-function renderInlineImageCard(image, requestedId = null) {
-  const fallbackCaption = requestedId ? `Imagem ${requestedId}` : "Imagem";
+function renderInlineImageCard(image, requestedId = null, imageLabel = "Imagem") {
+  const fallbackCaption = requestedId ? `${imageLabel} ${requestedId}` : imageLabel;
   const caption = escapeHtml((image && image.caption) || fallbackCaption);
   const publicSrc = toImagePublicSrc(image && image.filePath);
   if (!publicSrc) {
@@ -391,7 +431,7 @@ function renderDailyLogInlineItem(dailyLog, requestedId = null, context = null) 
     context.timesheetItems,
     context.dailyLogsById,
     context.dailyLogsOrdered,
-    { expandDailyLogTags: false },
+    { expandDailyLogTags: false, imageLabel: context.imageLabel },
     context.technicianItems || [],
     context.orderEquipments || []
   );
@@ -508,7 +548,7 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
     const id = Number(rawId);
     if (!Number.isInteger(id) || id <= 0) return _match;
     const image = imageById.get(id);
-    return renderInlineImageCard(image, id);
+    return renderInlineImageCard(image, id, opts.imageLabel || "Imagem");
   });
   const tableReplacedPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmpr/gi;
   const tableRequiredPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmpq/gi;
@@ -532,7 +572,8 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
     dailyLogsById,
     dailyLogsOrdered,
     technicianItems,
-    orderEquipments
+    orderEquipments,
+    imageLabel: opts.imageLabel || "Imagem"
   };
   const dailyLogTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi;
   const withDailyLogs = withTechTeam.replace(dailyLogTagPattern, (_match, rawId) => {
@@ -575,6 +616,8 @@ function buildPreviewModel(payload, options = {}) {
     ...rawReport,
     prepared_by: signedTechnicianName || preparedByRaw || systemUserFallback
   };
+  const documentLang = String(rawReport.document_language || "pt").trim().toLowerCase();
+  const uiLabels = REPORT_UI_LABELS[documentLang] || REPORT_UI_LABELS.pt;
   const images = Array.isArray(payload.images) ? payload.images : [];
   const imageById = new Map(
     images
@@ -659,7 +702,7 @@ function buildPreviewModel(payload, options = {}) {
           sectionImages.push({
             id: null,
             filePath: toImagePublicSrc(section.image_left_path),
-            caption: "Imagem 1",
+            caption: `${uiLabels.image} 1`,
             sortOrder: 1
           });
         }
@@ -667,7 +710,7 @@ function buildPreviewModel(payload, options = {}) {
           sectionImages.push({
             id: null,
             filePath: toImagePublicSrc(section.image_right_path),
-            caption: "Imagem 2",
+            caption: `${uiLabels.image} 2`,
             sortOrder: 2
           });
         }
@@ -685,7 +728,7 @@ function buildPreviewModel(payload, options = {}) {
           timesheetItems,
           dailyLogsById,
           dailyLogsOrdered,
-          {},
+          { imageLabel: uiLabels.image },
           technicianItems,
           orderEquipments
         ),
@@ -697,7 +740,7 @@ function buildPreviewModel(payload, options = {}) {
           timesheetItems,
           dailyLogsById,
           dailyLogsOrdered,
-          {},
+          { imageLabel: uiLabels.image },
           technicianItems,
           orderEquipments
         ),
@@ -718,8 +761,6 @@ function buildPreviewModel(payload, options = {}) {
   };
   const components = groupComponents(payload.components || []);
 
-  const documentLang = String(rawReport.document_language || "pt").trim().toLowerCase();
-  const uiLabels = REPORT_UI_LABELS[documentLang] || REPORT_UI_LABELS.pt;
   const footerHtml = String(reportConfig && reportConfig.footerHtml != null ? reportConfig.footerHtml : "").trim();
 
   return {

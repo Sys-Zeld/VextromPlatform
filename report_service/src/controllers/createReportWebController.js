@@ -108,9 +108,9 @@ function createReportWebController(deps) {
       .trim();
   }
 
-  function buildTranslationPrompt(languageKey) {
+  function buildTranslationSystemInstruction(languageKey) {
     const lang = REPORT_LANGUAGES[normalizeReportLanguage(languageKey)] || REPORT_LANGUAGES.pt;
-    return `Traduza o conteudo para ${lang.label}. Apenas traduza e retorne apenas o texto. Sem explicacoes extras. Preserve codigos tecnicos, placeholders como @img=ID/@equip=ID/@tblequip e URLs sem alteracao.`;
+    return `Voce e um tradutor tecnico. Traduza o texto recebido para ${lang.label}. Retorne apenas o texto traduzido, sem nenhuma explicacao, prefixo, rotulo ou comentario adicional. Preserve exatamente codigos tecnicos, placeholders como @img=ID, @equip=ID, @tblequip e URLs sem qualquer alteracao.`;
   }
 
   function parseTimeToMinutes(timeStr) {
@@ -440,7 +440,7 @@ function createReportWebController(deps) {
     const { masked, matches } = maskProtectedTokens(text);
     const result = await reviseTextWithAi({
       text: masked,
-      prompt: buildTranslationPrompt(targetLanguage),
+      systemInstruction: buildTranslationSystemInstruction(targetLanguage),
       preserveFormatting: false
     });
     const translatedRaw = String(result && result.revisedText ? result.revisedText : "");
@@ -547,7 +547,8 @@ function createReportWebController(deps) {
     const sections = Array.isArray(data.sections) ? data.sections : [];
     const dailyLogs = Array.isArray(data.dailyLogs) ? data.dailyLogs : [];
     const components = Array.isArray(data.components) ? data.components : [];
-    const totalSteps = 1 + sections.length + dailyLogs.length + components.length;
+    const images = Array.isArray(data.images) ? data.images : [];
+    const totalSteps = 1 + sections.length + dailyLogs.length + components.length + images.length;
     let doneSteps = 0;
     const emitProgress = (message) => {
       doneSteps += 1;
@@ -660,6 +661,16 @@ function createReportWebController(deps) {
         sortOrder: Number(component.sort_order || 0)
       });
       emitProgress(`Traduzindo componentes ${i + 1}/${components.length}...`);
+    }
+
+    for (let i = 0; i < images.length; i += 1) {
+      const image = images[i];
+      const sourceCaption = String(image.caption || "").trim();
+      // eslint-disable-next-line no-await-in-loop
+      const translatedCaption = sourceCaption ? await translateTextUsingAi(sourceCaption, normalizedTarget, translationCache) : "";
+      // eslint-disable-next-line no-await-in-loop
+      await repo.updateImageCaption(Number(image.id), translatedCaption || sourceCaption);
+      emitProgress(`Traduzindo legendas de imagens ${i + 1}/${images.length}...`);
     }
 
     if (onProgress) {
