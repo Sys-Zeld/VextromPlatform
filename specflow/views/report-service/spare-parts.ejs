@@ -314,6 +314,9 @@
       };
     });
 
+    window._sparePartsGridData = data;
+    window._sparePartsGridI18n = i18n;
+
     if (!data.length) {
       gridTarget.innerHTML = "<div class=\"text-center text-muted py-4\">" + i18n.noSpare + "</div>";
       return;
@@ -582,39 +585,47 @@
     if (!printBtn) return;
 
     printBtn.addEventListener("click", function () {
+      var allData = window._sparePartsGridData || [];
+      var i18n = window._sparePartsGridI18n || {};
       var grid = document.getElementById("sparePartsGrid");
-      if (!grid) return;
 
-      // Column headers (exclude last "Acoes" column)
-      var headers = [];
-      var thEls = grid.querySelectorAll(".gridjs-thead .gridjs-th");
-      thEls.forEach(function (th, i) {
-        if (i < thEls.length - 1) headers.push(th.innerText.trim());
-      });
-
-      // Visible rows (Grid.js renders only filtered rows in the DOM)
-      var rows = [];
-      var trEls = grid.querySelectorAll(".gridjs-tbody .gridjs-tr");
-      trEls.forEach(function (tr) {
-        var cells = tr.querySelectorAll(".gridjs-td");
-        var rowData = [];
-        cells.forEach(function (td, i) {
-          if (i < cells.length - 1) rowData.push(td.innerText.trim()); // skip actions column
-        });
-        if (rowData.length) rows.push(rowData);
-      });
-
-      // Get current search term if any
-      var searchInput = grid.querySelector(".gridjs-search-input");
+      // Get current search term from GridJS input
+      var searchInput = grid ? grid.querySelector(".gridjs-search-input") : null;
       var searchTerm = searchInput ? searchInput.value.trim() : "";
+      var searchLower = searchTerm.toLowerCase();
 
-      // Build print HTML
-      var headerRow = headers.map(function (h) {
-        return "<th>" + h + "</th>";
-      }).join("");
+      // Filter data: no search → all rows; search → match any text field
+      var filtered = allData;
+      if (searchLower) {
+        filtered = allData.filter(function (row) {
+          return [row.id, row.description, row.manufacturer, row.equipmentModel,
+                  row.partNumber, row.leadTime, row.obsolete, row.replacedBy, row.family]
+            .some(function (v) {
+              return String(v || "").toLowerCase().indexOf(searchLower) >= 0;
+            });
+        });
+      }
 
-      var bodyRows = rows.map(function (r) {
-        return "<tr>" + r.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>";
+      // Column definitions for print (same order as grid, excluding actions)
+      var cols = [
+        { key: "id",             label: i18n.colId || "ID" },
+        { key: "description",    label: i18n.colDescription || "Descrição" },
+        { key: "manufacturer",   label: i18n.colManufacturer || "Fabricante" },
+        { key: "equipmentModel", label: i18n.colModel || "Modelo" },
+        { key: "partNumber",     label: i18n.colPartNumber || "Part Number" },
+        { key: "leadTime",       label: i18n.colLeadTime || "Lead Time" },
+        { key: "obsolete",       label: i18n.colObsolete || "Obsoleto" },
+        { key: "replacedBy",     label: i18n.colReplacedBy || "Substituído por" },
+        { key: "family",         label: i18n.colFamily || "Família" }
+      ];
+
+      var headerRow = cols.map(function (c) { return "<th>" + c.label + "</th>"; }).join("");
+      var bodyRows = filtered.map(function (row) {
+        return "<tr>" + cols.map(function (c) {
+          // Strip HTML tags that may exist in escaped cell values
+          var val = String(row[c.key] || "-").replace(/<[^>]*>/g, "");
+          return "<td>" + val + "</td>";
+        }).join("") + "</tr>";
       }).join("");
 
       var now = new Date().toLocaleString("pt-BR");
@@ -645,7 +656,7 @@
         + "<div class=\"banner-meta\">Gerado em: " + now + "</div>"
         + "</div>"
         + filterLine
-        + "<p class=\"count\">" + rows.length + " registro(s)</p>"
+        + "<p class=\"count\">" + filtered.length + " registro(s)</p>"
         + "<table><thead><tr>" + headerRow + "</tr></thead>"
         + "<tbody>" + bodyRows + "</tbody></table>"
         + "</body></html>";
