@@ -257,35 +257,9 @@
 
 <script>
 function printSignedReport() {
-  var reportBody = document.getElementById("signedReportBody");
-  if (!reportBody) return;
-
-  var printWindow = window.open("", "_blank", "width=1200,height=900");
-  if (!printWindow) return;
-
-  var html = "<!DOCTYPE html>"
-    + "<html lang='pt-BR'>"
-    + "<head>"
-    + "<meta charset='UTF-8' />"
-    + "<meta name='viewport' content='width=device-width, initial-scale=1.0' />"
-    + "<title>Relatorio assinado</title>"
-    + "<link href='/public/css/report-preview.css' rel='stylesheet' />"
-    + "<link href='/public/css/report-print.css' rel='stylesheet' />"
-    + "<style>"
-    + "body{margin:0;background:#fff;}"
-    + ".report-doc{max-width:none;margin:0 auto;}"
-    + ".report-page{box-shadow:none !important;}"
-    + "</style>"
-    + "</head>"
-    + "<body>"
-    + reportBody.innerHTML
-    + "<script>window.onload=function(){setTimeout(function(){window.print();},120);};<\/script>"
-    + "</body>"
-    + "</html>";
-
-  printWindow.document.open();
-  printWindow.document.write(html);
-  printWindow.document.close();
+  var token = "<%= signRequest && signRequest.token ? signRequest.token : '' %>";
+  if (!token) return;
+  window.open("/r/sign/" + token + "/report?print=1", "_blank");
 }
 
 (function () {
@@ -377,8 +351,5 @@ function printSignedReport() {
   window.addEventListener("resize", resizeCanvas);
 })();
 </script>
-<% if (reportHtml) { %>
-<script src="/public/js/report-pagination.js"></script>
-<% } %>
 </body>
 </html>

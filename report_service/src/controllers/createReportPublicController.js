@@ -118,6 +118,7 @@ function createReportPublicController(deps) {
         .replace(/>/g, "&gt;");
 
       const cv = Date.now();
+      const autoPrint = req.query.print === "1";
       return res.send(`<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -127,8 +128,6 @@ function createReportPublicController(deps) {
   <link href="/public/css/report-preview.css" rel="stylesheet" />
   <link href="/public/css/report-print.css" rel="stylesheet" />
   <style>
-    body { margin: 0; background: #e9eeea; }
-    .report-doc { margin: 24px auto; }
     .report-print-btn {
       position: fixed;
       top: 16px;
@@ -148,17 +147,30 @@ function createReportPublicController(deps) {
       gap: 6px;
     }
     .report-print-btn:hover { background: #3d6228; }
-    @media print {
-      body { background: #fff; }
-      .report-doc { margin: 0; }
-      .report-print-btn { display: none !important; }
-    }
+    @media print { .report-print-btn { display: none !important; } }
   </style>
 </head>
 <body>
-<button class="report-print-btn" onclick="window.print()">Imprimir</button>
+<button class="report-print-btn" onclick="window.print()">&#128424; Imprimir</button>
 ${reportHtml}
-<script src="/public/js/report-pagination.js?v=${cv}"></script>
+<script src="/public/js/report-pagination.js?v=${cv}"></script>${autoPrint ? `
+<script>
+(function () {
+  function tryPrint() {
+    if (window.__reportPaginationDone) { window.print(); return; }
+    var attempts = 0;
+    var t = setInterval(function () {
+      attempts++;
+      if (window.__reportPaginationDone || attempts > 30) {
+        clearInterval(t);
+        window.print();
+      }
+    }, 100);
+  }
+  if (document.readyState === "complete") { setTimeout(tryPrint, 200); }
+  else { window.addEventListener("load", function () { setTimeout(tryPrint, 200); }); }
+})();
+</script>` : ""}
 </body>
 </html>`);
     },
