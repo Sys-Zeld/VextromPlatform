@@ -247,7 +247,11 @@ function createReportWebController(deps) {
       os_titulo: order.title || "",
       cliente: order.customer_name || "",
       local: order.site_name || "",
-      data_abertura: order.opening_date ? String(order.opening_date).slice(0, 10) : "",
+      data_abertura: (() => {
+        const raw = order.opening_date ? String(order.opening_date).slice(0, 10) : "";
+        const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return m ? `${m[3]}/${m[2]}/${m[1]}` : raw;
+      })(),
       status: order.status || "",
       tecnicos: techNames
     };
