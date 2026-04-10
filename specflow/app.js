@@ -138,7 +138,7 @@ const {
   deleteBackupFileById,
   syncBackupsFromDirectory
 } = require("./services/backups");
-const { generateProfileJsonFromDocument, reviseTextWithAi } = require("./services/aiProfiles");
+const { generateProfileJsonFromDocument, reviseTextWithAi, extractSparePartsFromDocument, getSparePartsDefaultPrompt, getSparePartsJsonSchema } = require("./services/aiProfiles");
 const { getAiPromptTemplate, setAiPromptTemplate } = require("./services/aiPromptSettings");
 const { registerReportService } = require("../report_service/src/app");
 
@@ -5073,6 +5073,9 @@ if (env.reportServiceEnabled) {
     sanitizeInput,
     sanitizeRichTextInput,
     reviseTextWithAi,
+    extractSparePartsFromDocument,
+    getSparePartsDefaultPrompt,
+    getSparePartsJsonSchema,
     requireApiScope,
     requireAdminAuth,
     csrfProtection

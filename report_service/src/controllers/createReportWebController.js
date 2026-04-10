@@ -34,6 +34,9 @@ function createReportWebController(deps) {
   const sanitizeInput = deps.sanitizeInput;
   const sanitizeRichTextInput = deps.sanitizeRichTextInput || deps.sanitizeInput;
   const reviseTextWithAi = deps.reviseTextWithAi;
+  const extractSparePartsFromDocument = deps.extractSparePartsFromDocument;
+  const getSparePartsDefaultPrompt = deps.getSparePartsDefaultPrompt;
+  const getSparePartsJsonSchema = deps.getSparePartsJsonSchema;
   const hasValidRequiredFk = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
   const normalizeModelToken = (value) => String(value || "")
     .normalize("NFD")
@@ -1048,6 +1051,66 @@ function createReportWebController(deps) {
       }
       await repo.deleteSparePart(sparePartId);
       return res.redirect("/admin/report-service/spare-parts?deleted=1");
+    },
+
+    async extractSparePartsFromPdf(req, res) {
+      if (!extractSparePartsFromDocument) {
+        return res.status(503).json({ ok: false, message: "Servico de IA nao disponivel." });
+      }
+      const fileBuffer = Buffer.isBuffer(req.body) ? req.body : null;
+      if (!fileBuffer || fileBuffer.length === 0) {
+        return res.status(422).json({ ok: false, message: "Arquivo PDF invalido ou vazio." });
+      }
+      const contentType = String(req.headers["content-type"] || "application/pdf").split(";")[0].trim();
+      const fileName = sanitizeInput(req.headers["x-file-name"] ? decodeURIComponent(req.headers["x-file-name"]) : "documento.pdf");
+      const promptTemplate = sanitizeInput(req.headers["x-ai-prompt"] ? decodeURIComponent(req.headers["x-ai-prompt"]) : "");
+
+      const result = await extractSparePartsFromDocument({
+        fileBuffer,
+        fileName,
+        mimeType: contentType,
+        promptTemplate
+      });
+
+      return res.json({ ok: true, spareParts: result.spareParts, count: result.spareParts.length });
+    },
+
+    async bulkImportSpareParts(req, res) {
+      let items;
+      try {
+        items = Array.isArray(req.body.spare_parts) ? req.body.spare_parts : JSON.parse(req.body.spare_parts || "[]");
+      } catch (_e) {
+        return res.status(422).json({ ok: false, message: "JSON de spare parts invalido." });
+      }
+      if (!Array.isArray(items) || !items.length) {
+        return res.status(422).json({ ok: false, message: "Nenhum spare part para importar." });
+      }
+
+      const normalized = items.map((item) => ({
+        description: sanitizeInput(String(item.description || "")).trim(),
+        manufacturer: sanitizeInput(String(item.manufacturer || "")).trim(),
+        partNumber: sanitizeInput(String(item.part_number || "")).trim(),
+        equipmentFamily: sanitizeInput(String(item.equipment_family || "")).trim(),
+        equipmentModel: sanitizeInput(String(item.equipment_model || "")).trim(),
+        leadTime: sanitizeInput(String(item.lead_time || "")).trim(),
+        isObsolete: item.is_obsolete === true || String(item.is_obsolete).toLowerCase() === "true",
+        replacedByPartNumber: sanitizeInput(String(item.replaced_by_part_number || "")).trim()
+      })).filter((item) => item.description);
+
+      if (!normalized.length) {
+        return res.status(422).json({ ok: false, message: "Nenhum spare part com descricao valida para importar." });
+      }
+
+      const result = await repo.bulkCreateSpareParts(normalized);
+      return res.json({ ok: true, inserted: result.inserted, skipped: result.skipped });
+    },
+
+    async getSparePartsAiConfig(_req, res) {
+      return res.json({
+        ok: true,
+        defaultPrompt: getSparePartsDefaultPrompt ? getSparePartsDefaultPrompt() : "",
+        jsonSchema: getSparePartsJsonSchema ? getSparePartsJsonSchema() : ""
+      });
     },
 
     async linkSparePartToEquipment(req, res) {

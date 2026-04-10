@@ -557,6 +557,45 @@ async function createSparePart(payload) {
   return result.rows[0];
 }
 
+async function getExistingPartNumbers(partNumbers) {
+  if (!partNumbers.length) return new Set();
+  const placeholders = partNumbers.map((_, i) => `$${i + 1}`).join(", ");
+  const result = await db.query(
+    `SELECT LOWER(part_number) AS pn FROM service_report_spare_parts WHERE LOWER(part_number) = ANY(ARRAY[${placeholders}]) AND part_number <> ''`,
+    partNumbers.map((pn) => String(pn).toLowerCase())
+  );
+  return new Set(result.rows.map((r) => r.pn));
+}
+
+async function bulkCreateSpareParts(items) {
+  if (!items || !items.length) return { inserted: 0, skipped: 0, items: [] };
+
+  const withPn = items.filter((item) => String(item.partNumber || "").trim());
+  const withoutPn = items.filter((item) => !String(item.partNumber || "").trim());
+
+  const existingPns = await getExistingPartNumbers(
+    withPn.map((item) => String(item.partNumber).trim())
+  );
+
+  const toInsert = [
+    ...withPn.filter((item) => !existingPns.has(String(item.partNumber).trim().toLowerCase())),
+    ...withoutPn
+  ];
+
+  const inserted = [];
+  for (const payload of toInsert) {
+    // eslint-disable-next-line no-await-in-loop
+    const row = await createSparePart(payload);
+    inserted.push(row);
+  }
+
+  return {
+    inserted: inserted.length,
+    skipped: items.length - toInsert.length,
+    items: inserted
+  };
+}
+
 async function updateSparePart(id, payload) {
   const result = await db.query(
     `
@@ -2019,6 +2058,7 @@ module.exports = {
   listSpareParts,
   getSparePartById,
   createSparePart,
+  bulkCreateSpareParts,
   updateSparePart,
   deleteSparePart,
   listSparePartsByEquipment,

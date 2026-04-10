@@ -80,8 +80,8 @@ const QUILL_SECTION_TITLE_FORMATS = [
   "image"
 ];
 
-const COMPONENT_CATEGORIES = ["replaced", "required", "spare_recommended"];
-const SIGNER_TYPES = ["vextrom_technician", "customer_responsible"];
+const COMPONENT_CATEGORIES = ["substituidos", "Para_troca", "recomendados"];
+const SIGNER_TYPES = ["Tecnicos_Vextrom", "Responsavel_Cliente", "Gerente_Projeto", "Diretor_Tecnico"];
 const SECTION_SEED_HTML = {
   scope: "<p><strong>Escopo:</strong> Execucao de manutencao corretiva e verificacao funcional do sistema UPS, incluindo validacao de tempos de resposta e inspeção dos conjuntos de potencia.</p><p>O atendimento contempla equipe tecnica Vextrom, instrumentos calibrados, registro de timesheet e rastreabilidade de componentes.</p>",
   technical_description: "<p><strong>Dia 1:</strong> Inspecao inicial, verificacao de alarmes historicos, medições de tensao e frequencia, e testes de transferencia.</p><p><strong>Dia 2:</strong> Ajustes em blocos de potencia, substituicao de itens avariados e testes de estabilidade em carga controlada.</p>",

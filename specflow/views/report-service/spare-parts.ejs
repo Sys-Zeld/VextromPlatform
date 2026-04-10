@@ -62,6 +62,7 @@
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders"><%= t("rs.orders.pageTitle") %></a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/equipments"><%= t("rs.equip.pageTitle") %></a>
         <button class="btn btn-primary btn-sm" type="button" id="printSparePartsBtn"><%= t("rs.spare.printList") %></button>
+        <button class="btn btn-outline-success btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#aiImportModal">&#129302; Importar com IA</button>
       </div>
     </div>
   </div>
@@ -657,4 +658,234 @@
     });
   })();
 </script>
+
+<%# ===== MODAL IMPORTAR COM IA ===== %>
+<div class="modal fade" id="aiImportModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">&#129302; Importar Spare Parts com IA</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+
+        <div class="mb-4">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-secondary rounded-pill">1</span>
+            <strong class="small">Modelo JSON (schema da tabela spare_parts)</strong>
+          </div>
+          <p class="text-muted small mb-2">Esta é a estrutura que a IA vai preencher para cada peça encontrada no documento.</p>
+          <pre id="aiImportSchema" class="border rounded p-2 small" style="background:#f8f9fa;max-height:160px;overflow:auto;font-size:0.76rem;"></pre>
+        </div>
+
+        <div class="mb-4">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-secondary rounded-pill">2</span>
+            <strong class="small">Prompt para a IA <span class="text-muted fw-normal">(editável)</span></strong>
+          </div>
+          <p class="text-muted small mb-2">O prompt é enviado junto com o PDF. Edite as instruções conforme necessário para o seu documento.</p>
+          <textarea id="aiImportPrompt" class="form-control font-monospace" rows="10" style="font-size:0.76rem;"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-secondary rounded-pill">3</span>
+            <strong class="small">Enviar documento PDF</strong>
+          </div>
+          <p class="text-muted small mb-2">Selecione um PDF com a lista de spare parts. A IA irá ler e extrair todos os dados automaticamente.</p>
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <input class="form-control form-control-sm" type="file" id="aiImportPdfFile" accept="application/pdf,.pdf" style="max-width:360px;" />
+            <button class="btn btn-outline-primary btn-sm" type="button" id="aiExtractBtn" disabled>
+              <span id="aiExtractSpinner" class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
+              Extrair com IA
+            </button>
+          </div>
+          <div id="aiExtractStatus" class="mt-2 small text-muted"></div>
+        </div>
+
+        <div class="mb-2" id="aiJsonReviewSection" style="display:none;">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-success rounded-pill">4</span>
+            <strong class="small">Revisar JSON extraído</strong>
+            <span id="aiJsonBadge" class="badge bg-secondary ms-1"></span>
+          </div>
+          <p class="text-muted small mb-2">Revise os dados antes de importar. Você pode editar o JSON manualmente se necessário.</p>
+          <textarea id="aiImportJsonEditor" class="form-control font-monospace" rows="14" style="font-size:0.76rem;" placeholder="JSON gerado pela IA aparecerá aqui..."></textarea>
+          <div id="aiJsonValidStatus" class="mt-2 small"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer gap-2 flex-wrap">
+        <span id="aiImportResult" class="small me-auto"></span>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+        <button type="button" class="btn btn-success btn-sm" id="aiImportBtn" disabled>
+          <span id="aiImportSpinner" class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
+          Importar Spare Parts
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var csrfToken = "<%= csrfToken %>";
+  var aiConfigUrl = "/admin/report-service/spare-parts/ai-config";
+  var aiExtractUrl = "/admin/report-service/spare-parts/ai-extract";
+  var aiBulkImportUrl = "/admin/report-service/spare-parts/bulk-import";
+
+  var modal = document.getElementById("aiImportModal");
+  var pdfFileInput = document.getElementById("aiImportPdfFile");
+  var extractBtn = document.getElementById("aiExtractBtn");
+  var extractSpinner = document.getElementById("aiExtractSpinner");
+  var extractStatus = document.getElementById("aiExtractStatus");
+  var promptTextarea = document.getElementById("aiImportPrompt");
+  var schemaEl = document.getElementById("aiImportSchema");
+  var jsonReviewSection = document.getElementById("aiJsonReviewSection");
+  var jsonEditor = document.getElementById("aiImportJsonEditor");
+  var jsonBadge = document.getElementById("aiJsonBadge");
+  var jsonValidStatus = document.getElementById("aiJsonValidStatus");
+  var importBtn = document.getElementById("aiImportBtn");
+  var importSpinner = document.getElementById("aiImportSpinner");
+  var importResult = document.getElementById("aiImportResult");
+
+  if (!modal) return;
+
+  modal.addEventListener("show.bs.modal", function () {
+    if (promptTextarea.value) return;
+    fetch(aiConfigUrl, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.defaultPrompt) promptTextarea.value = data.defaultPrompt;
+        if (data && data.jsonSchema) schemaEl.textContent = data.jsonSchema;
+      })
+      .catch(function () { extractStatus.textContent = "Erro ao carregar configuracao de IA."; });
+  });
+
+  pdfFileInput.addEventListener("change", function () {
+    var hasFile = pdfFileInput.files && pdfFileInput.files.length > 0;
+    extractBtn.disabled = !hasFile;
+    if (!hasFile) extractStatus.textContent = "";
+  });
+
+  extractBtn.addEventListener("click", function () {
+    var file = pdfFileInput.files && pdfFileInput.files[0];
+    if (!file) return;
+
+    extractBtn.disabled = true;
+    extractSpinner.classList.remove("d-none");
+    extractStatus.textContent = "Enviando PDF para a IA, aguarde...";
+    importBtn.disabled = true;
+    jsonReviewSection.style.display = "none";
+    jsonEditor.value = "";
+    importResult.textContent = "";
+
+    fetch(aiExtractUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type || "application/pdf",
+        "x-csrf-token": csrfToken,
+        "x-file-name": encodeURIComponent(file.name),
+        "x-ai-prompt": encodeURIComponent(promptTextarea.value.trim())
+      },
+      credentials: "same-origin",
+      body: file
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        extractSpinner.classList.add("d-none");
+        extractBtn.disabled = false;
+        if (!data || !data.ok) {
+          extractStatus.innerHTML = "<span class='text-danger'>\u274C " + (data && data.message ? data.message : "Erro ao extrair.") + "</span>";
+          return;
+        }
+        extractStatus.innerHTML = "<span class='text-success'>\u2705 IA retornou <strong>" + (data.count || 0) + "</strong> item(s). Revise abaixo antes de importar.</span>";
+        jsonEditor.value = JSON.stringify(data.spareParts, null, 2);
+        jsonReviewSection.style.display = "";
+        validateJson();
+      })
+      .catch(function () {
+        extractSpinner.classList.add("d-none");
+        extractBtn.disabled = false;
+        extractStatus.innerHTML = "<span class='text-danger'>\u274C Falha na comunicacao com o servidor.</span>";
+      });
+  });
+
+  jsonEditor.addEventListener("input", validateJson);
+
+  function validateJson() {
+    var raw = jsonEditor.value.trim();
+    if (!raw) {
+      jsonValidStatus.textContent = "";
+      jsonBadge.textContent = "";
+      importBtn.disabled = true;
+      return;
+    }
+    var parsed;
+    try { parsed = JSON.parse(raw); } catch (e) {
+      jsonValidStatus.innerHTML = "<span class='text-danger'>\u274C JSON inv\u00e1lido: " + e.message + "</span>";
+      jsonBadge.textContent = "inválido";
+      jsonBadge.className = "badge bg-danger ms-1";
+      importBtn.disabled = true;
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      jsonValidStatus.innerHTML = "<span class='text-danger'>\u274C O JSON deve ser um array [ ].</span>";
+      jsonBadge.textContent = "inválido";
+      jsonBadge.className = "badge bg-danger ms-1";
+      importBtn.disabled = true;
+      return;
+    }
+    var withDesc = parsed.filter(function (item) { return String(item.description || "").trim(); });
+    jsonValidStatus.innerHTML = "<span class='text-success'>\u2705 JSON v\u00e1lido &mdash; <strong>" + parsed.length + "</strong> item(s), <strong>" + withDesc.length + "</strong> com descri\u00e7\u00e3o.</span>";
+    jsonBadge.textContent = parsed.length + " itens";
+    jsonBadge.className = "badge bg-success ms-1";
+    importBtn.disabled = withDesc.length === 0;
+  }
+
+  importBtn.addEventListener("click", function () {
+    var raw = jsonEditor.value.trim();
+    var parsed;
+    try { parsed = JSON.parse(raw); } catch (_e) { return; }
+    if (!Array.isArray(parsed) || !parsed.length) return;
+
+    importBtn.disabled = true;
+    importSpinner.classList.remove("d-none");
+    importResult.textContent = "Importando...";
+
+    var body = new URLSearchParams();
+    body.append("_csrf", csrfToken);
+    body.append("spare_parts", JSON.stringify(parsed));
+
+    fetch(aiBulkImportUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json"
+      },
+      credentials: "same-origin",
+      body: body.toString()
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        importSpinner.classList.add("d-none");
+        if (!data || !data.ok) {
+          importResult.innerHTML = "<span class='text-danger'>\u274C " + (data && data.message ? data.message : "Erro ao importar.") + "</span>";
+          importBtn.disabled = false;
+          return;
+        }
+        importResult.innerHTML = "<span class='text-success'>\u2705 Importados: <strong>" + data.inserted + "</strong> &mdash; Ignorados (j\u00e1 existem): <strong>" + data.skipped + "</strong></span>";
+        if (data.inserted > 0) {
+          setTimeout(function () { window.location.href = "/admin/report-service/spare-parts?created=1"; }, 1600);
+        }
+      })
+      .catch(function () {
+        importSpinner.classList.add("d-none");
+        importResult.innerHTML = "<span class='text-danger'>\u274C Falha na comunicacao com o servidor.</span>";
+        importBtn.disabled = false;
+      });
+  });
+})();
+</script>
+
 <%- include("../partials/footer") %>

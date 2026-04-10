@@ -115,7 +115,16 @@ function createReportServiceWebRouter(deps) {
   router.post("/equipments/:id/delete-inline", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteEquipmentInline));
 
   router.get("/spare-parts", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.listSpareParts));
+  router.get("/spare-parts/ai-config", deps.requireAdminAuth, asyncHandler(controller.getSparePartsAiConfig));
   router.post("/spare-parts", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.createSparePart));
+  router.post(
+    "/spare-parts/ai-extract",
+    express.raw({ type: ["application/pdf", "application/octet-stream"], limit: "25mb" }),
+    deps.csrfProtection,
+    deps.requireAdminAuth,
+    asyncHandler(controller.extractSparePartsFromPdf)
+  );
+  router.post("/spare-parts/bulk-import", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.bulkImportSpareParts));
   router.post("/spare-parts/:id/update", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateSparePart));
   router.post("/spare-parts/:id/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteSparePart));
   router.post("/spare-parts/equipment-links", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.linkSparePartToEquipment));
