@@ -196,6 +196,11 @@ Validacao de seguranca no restore:
 - backups mistos (mais de um modulo no mesmo dump) sao bloqueados para evitar restore no banco errado
 - ajuste opcional de leitura para validacao: `DB_RESTORE_SCAN_BYTES` (padrao `8388608`)
 
+### Manutencao de dados (Report Service)
+
+- `npm run report-service:spare-parts:clear` — apaga todos os spare parts e vinculos com equipamentos (pede confirmacao digitando `CONFIRMAR`)
+- `npm run report-service:os:init` — seed inicial de OS
+
 ### Operacao admin
 
 - `npm run admin:sessions:clear`

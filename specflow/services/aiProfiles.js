@@ -349,9 +349,8 @@ const SPARE_PARTS_JSON_SCHEMA = JSON.stringify([
   }
 ], null, 2);
 
-const SPARE_PARTS_DEFAULT_PROMPT = `Você é um especialista em gestão de peças sobressalentes (spare parts) industriais.
-
-Analise o documento enviado e extraia TODAS as peças sobressalentes encontradas.
+const SPARE_PARTS_DEFAULT_PROMPT = `
+Analise o documento enviado e extraia TODAS os componentes encontrados.
 
 Retorne APENAS um array JSON puro, sem markdown, sem comentários, sem texto adicional.
 O JSON deve começar com [ e terminar com ].
