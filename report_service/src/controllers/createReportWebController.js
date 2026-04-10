@@ -1233,10 +1233,14 @@ function createReportWebController(deps) {
 
       const spareParts = await repo.listSpareParts();
 
-      // spare.equipment_model is always compared against the resolved reference value
-      const matching = spareParts.filter((item) =>
-        isModelMatch(sanitizeInput(item.equipment_model || ""), referenceValue)
-      );
+      // family mode: compare spare.equipment_family against equipment.model_family
+      // model mode:  compare spare.equipment_model against equipment.type
+      const matching = spareParts.filter((item) => {
+        const spareValue = linkMode === "model"
+          ? sanitizeInput(item.equipment_model || "")
+          : sanitizeInput(item.equipment_family || "");
+        return isModelMatch(spareValue, referenceValue);
+      });
 
       if (!matching.length) {
         return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&auto_no_match=1&link_mode=${linkMode}`);
