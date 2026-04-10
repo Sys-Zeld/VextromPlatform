@@ -126,7 +126,59 @@
     return normalized;
   }
 
+  function buildEditorModules(toolbar, enableTable) {
+    var modules = {
+      toolbar: {
+        container: toolbar,
+        handlers: {
+          image: buildImageToolbarHandler(null)
+        }
+      }
+    };
+    if (enableTable) {
+      modules.toolbar.handlers.insertTable = function () {
+        var betterTableModule = this.quill.getModule("better-table");
+        if (betterTableModule && typeof betterTableModule.insertTable === "function") {
+          betterTableModule.insertTable(3, 3);
+        }
+      };
+    }
+    if (enableTable && window.QuillBetterTable) {
+      modules["better-table"] = {
+        operationMenu: {
+          items: {
+            unmergeCells: { text: "Desfazer mesclagem" }
+          }
+        }
+      };
+      modules.keyboard = {
+        bindings: window.QuillBetterTable.keyboardBindings
+      };
+    }
+    return modules;
+  }
+
+  function normalizeToolbarButtons(toolbarModule) {
+    var container = toolbarModule && toolbarModule.container;
+    if (!container || !container.querySelectorAll) return;
+    var toolbarButtons = container.querySelectorAll("button");
+    Array.prototype.forEach.call(toolbarButtons, function (btn) {
+      if (!btn) return;
+      // Quill toolbar lives inside <form>; prevent implicit submit on format clicks.
+      btn.setAttribute("type", "button");
+    });
+    // Prevent toolbar clicks from stealing focus from the editor.
+    // Without this, clicking a picker (tabindex="0" spans) causes blur on the
+    // editor, clearing the selection before quill.format() is called.
+    container.addEventListener("mousedown", function (e) {
+      if (e.target && e.target.tagName !== "INPUT") {
+        e.preventDefault();
+      }
+    });
+  }
+
   contentToolbar = ensureToolbarImageControl(contentToolbar);
+  titleToolbar = ensureToolbarImageControl(titleToolbar);
 
   function hydrateQuill(quill, deltaValue, htmlValue) {
     var hydrated = false;
@@ -147,6 +199,16 @@
     if (!hydrated) quill.setText("");
   }
 
+  function textToHtml(value) {
+    var raw = String(value || "").trim();
+    if (!raw) return "";
+    var escaped = raw
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+    return "<p>" + escaped.replace(/\r?\n/g, "</p><p>") + "</p>";
+  }
+
   function applyDefaultJustify(quill) {
     var ops = (quill.getContents().ops || []);
     var pos = 0;
@@ -165,65 +227,6 @@
     quill.format("align", "justify", "silent");
   }
 
-  function ensureTagUi(editorEl) {
-    var wrap = document.createElement("div");
-    wrap.className = "report-tag-tools";
-
-    var validationEl = document.createElement("div");
-    validationEl.className = "report-tag-validation";
-    validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @tblequip, @timesheet, @equipetecnica, @equip=ID, @descricaodia=ID, @descricaodia ou @conclusaogeral.";
-    wrap.appendChild(validationEl);
-
-    editorEl.insertAdjacentElement("afterend", wrap);
-    return {
-      wrap: wrap,
-      validationEl: validationEl
-    };
-  }
-
-  function collectTagIdsFromText(text, regex) {
-    var source = String(text || "");
-    var ids = [];
-    var match;
-    while ((match = regex.exec(source)) !== null) {
-      ids.push(Number(match[1]));
-    }
-    return ids.filter(function (id) { return Number.isInteger(id) && id > 0; });
-  }
-
-  function renderValidation(ui, quill, label) {
-    var text = quill.getText();
-    var imageIds = collectTagIdsFromText(text, /@img\s*=\s*(\d+)/gi);
-    var equipmentIds = collectTagIdsFromText(text, /@equip\s*=\s*(\d+)/gi);
-    var dailyLogIds = collectTagIdsFromText(text, /@descricaodia\s*=\s*(\d+)/gi);
-
-    if (!imageIds.length && !equipmentIds.length && !dailyLogIds.length) {
-      ui.validationEl.classList.remove("error");
-      ui.validationEl.textContent = "Use @img=ID, @tblcmpr/@tblcmpq/@tblcmps, @tblequip, @timesheet, @equipetecnica, @equip=ID, @descricaodia=ID, @descricaodia ou @conclusaogeral.";
-      quill.container.classList.remove("report-tag-editor-invalid");
-      return;
-    }
-
-    var invalidImages = Array.from(new Set(imageIds.filter(function (id) { return !tagImageIdSet.has(id); })));
-    var invalidEquipments = Array.from(new Set(equipmentIds.filter(function (id) { return !equipmentTagIdSet.has(id); })));
-    var invalidDailyLogs = Array.from(new Set(dailyLogIds.filter(function (id) { return !dailyLogTagIdSet.has(id); })));
-    var editorContainer = quill.container;
-    if (invalidImages.length || invalidEquipments.length || invalidDailyLogs.length) {
-      var messages = [];
-      if (invalidImages.length) messages.push("IDs de imagem nao cadastrados: " + invalidImages.join(", "));
-      if (invalidEquipments.length) messages.push("IDs de equipamento nao cadastrados: " + invalidEquipments.join(", "));
-      if (invalidDailyLogs.length) messages.push("IDs de descricao diaria nao cadastrados: " + invalidDailyLogs.join(", "));
-      ui.validationEl.classList.add("error");
-      ui.validationEl.textContent = messages.join(" | ") + " (" + label + ")";
-      editorContainer.classList.add("report-tag-editor-invalid");
-      return;
-    }
-
-    ui.validationEl.classList.remove("error");
-    ui.validationEl.textContent = "Tags validadas (" + label + "): img " + imageIds.length + " | equip " + equipmentIds.length + " | descricaodia " + dailyLogIds.length;
-    editorContainer.classList.remove("report-tag-editor-invalid");
-  }
-
   forms.forEach(function (formEl) {
     var contentEditorEl = formEl.querySelector("[data-quill-editor]");
     var titleEditorEl = formEl.querySelector("[data-quill-title-editor]");
@@ -236,6 +239,8 @@
     var titleTextField = formEl.querySelector("[data-section-title-text]");
     var aiReviseBtn = formEl.querySelector("[data-section-ai-revise-btn]");
     var aiStatus = formEl.querySelector("[data-section-ai-status]");
+    var loadDefaultModelBtn = formEl.querySelector("[data-load-default-model-btn]");
+    var loadDefaultModelHtmlEl = formEl.querySelector("[data-load-default-model-html]");
     var csrfInput = formEl.querySelector('input[name="_csrf"]');
     var csrfToken = csrfInput ? csrfInput.value : "";
     if (!contentEditorEl || !titleEditorEl || !deltaField || !htmlField || !textField || !titleDeltaField || !titleHtmlField || !titlePlainField || !titleTextField) return;
@@ -245,31 +250,7 @@
     var sectionReviseEndpoint = explicitSectionReviseEndpoint || (actionMatch ? ("/admin/report-service/orders/" + actionMatch[1] + "/sections/revise-text") : "");
     var imgUploadUrl = explicitImageUploadEndpoint || (actionMatch ? ("/admin/report-service/orders/" + actionMatch[1] + "/images/import") : "");
 
-    var contentModules = {
-      toolbar: {
-        container: contentToolbar,
-        handlers: {
-          insertTable: function () {
-            var tableModule = this.quill.getModule("better-table");
-            if (!tableModule || typeof tableModule.insertTable !== "function") return;
-            tableModule.insertTable(3, 3);
-          },
-          image: buildImageToolbarHandler(null)
-        }
-      }
-    };
-    if (window.QuillBetterTable) {
-      contentModules["better-table"] = {
-        operationMenu: {
-          items: {
-            unmergeCells: { text: "Desfazer mesclagem" }
-          }
-        }
-      };
-      contentModules.keyboard = {
-        bindings: window.QuillBetterTable.keyboardBindings
-      };
-    }
+    var contentModules = buildEditorModules(contentToolbar, true);
 
     var contentQuill = new window.Quill(contentEditorEl, {
       theme: "snow",
@@ -279,41 +260,42 @@
     });
     var contentToolbarModule = contentQuill.getModule("toolbar");
     if (contentToolbarModule && contentToolbarModule.handlers) {
+      normalizeToolbarButtons(contentToolbarModule);
       contentToolbarModule.handlers.image = buildImageToolbarHandler(contentQuill, imgUploadUrl, csrfToken);
     }
-    hydrateQuill(contentQuill, deltaField.value, htmlField.value);
+    var contentHtmlSource = String(htmlField.value || "").trim();
+    if (!contentHtmlSource) {
+      contentHtmlSource = textToHtml(textField.value);
+    }
+    hydrateQuill(contentQuill, deltaField.value, contentHtmlSource);
     applyDefaultJustify(contentQuill);
-    var contentTagUi = ensureTagUi(contentEditorEl);
 
     var titleQuill = new window.Quill(titleEditorEl, {
       theme: "snow",
-      modules: {
-        toolbar: {
-          container: titleToolbar,
-          handlers: {
-            image: buildImageToolbarHandler(null)
-          }
-        }
-      },
+      modules: buildEditorModules(titleToolbar, false),
       formats: titleFormats,
       placeholder: "Titulo do capitulo..."
     });
     var titleToolbarModule = titleQuill.getModule("toolbar");
     if (titleToolbarModule && titleToolbarModule.handlers) {
+      normalizeToolbarButtons(titleToolbarModule);
       titleToolbarModule.handlers.image = buildImageToolbarHandler(titleQuill, imgUploadUrl, csrfToken);
     }
     hydrateQuill(titleQuill, titleDeltaField.value, titleHtmlField.value || titleTextField.value);
     applyDefaultJustify(titleQuill);
-    var titleTagUi = ensureTagUi(titleEditorEl);
 
-    function syncTagStates() {
-      renderValidation(contentTagUi, contentQuill, "conteudo");
-      renderValidation(titleTagUi, titleQuill, "titulo");
+    if (loadDefaultModelBtn && loadDefaultModelHtmlEl) {
+      loadDefaultModelBtn.addEventListener("click", function () {
+        var modelHtml = String(loadDefaultModelHtmlEl.value || "").trim();
+        if (!modelHtml) {
+          if (aiStatus) aiStatus.textContent = "Modelo padrao vazio para este capitulo.";
+          return;
+        }
+        hydrateQuill(contentQuill, "", modelHtml);
+        applyDefaultJustify(contentQuill);
+        if (aiStatus) aiStatus.textContent = "Modelo padrao carregado no conteudo do capitulo.";
+      });
     }
-
-    contentQuill.on("text-change", syncTagStates);
-    titleQuill.on("text-change", syncTagStates);
-    syncTagStates();
 
     if (aiReviseBtn) {
       aiReviseBtn.addEventListener("click", async function () {

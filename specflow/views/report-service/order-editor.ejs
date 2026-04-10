@@ -272,7 +272,9 @@
               </div>
               <div class="small text-muted mb-1" id="dailyLogAiStatus"></div>
               <input type="hidden" name="content" data-daily-log-content />
-              <div class="report-quill-editor daily-log-quill-editor" data-daily-log-quill></div>
+              <div class="report-quill-editor daily-log-quill-editor">
+                <div data-daily-log-quill></div>
+              </div>
             </div>
           </form>
         </div>
@@ -713,6 +715,17 @@
 <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.min.js"></script>
 <script>
+(function () {
+  if (typeof window.Quill === "undefined") return;
+  var FontAttributor = window.Quill.import("formats/font");
+  FontAttributor.whitelist = ["arial", "serif", "monospace"];
+  window.Quill.register(FontAttributor, true);
+  if (window.QuillBetterTable) {
+    window.Quill.register({ "modules/better-table": window.QuillBetterTable }, true);
+  }
+})();
+</script>
+<script>
   window.dailyLogsIndex = <%- JSON.stringify(
     (dailyLogs || []).map((item) => ({
       id: Number(item.id || 0),
@@ -770,6 +783,17 @@
       placeholder: "Descreva a atividade diaria..."
     });
     quill.format("align", "justify", "silent");
+    var dailyToolbarModule = quill.getModule("toolbar");
+    if (dailyToolbarModule && dailyToolbarModule.container) {
+      Array.prototype.forEach.call(dailyToolbarModule.container.querySelectorAll("button"), function (btn) {
+        btn.setAttribute("type", "button");
+      });
+      dailyToolbarModule.container.addEventListener("mousedown", function (e) {
+        if (e.target && e.target.tagName !== "INPUT") {
+          e.preventDefault();
+        }
+      });
+    }
 
     function getTodayRichDateLabel() {
       var now = new Date();

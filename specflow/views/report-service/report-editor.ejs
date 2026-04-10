@@ -171,6 +171,18 @@
                   <td><code>@equip=1</code></td>
                 </tr>
                 <tr>
+                  <td><code>@tagsequip</code></td>
+                  <td>Exibe todas as TAGs dos equipamentos vinculados à OS, separadas por vírgula</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@tagsequip</code></td>
+                </tr>
+                <tr>
+                  <td><code>@site</code></td>
+                  <td>Exibe o nome do site vinculado à OS</td>
+                  <td><span class="text-muted">Automático</span></td>
+                  <td><code>@site</code></td>
+                </tr>
+                <tr>
                   <td><code>@descricaodia=ID</code></td>
                   <td>Exibe um log diário específico pelo ID de sequência</td>
                   <td>
@@ -311,122 +323,120 @@
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
                 <input type="hidden" name="return_to" value="report-editor" />
                 <input type="hidden" name="section_title" value="<%= section.section_title || '' %>" data-section-title-text />
-                <input type="hidden" name="section_title_delta_json" value='<%= JSON.stringify(section?.section_title_delta_json || { ops: [{ insert: "\\n" }] }) %>' data-section-title-delta />
-                <input type="hidden" name="section_title_html" value="<%= section ? section.section_title_html : '' %>" data-section-title-html />
+                <textarea class="d-none" name="section_title_delta_json" data-section-title-delta><%= JSON.stringify(section?.section_title_delta_json || { ops: [{ insert: "\\n" }] }) %></textarea>
+                <textarea class="d-none" name="section_title_html" data-section-title-html><%= section ? section.section_title_html : '' %></textarea>
                 <input type="hidden" name="section_title_text" value="<%= section ? section.section_title_text : '' %>" data-section-title-plain />
 
-                <input type="hidden" name="content_delta_json" value='<%= JSON.stringify(section?.content_delta_json || { ops: [{ insert: "\\n" }] }) %>' data-section-delta />
-                <input type="hidden" name="content_html" value="<%= section ? section.content_html : '' %>" data-section-html />
+                <textarea class="d-none" name="content_delta_json" data-section-delta><%= JSON.stringify(section?.content_delta_json || { ops: [{ insert: "\\n" }] }) %></textarea>
+                <textarea class="d-none" name="content_html" data-section-html><%= section ? section.content_html : '' %></textarea>
                 <input type="hidden" name="content_text" value="<%= section ? section.content_text : '' %>" data-section-text />
 
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
-                  <div>
-                    <span class="badge bg-secondary-subtle text-secondary-emphasis border">Capitulo <%= index + 1 %></span>
-                    <code class="small ms-2"><%= section.section_key %></code>
-                  </div>
-                  <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <div class="form-check form-switch m-0">
-                      <input type="hidden" name="is_visible" value="false" />
-                      <input class="form-check-input" type="checkbox" name="is_visible" value="true" <%= section?.is_visible === false ? "" : "checked" %> />
-                      <label class="form-check-label">Exibir secao</label>
+                <div class="report-section-commandbar mb-2">
+                  <div class="report-section-commandbar-top d-flex align-items-center justify-content-between flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis border">Capitulo <%= index + 1 %></span>
+                      <code class="small ms-1"><%= section.section_key %></code>
+                      <div class="form-check form-switch m-0 ms-1">
+                        <input type="hidden" name="is_visible" value="false" />
+                        <input class="form-check-input" type="checkbox" name="is_visible" value="true" <%= section?.is_visible === false ? "" : "checked" %> />
+                        <label class="form-check-label">Exibir secao</label>
+                      </div>
                     </div>
-                    <button class="btn btn-outline-secondary btn-sm" type="button" data-section-ai-revise-btn>Revisar com IA</button>
-                    <button
-                      class="btn btn-outline-danger btn-sm"
-                      type="submit"
-                      formaction="/admin/report-service/orders/<%= order.id %>/sections/<%= section.section_key %>/delete"
-                      formnovalidate
-                      onclick="return confirm('Excluir este capitulo?');"
-                    >
-                      Excluir capitulo
-                    </button>
-                    <button class="btn btn-outline-primary btn-sm" type="submit">Salvar capitulo</button>
+                  </div>
+                  <div class="report-section-commandbar-actions d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <% if (section.section_key === "scope" || section.section_key === "recommendations") { %>
+                        <button class="btn btn-outline-secondary btn-sm" type="button" data-load-default-model-btn>Carregar modelo</button>
+                      <% } %>
+                      <button
+                        type="button"
+                        class="btn btn-link btn-sm p-0 text-decoration-none"
+                        data-bs-toggle="modal"
+                        data-bs-target="#reportTagsHelpModal"
+                      >
+                        Ver tags disponíveis
+                      </button>
+                      <button class="btn btn-outline-secondary btn-sm" type="button" data-section-ai-revise-btn>Revisar com IA</button>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap report-section-commandbar-primary">
+                      <button class="btn btn-outline-primary btn-sm" type="submit">Salvar capitulo</button>
+                      <button
+                        class="btn btn-outline-danger btn-sm"
+                        type="submit"
+                        formaction="/admin/report-service/orders/<%= order.id %>/sections/<%= section.section_key %>/delete"
+                        formnovalidate
+                        onclick="return confirm('Excluir este capitulo?');"
+                      >
+                        Excluir capitulo
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div class="small text-muted mb-1" data-section-ai-status></div>
 
-                <label class="form-label mb-1 small text-muted">Titulo do capitulo (rich text)</label>
-                <div class="small text-muted mb-2">
-                  Use este campo somente para o titulo do capitulo (primeira linha). O conteudo do relatorio deve ser escrito no campo abaixo.
+                <div class="report-title-editor-block">
+                  <label class="form-label mb-1 small text-muted">Titulo do capitulo (rich text)</label>
+                  <div class="small text-muted mb-2">
+                    Use este campo somente para o titulo do capitulo (primeira linha). O conteudo do relatorio deve ser escrito no campo abaixo.
+                  </div>
+                  <div data-report-tag-anchor></div>
                 </div>
-                <div class="report-quill-title-editor mb-3" data-quill-title-editor></div>
+                <% if (section.section_key === "scope" || section.section_key === "recommendations") { %>
+                  <textarea class="d-none" data-load-default-model-html><%= section.section_key === "scope" ? (reportConfig.defaultScopeHtml || "") : (reportConfig.defaultRecommendationsHtml || "") %></textarea>
+                <% } %>
+                <div class="report-quill-title-editor mb-3 report-title-editor-block">
+                  <div data-quill-title-editor></div>
+                </div>
 
                 <label class="form-label mb-0 small text-muted">Conteudo do capitulo</label>
-                <details class="mb-2">
-                  <summary class="small text-muted" style="cursor:pointer;user-select:none;">Ver tags disponíveis</summary>
-                  <div class="table-responsive mt-2">
-                    <table class="table table-sm table-bordered mb-0" style="font-size:0.8rem;">
-                      <thead class="table-light">
-                        <tr>
-                          <th style="white-space:nowrap;">Tag</th>
-                          <th>Descrição</th>
-                          <th>Exemplo</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td><code>@img=ID</code></td>
-                          <td>Renderiza uma imagem inline do banco de imagens pelo ID</td>
-                          <td><code>@img=3</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@equip=ID</code></td>
-                          <td>Exibe a TAG ou tipo do equipamento pelo ID</td>
-                          <td><code>@equip=1</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@descricaodia=ID</code></td>
-                          <td>Exibe o conteúdo de um log diário específico pelo ID de sequência</td>
-                          <td><code>@descricaodia=2</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@descricaodia</code></td>
-                          <td>Exibe todos os logs diários em sequência (exceto conclusão geral)</td>
-                          <td><code>@descricaodia</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@conclusaogeral</code></td>
-                          <td>Exibe a conclusão geral gerada por IA (log marcado como conclusaogeral)</td>
-                          <td><code>@conclusaogeral</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@tblcmpr</code></td>
-                          <td>Tabela de componentes substituídos (categoria: replaced)</td>
-                          <td><code>@tblcmpr</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@tblcmpq</code></td>
-                          <td>Tabela de componentes necessários (categoria: required)</td>
-                          <td><code>@tblcmpq</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@tblcmps</code></td>
-                          <td>Tabela de componentes sobressalentes (categoria: spare)</td>
-                          <td><code>@tblcmps</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@tblequip</code></td>
-                          <td>Tabela completa dos equipamentos vinculados à OS (dados da tabela de equipamentos)</td>
-                          <td><code>@tblequip</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@timesheet</code></td>
-                          <td>Tabela de timesheet com datas e horários de entrada/saída</td>
-                          <td><code>@timesheet</code></td>
-                        </tr>
-                        <tr>
-                          <td><code>@equipetecnica</code></td>
-                          <td>Tabela da equipe técnica com nome, função e empresa</td>
-                          <td><code>@equipetecnica</code></td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
-                <div class="report-quill-editor" data-quill-editor></div>
+                <div class="report-quill-editor">
+                  <div data-quill-editor></div>
+                </div>
 
               </form>
             <% }) %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade" id="reportTagsHelpModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Tags disponíveis</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body">
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered mb-0" style="font-size:0.8rem;">
+                <thead class="table-light">
+                  <tr>
+                    <th style="white-space:nowrap;">Tag</th>
+                    <th>Descrição</th>
+                    <th>Exemplo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td><code>@img=ID</code></td><td>Renderiza uma imagem inline do banco de imagens pelo ID</td><td><code>@img=3</code></td></tr>
+                  <tr><td><code>@equip=ID</code></td><td>Exibe a TAG ou tipo do equipamento pelo ID</td><td><code>@equip=1</code></td></tr>
+                  <tr><td><code>@tagsequip</code></td><td>Exibe todas as TAGs dos equipamentos vinculados à OS, separadas por vírgula</td><td><code>@tagsequip</code></td></tr>
+                  <tr><td><code>@site</code></td><td>Exibe o nome do site vinculado à OS</td><td><code>@site</code></td></tr>
+                  <tr><td><code>@descricaodia=ID</code></td><td>Exibe o conteúdo de um log diário específico pelo ID de sequência</td><td><code>@descricaodia=2</code></td></tr>
+                  <tr><td><code>@descricaodia</code></td><td>Exibe todos os logs diários em sequência (exceto conclusão geral)</td><td><code>@descricaodia</code></td></tr>
+                  <tr><td><code>@conclusaogeral</code></td><td>Exibe a conclusão geral gerada por IA (log marcado como conclusaogeral)</td><td><code>@conclusaogeral</code></td></tr>
+                  <tr><td><code>@tblcmpr</code></td><td>Tabela de componentes substituídos (categoria: replaced)</td><td><code>@tblcmpr</code></td></tr>
+                  <tr><td><code>@tblcmpq</code></td><td>Tabela de componentes necessários (categoria: required)</td><td><code>@tblcmpq</code></td></tr>
+                  <tr><td><code>@tblcmps</code></td><td>Tabela de componentes sobressalentes (categoria: spare)</td><td><code>@tblcmps</code></td></tr>
+                  <tr><td><code>@tblequip</code></td><td>Tabela completa dos equipamentos vinculados à OS (dados da tabela de equipamentos)</td><td><code>@tblequip</code></td></tr>
+                  <tr><td><code>@timesheet</code></td><td>Tabela de timesheet com datas e horários de entrada/saída</td><td><code>@timesheet</code></td></tr>
+                  <tr><td><code>@equipetecnica</code></td><td>Tabela da equipe técnica com nome, função e empresa</td><td><code>@equipetecnica</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
           </div>
         </div>
       </div>
@@ -1093,6 +1103,11 @@
     var modal = new bootstrap.Modal(document.getElementById("imagePreviewModal"));
     modal.show();
   }
+</script>
+
+<script>
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  window.scrollTo(0, 0);
 </script>
 
 <%- include("../partials/footer") %>

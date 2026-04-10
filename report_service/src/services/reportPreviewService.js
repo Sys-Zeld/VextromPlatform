@@ -418,6 +418,32 @@ function renderEquipmentsInlineTable(orderEquipments) {
 
   return `<div class="report-inline-equipments-wrap">${tablesHtml}</div>`;
 }
+
+function renderEquipmentTagsInline(orderEquipments) {
+  const rows = Array.isArray(orderEquipments) ? orderEquipments : [];
+  if (!rows.length) return "-";
+
+  const seen = new Set();
+  const tags = [];
+  rows.forEach((item) => {
+    const label = String(item?.tag_number || item?.tag || "").trim();
+    if (!label) return;
+    const dedupeKey = label.toLowerCase();
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
+    tags.push(label);
+  });
+
+  if (!tags.length) return "-";
+  return escapeHtml(tags.join(", "));
+}
+
+function renderSiteInline(siteData) {
+  const source = siteData && typeof siteData === "object" ? siteData : {};
+  const siteLabel = String(source.site_name || source.name || source.title || "").trim();
+  return siteLabel ? escapeHtml(siteLabel) : "-";
+}
+
 function renderDailyLogInlineItem(dailyLog, requestedId = null, context = null) {
   if (!dailyLog) return "";
   const contentHtml = String(dailyLog.content || "").trim();
@@ -433,7 +459,8 @@ function renderDailyLogInlineItem(dailyLog, requestedId = null, context = null) 
     context.dailyLogsOrdered,
     { expandDailyLogTags: false, imageLabel: context.imageLabel },
     context.technicianItems || [],
-    context.orderEquipments || []
+    context.orderEquipments || [],
+    context.siteData || {}
   );
 }
 
@@ -529,7 +556,7 @@ function wrapImageCardsIntoRows(html) {
   return result;
 }
 
-function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems, dailyLogsById, dailyLogsOrdered, options = {}, technicianItems = [], orderEquipments = []) {
+function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems, dailyLogsById, dailyLogsOrdered, options = {}, technicianItems = [], orderEquipments = [], siteData = {}) {
   const source = String(contentHtml || "");
   if (!source) return "<p><br></p>";
   const opts = {
@@ -556,8 +583,12 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
   const withReplacedTable = withImages.replace(tableReplacedPattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "replaced")));
   const withRequiredTable = withReplacedTable.replace(tableRequiredPattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "required")));
   const withTables = withRequiredTable.replace(tableSparePattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "spare")));
+  const equipmentTagsPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*(?:tagsequip|tagequip(?:amentos)?)/gi;
+  const withEquipmentTags = withTables.replace(equipmentTagsPattern, () => renderEquipmentTagsInline(orderEquipments));
+  const siteTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*(?:site|nomesite)/gi;
+  const withSite = withEquipmentTags.replace(siteTagPattern, () => renderSiteInline(siteData));
   const equipmentTablePattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*(?:tblequip(?:amentos)?)/gi;
-  const withEquipmentTable = withTables.replace(equipmentTablePattern, () => renderEquipmentsInlineTable(orderEquipments));
+  const withEquipmentTable = withSite.replace(equipmentTablePattern, () => renderEquipmentsInlineTable(orderEquipments));
   const timesheetTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*timesheet/gi;
   const withTimesheet = withEquipmentTable.replace(timesheetTagPattern, () => renderTimesheetInlineTable(timesheetItems));
   const techTeamTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*equipetecnica/gi;
@@ -573,6 +604,7 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
     dailyLogsOrdered,
     technicianItems,
     orderEquipments,
+    siteData,
     imageLabel: opts.imageLabel || "Imagem"
   };
   const dailyLogTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi;
@@ -599,6 +631,7 @@ function buildPreviewModel(payload, options = {}) {
   const templateKey = String(options && options.templateKey ? options.templateKey : reportConfig.templateKey || "").trim().toLowerCase();
   const rawOrder = payload.order || {};
   const order = withServiceOrderDisplay(rawOrder);
+  const siteData = payload.site && typeof payload.site === "object" ? payload.site : {};
   const rawReport = payload.report || {};
   const signatures = Array.isArray(payload.signatures) ? payload.signatures : [];
   const vextromSignatures = signatures
@@ -647,6 +680,7 @@ function buildPreviewModel(payload, options = {}) {
   });
 
   const sections = payload.sections || [];
+  const previewSections = Array.isArray(sections) ? sections : [];
   const orderEquipments = Array.isArray(payload.orderEquipments) ? payload.orderEquipments : [];
   const equipmentById = new Map(
     orderEquipments
@@ -679,10 +713,10 @@ function buildPreviewModel(payload, options = {}) {
       .filter((item) => Number.isInteger(item.orderSeq) && item.orderSeq > 0)
       .map((item) => [item.orderSeq, item])
   );
-  const visibleSections = sections
+  const visibleSections = previewSections
     .filter((item) => item?.is_visible !== false)
     .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id || 0) - Number(b.id || 0));
-  const orderedVisibleSections = (visibleSections.length ? visibleSections : sections)
+  const orderedVisibleSections = (visibleSections.length ? visibleSections : previewSections)
     .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0) || Number(a.id || 0) - Number(b.id || 0))
     .map((section, index) => {
       const sectionKey = String(section.section_key || "").trim().toLowerCase();
@@ -730,7 +764,8 @@ function buildPreviewModel(payload, options = {}) {
           dailyLogsOrdered,
           { imageLabel: uiLabels.image },
           technicianItems,
-          orderEquipments
+          orderEquipments,
+          siteData
         ),
         content_html_preview: injectTaggedImagesInHtml(
           section.content_html || "<p><br></p>",
@@ -742,7 +777,8 @@ function buildPreviewModel(payload, options = {}) {
           dailyLogsOrdered,
           { imageLabel: uiLabels.image },
           technicianItems,
-          orderEquipments
+          orderEquipments,
+          siteData
         ),
         section_title_html: section.section_title_html || `<p>${section.section_title || "-"}</p>`,
         section_title_text: section.section_title_text || section.section_title || "-",
@@ -751,13 +787,13 @@ function buildPreviewModel(payload, options = {}) {
       };
     });
   const sectionMap = {
-    scope: getSectionContent(sections, "scope"),
-    technicalDescription: getSectionContent(sections, "technical_description"),
-    replacedComponents: getSectionContent(sections, "replaced_components"),
-    requiredComponents: getSectionContent(sections, "required_components"),
-    recommendedSpare: getSectionContent(sections, "recommended_spare"),
-    recommendations: getSectionContent(sections, "recommendations"),
-    conclusion: getSectionContent(sections, "conclusion")
+    scope: getSectionContent(previewSections, "scope"),
+    technicalDescription: getSectionContent(previewSections, "technical_description"),
+    replacedComponents: getSectionContent(previewSections, "replaced_components"),
+    requiredComponents: getSectionContent(previewSections, "required_components"),
+    recommendedSpare: getSectionContent(previewSections, "recommended_spare"),
+    recommendations: getSectionContent(previewSections, "recommendations"),
+    conclusion: getSectionContent(previewSections, "conclusion")
   };
   const components = groupComponents(payload.components || []);
 

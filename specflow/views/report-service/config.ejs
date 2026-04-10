@@ -1,4 +1,31 @@
 <%- include("../partials/head", { pageTitle }) %>
+<link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.css" rel="stylesheet" />
+<link href="/public/css/report-editor.css" rel="stylesheet" />
+<style>
+  /* wrappers dos editores de config */
+  .report-quill-editor:has(#default-scope-editor),
+  .report-quill-editor:has(#default-recommendations-editor) {
+    margin-bottom: 8px;
+  }
+
+  /* #default-*-editor agora É o ql-container */
+  #default-scope-editor,
+  #default-recommendations-editor {
+    height: auto;
+    min-height: 140px;
+  }
+
+  #default-scope-editor .ql-editor,
+  #default-recommendations-editor .ql-editor {
+    min-height: 140px;
+  }
+
+  .report-config-save-row {
+    clear: both;
+    margin-top: 12px;
+  }
+</style>
 
 <section class="card app-card mb-3">
   <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
@@ -20,6 +47,9 @@
   <div class="card-body">
     <form method="post" action="/admin/report-service/config" class="row g-3" id="config-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div class="col-12 d-flex justify-content-end report-config-save-row">
+        <button class="btn btn-primary btn-sm" type="submit" id="btn-save">Salvar configuracao padrao</button>
+      </div>
 
       <div class="col-12 col-lg-4">
         <label class="form-label">Template padrao do report</label>
@@ -163,9 +193,46 @@
         </div>
       </div>
 
-      <div class="col-12 d-flex justify-content-end">
-        <button class="btn btn-primary btn-sm" type="submit" id="btn-save">Salvar configuracao padrao</button>
+      <div class="col-12">
+        <div class="card app-card">
+          <div class="card-body">
+            <label class="form-label">Capitulo padrao: ESCOPO</label>
+            <div class="mb-2 p-2 border rounded" style="background:#f8f9fa;font-size:0.75rem;color:#6b7280;">
+              Conteudo padrao aplicado ao capitulo <strong>ESCOPO</strong> na criacao de novos relatorios.
+            </div>
+            <div class="d-flex gap-2 mb-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="edit-scope-btn">Editar</button>
+              <button type="button" class="btn btn-primary btn-sm" id="save-scope-btn">Salvar</button>
+              <button type="button" class="btn btn-outline-danger btn-sm" id="reset-scope-btn">Restaurar padrao</button>
+            </div>
+            <div class="report-quill-editor">
+              <div id="default-scope-editor"></div>
+            </div>
+            <textarea class="d-none" name="default_scope_html" id="default-scope-html"><%= reportConfig.defaultScopeHtml || "" %></textarea>
+          </div>
+        </div>
       </div>
+
+      <div class="col-12">
+        <div class="card app-card">
+          <div class="card-body">
+            <label class="form-label">Capitulo padrao: RECOMENDACOES</label>
+            <div class="mb-2 p-2 border rounded" style="background:#f8f9fa;font-size:0.75rem;color:#6b7280;">
+              Conteudo padrao aplicado ao capitulo <strong>RECOMENDACOES</strong> na criacao de novos relatorios.
+            </div>
+            <div class="d-flex gap-2 mb-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="edit-recommendations-btn">Editar</button>
+              <button type="button" class="btn btn-primary btn-sm" id="save-recommendations-btn">Salvar</button>
+              <button type="button" class="btn btn-outline-danger btn-sm" id="reset-recommendations-btn">Restaurar padrao</button>
+            </div>
+            <div class="report-quill-editor">
+              <div id="default-recommendations-editor"></div>
+            </div>
+            <textarea class="d-none" name="default_recommendations_html" id="default-recommendations-html"><%= reportConfig.defaultRecommendationsHtml || "" %></textarea>
+          </div>
+        </div>
+      </div>
+
     </form>
   </div>
 </section>
@@ -221,8 +288,165 @@ async function handleLogoUpload(brand, fileInput) {
 }
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.min.js"></script>
+<script>
+(function () {
+  if (typeof window.Quill === "undefined") return;
+  var FontAttributor = window.Quill.import("formats/font");
+  FontAttributor.whitelist = ["arial", "serif", "monospace"];
+  window.Quill.register(FontAttributor, true);
+  if (window.QuillBetterTable) {
+    window.Quill.register({ "modules/better-table": window.QuillBetterTable }, true);
+  }
+})();
+</script>
 <script>
 var DEFAULT_FOOTER_HTML = <%- JSON.stringify(reportConfig.defaultFooterHtml || '') %>;
+var DEFAULT_SCOPE_HTML = <%- JSON.stringify(reportConfig.defaultSystemScopeHtml || "") %>;
+var DEFAULT_RECOMMENDATIONS_HTML = <%- JSON.stringify(reportConfig.defaultSystemRecommendationsHtml || "") %>;
+var configForm = document.getElementById("config-form");
+
+function syncEditorToInput(state) {
+  if (!state || !state.quill || !state.input) return;
+  var plain = state.quill.getText().replace(/\s+/g, " ").trim();
+  state.input.value = plain ? String(state.quill.root.innerHTML || "").trim() : "";
+}
+
+function buildConfigSectionEditor(editorId, inputId, editBtnId, saveBtnId, resetBtnId, defaultHtml) {
+  var editorEl = document.getElementById(editorId);
+  var inputEl = document.getElementById(inputId);
+  var editBtn = document.getElementById(editBtnId);
+  var saveBtn = document.getElementById(saveBtnId);
+  var resetBtn = document.getElementById(resetBtnId);
+  if (!editorEl || !inputEl || typeof window.Quill === "undefined") return null;
+
+  var quill = new window.Quill(editorEl, {
+    theme: "snow",
+    modules: {
+      toolbar: {
+        container: [
+          [{ font: ["arial", "serif", "monospace"] }, { size: ["small", false, "large", "huge"] }],
+          [{ header: [1, 2, 3, false] }],
+          ["bold", "italic", "underline", { color: [] }],
+          [{ list: "ordered" }, { list: "bullet" }],
+          [{ align: [] }],
+          ["link", "image", "clean"]
+        ],
+        handlers: {
+          image: function () {
+            var q = quill;
+            var csrfInput = document.querySelector('#config-form input[name="_csrf"]');
+            var csrfToken = csrfInput ? csrfInput.value : "";
+            var input = document.createElement("input");
+            input.setAttribute("type", "file");
+            input.setAttribute("accept", "image/*");
+            input.style.display = "none";
+            document.body.appendChild(input);
+            input.click();
+            input.onchange = function () {
+              var file = input.files && input.files[0];
+              if (!file) { document.body.removeChild(input); return; }
+              fetch("/admin/report-service/config/image-upload", {
+                method: "POST",
+                headers: {
+                  "Content-Type": file.type || "application/octet-stream",
+                  "x-file-name": encodeURIComponent(file.name),
+                  "x-csrf-token": csrfToken
+                },
+                body: file
+              })
+                .then(function (resp) { return resp.json(); })
+                .then(function (json) {
+                  if (json.ok && json.data && json.data.filePath) {
+                    var imgSrc = "/docs/report/img/" + encodeURIComponent(json.data.filePath);
+                    var range = q.getSelection(true);
+                    var index = range && Number.isInteger(range.index) ? range.index : q.getLength();
+                    q.insertEmbed(index, "image", imgSrc, "user");
+                    q.setSelection(index + 1, 0, "user");
+                  }
+                  document.body.removeChild(input);
+                })
+                .catch(function () { document.body.removeChild(input); });
+            };
+          }
+        }
+      }
+    },
+    formats: [
+      "font",
+      "size",
+      "header",
+      "bold",
+      "italic",
+      "underline",
+      "color",
+      "list",
+      "align",
+      "link",
+      "image"
+    ],
+    placeholder: "Digite o conteudo padrao..."
+  });
+
+  var toolbarModule = quill.getModule("toolbar");
+  if (toolbarModule && toolbarModule.container) {
+    Array.prototype.forEach.call(toolbarModule.container.querySelectorAll("button"), function (btn) {
+      btn.setAttribute("type", "button");
+    });
+    toolbarModule.container.addEventListener("mousedown", function (e) {
+      if (e.target && e.target.tagName !== "INPUT") {
+        e.preventDefault();
+      }
+    });
+  }
+
+  if (String(inputEl.value || "").trim()) {
+    quill.clipboard.dangerouslyPasteHTML(String(inputEl.value));
+  } else {
+    quill.setText("");
+  }
+  quill.format("align", "justify", "silent");
+  var state = { quill: quill, input: inputEl };
+
+  function setEditing(isEditing) {
+    quill.enable(Boolean(isEditing));
+    if (editBtn) editBtn.disabled = Boolean(isEditing);
+    if (saveBtn) saveBtn.disabled = !Boolean(isEditing);
+    if (resetBtn) resetBtn.disabled = !Boolean(isEditing);
+  }
+
+  setEditing(false);
+
+  if (editBtn) {
+    editBtn.addEventListener("click", function () {
+      setEditing(true);
+      quill.focus();
+    });
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener("click", function () {
+      syncEditorToInput(state);
+      if (configForm && typeof configForm.requestSubmit === "function") {
+        configForm.requestSubmit();
+      } else if (configForm) {
+        configForm.submit();
+      }
+    });
+  }
+
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function () {
+      if (!confirm("Restaurar para o padrao?")) return;
+      quill.setText("");
+      if (String(defaultHtml || "").trim()) quill.clipboard.dangerouslyPasteHTML(String(defaultHtml));
+      setEditing(true);
+    });
+  }
+
+  return state;
+}
 
 function previewFooter() {
   var html = document.getElementById('footer-html-input').value;
@@ -237,6 +461,30 @@ function resetFooter() {
   document.getElementById('footer-html-input').value = DEFAULT_FOOTER_HTML;
   var wrap = document.getElementById('footer-preview-wrap');
   wrap.style.display = 'none';
+}
+
+var scopeEditorState = buildConfigSectionEditor(
+  "default-scope-editor",
+  "default-scope-html",
+  "edit-scope-btn",
+  "save-scope-btn",
+  "reset-scope-btn",
+  DEFAULT_SCOPE_HTML
+);
+var recommendationsEditorState = buildConfigSectionEditor(
+  "default-recommendations-editor",
+  "default-recommendations-html",
+  "edit-recommendations-btn",
+  "save-recommendations-btn",
+  "reset-recommendations-btn",
+  DEFAULT_RECOMMENDATIONS_HTML
+);
+
+if (configForm) {
+  configForm.addEventListener("submit", function () {
+    syncEditorToInput(scopeEditorState);
+    syncEditorToInput(recommendationsEditorState);
+  });
 }
 </script>
 

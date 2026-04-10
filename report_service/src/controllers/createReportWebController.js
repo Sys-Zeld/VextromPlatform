@@ -1501,7 +1501,13 @@ function createReportWebController(deps) {
         logoChloride: sanitizeInput(req.body.logo_chloride),
         logoCover: sanitizeInput(req.body.logo_cover),
         templateKey: sanitizeInput(req.body.template_key),
-        footerHtml: req.body.footer_html !== undefined ? String(req.body.footer_html) : undefined
+        footerHtml: req.body.footer_html !== undefined ? String(req.body.footer_html) : undefined,
+        defaultScopeHtml: req.body.default_scope_html !== undefined
+          ? sanitizeReportSectionHtml(req.body.default_scope_html)
+          : undefined,
+        defaultRecommendationsHtml: req.body.default_recommendations_html !== undefined
+          ? sanitizeReportSectionHtml(req.body.default_recommendations_html)
+          : undefined
       });
       return res.redirect("/admin/report-service/config?saved=1");
     },
@@ -1537,6 +1543,40 @@ function createReportWebController(deps) {
       fs.writeFileSync(path.join(targetDir, finalName), buffer);
 
       return res.status(201).json({ ok: true, data: { filePath: `/docs/report/img/logos/${finalName}` } });
+    },
+
+    async uploadConfigImage(req, res) {
+      let fileNameRaw = "imagem";
+      try {
+        fileNameRaw = decodeURIComponent(String(req.headers["x-file-name"] || "imagem"));
+      } catch (_err) {
+        fileNameRaw = String(req.headers["x-file-name"] || "imagem");
+      }
+      fileNameRaw = sanitizeInput(fileNameRaw);
+      const fileNameBase = path.basename(fileNameRaw).replace(/[^a-zA-Z0-9._-]/g, "") || "imagem";
+      const extFromName = path.extname(fileNameBase).toLowerCase();
+      const mime = String(req.headers["content-type"] || "").toLowerCase();
+      const extFromMime = mime.includes("png")
+        ? ".png"
+        : mime.includes("jpeg") || mime.includes("jpg")
+          ? ".jpg"
+          : mime.includes("webp")
+            ? ".webp"
+            : mime.includes("gif")
+              ? ".gif"
+              : "";
+      const ext = [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(extFromName) ? extFromName : extFromMime;
+      const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
+      if (!ext || !buffer.length) {
+        return res.status(400).json({ ok: false, error: "Arquivo de imagem invalido." });
+      }
+      const targetDir = path.join(process.cwd(), "docs", "report", "img");
+      fs.mkdirSync(targetDir, { recursive: true });
+      const fileSafeBase = path.basename(fileNameBase, extFromName || path.extname(fileNameBase)).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || "imagem";
+      const unique = crypto.randomBytes(6).toString("hex");
+      const finalName = `config-${Date.now()}-${fileSafeBase}-${unique}${ext === ".jpeg" ? ".jpg" : ext}`;
+      fs.writeFileSync(path.join(targetDir, finalName), buffer);
+      return res.status(201).json({ ok: true, data: { filePath: finalName } });
     },
 
     async attachEquipment(req, res) {

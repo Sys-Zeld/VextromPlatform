@@ -92,7 +92,6 @@ function buildPdfBuffer(payload) {
     drawLine(doc, "Issue Date", report.issue_date);
     drawLine(doc, "Last Modified", report.last_modified_at);
 
-    drawSection(doc, "Escopo", "");
     drawTable(
       doc,
       ["Campo", "Valor"],
@@ -111,7 +110,7 @@ function buildPdfBuffer(payload) {
         .replace(/<\/p>/gi, "\n")
         .replace(/<[^>]+>/g, "")
         .trim();
-      drawSection(doc, section.section_title, normalizedText || section.content_text || "-");
+      drawSection(doc, section.section_title, normalizedText || "-");
     });
 
     doc.addPage();

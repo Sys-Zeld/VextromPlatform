@@ -16,13 +16,16 @@
   padding: 12px;
   background: #fbfdfb;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .report-quill-title-editor .ql-toolbar.ql-snow,
 .report-quill-editor .ql-toolbar.ql-snow {
   border: 1px solid #cad6cb;
   border-radius: 8px 8px 0 0;
+  position: relative;
+  z-index: 8;
+  overflow: visible;
 }
 
 .report-quill-title-editor .ql-container.ql-snow,
@@ -39,7 +42,11 @@
 }
 
 .report-quill-editor .ql-container.ql-snow {
-  min-height: 180px;
+  min-height: 280px;
+}
+
+.report-quill-editor .ql-editor {
+  min-height: 260px;
 }
 
 .report-section-images-grid {
@@ -100,16 +107,48 @@
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.report-quill-title-editor .ql-editor .ql-font-serif,
+.report-quill-editor .ql-editor .ql-font-serif {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.report-quill-title-editor .ql-editor .ql-font-monospace,
+.report-quill-editor .ql-editor .ql-font-monospace {
+  font-family: "Courier New", "Lucida Console", monospace;
+}
+
 .ql-snow .ql-picker.ql-font .ql-picker-item[data-value="arial"]::before,
 .ql-snow .ql-picker.ql-font .ql-picker-label[data-value="arial"]::before {
   content: "Arial";
   font-family: Arial, Helvetica, sans-serif;
 }
 
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="serif"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="serif"]::before {
+  content: "Serif";
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.ql-snow .ql-picker.ql-font .ql-picker-item[data-value="monospace"]::before,
+.ql-snow .ql-picker.ql-font .ql-picker-label[data-value="monospace"]::before {
+  content: "Monospace";
+  font-family: "Courier New", "Lucida Console", monospace;
+}
+
 .ql-snow .ql-formats button.ql-insertTable::before {
   content: "Tabela";
   font-size: 0.8rem;
   line-height: 1;
+}
+
+.ql-snow .ql-formats button.ql-insertTable {
+  width: auto;
+  min-width: 52px;
+  padding: 0 6px;
+}
+
+.ql-snow .ql-formats button.ql-insertTable::before {
+  white-space: nowrap;
 }
 
 .ql-snow .ql-formats button.ql-insertImage::before {
@@ -134,8 +173,54 @@
   min-width: 0;
 }
 
+.report-quill-title-editor,
+.report-quill-editor {
+  position: relative;
+  /* z-index removido: não deve criar stacking context próprio, senão o
+     toolbar (z-index 8) e o picker-options ficam confinados abaixo de
+     elementos externos como .report-tag-tools (z-index 2). */
+  overflow: visible;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.118), 0 1px 4px rgba(0, 0, 0, 0.084);
+  border-radius: 8px;
+}
+
+.report-quill-title-editor .ql-snow .ql-picker,
+.report-quill-editor .ql-snow .ql-picker {
+  position: relative;
+  overflow: visible;
+}
+
+.report-quill-title-editor .ql-snow .ql-picker-options,
+.report-quill-editor .ql-snow .ql-picker-options {
+  background: var(--surface, #ffffff) !important;
+  border: 1px solid var(--border, #cad6cb) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14) !important;
+  z-index: 9999 !important;
+  position: absolute !important;
+}
+
+.report-quill-title-editor .ql-snow .ql-picker-item,
+.report-quill-title-editor .ql-snow .ql-picker-label,
+.report-quill-editor .ql-snow .ql-picker-item,
+.report-quill-editor .ql-snow .ql-picker-label {
+  color: var(--text, #1f2a26);
+}
+
+.report-tag-tools {
+  display: block;
+  position: relative;
+  z-index: 2;
+  clear: both;
+  margin: 8px 0 10px;
+}
+
+.report-tag-tools .card-body {
+  border-top: 2px solid color-mix(in srgb, var(--border) 70%, #ffffff 30%);
+}
+
+
 .report-tag-validation {
-  margin-top: 6px;
+  margin-top: 0;
   color: #5d695f;
   font-size: 0.8rem;
 }
@@ -335,4 +420,39 @@
 .report-quill-editor .ql-editor td,
 .report-quill-editor .ql-editor th {
   border-color: var(--border);
+}
+
+.report-inline-title-input {
+  width: 180px;
+  min-width: 140px;
+}
+
+.report-section-commandbar {
+  border-bottom: 1px dashed color-mix(in srgb, var(--border) 76%, #ffffff 24%);
+  padding-bottom: 8px;
+}
+
+.report-section-commandbar-actions .btn-link {
+  line-height: 1.2;
+}
+
+.report-section-commandbar-primary {
+  padding-left: 10px;
+  border-left: 1px solid color-mix(in srgb, var(--border) 78%, #ffffff 22%);
+}
+
+@media (max-width: 768px) {
+  .report-inline-title-input {
+    width: 100%;
+  }
+
+  .report-section-commandbar-top,
+  .report-section-commandbar-actions {
+    align-items: stretch !important;
+  }
+
+  .report-section-commandbar-primary {
+    padding-left: 0;
+    border-left: 0;
+  }
 }

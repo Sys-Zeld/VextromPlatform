@@ -31,6 +31,13 @@ function createReportServiceWebRouter(deps) {
     deps.requireAdminAuth,
     asyncHandler(controller.uploadConfigLogo)
   );
+  router.post(
+    "/config/image-upload",
+    express.raw({ type: ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif", "application/octet-stream"], limit: "10mb" }),
+    deps.csrfProtection,
+    deps.requireAdminAuth,
+    asyncHandler(controller.uploadConfigImage)
+  );
   router.post("/orders/:id/equipments", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.attachEquipment));
   router.post("/orders/:id/equipments/:equipmentId/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.detachEquipment));
   router.post("/orders/:id/timesheet", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.addTimesheet));

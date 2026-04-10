@@ -1,13 +1,16 @@
 const db = require("../../db");
 const env = require("../../../specflow/config/env");
 const { getReportTemplateOptions, normalizeReportTemplateKey } = require("./reportTemplateService");
+const { SECTION_SEED_HTML } = require("../constants");
 
 const REPORT_CONFIG_KEYS = {
   logoVextrom: "report.preview.logo.vextrom",
   logoChloride: "report.preview.logo.chloride",
   logoCover: "report.preview.logo.cover",
   defaultTemplate: "report.preview.template.default",
-  footerHtml: "report.preview.footer.html"
+  footerHtml: "report.preview.footer.html",
+  defaultScopeHtml: "report.preview.sections.scope.default_html",
+  defaultRecommendationsHtml: "report.preview.sections.recommendations.default_html"
 };
 
 const DEFAULT_FOOTER_HTML = `<div class="footer-signature">
@@ -149,6 +152,8 @@ const DEFAULT_FOOTER_HTML = `<div class="footer-signature">
     </div>
   </div>
 </div>`;
+const DEFAULT_SCOPE_HTML = String(SECTION_SEED_HTML.scope || "<p><br></p>");
+const DEFAULT_RECOMMENDATIONS_HTML = String(SECTION_SEED_HTML.recommendations || "<p><br></p>");
 
 async function getSettingsMap(keys) {
   const result = await db.query(
@@ -192,6 +197,12 @@ async function getReportConfigSettings() {
   const footerHtml = settings[REPORT_CONFIG_KEYS.footerHtml] !== undefined
     ? String(settings[REPORT_CONFIG_KEYS.footerHtml])
     : DEFAULT_FOOTER_HTML;
+  const defaultScopeHtml = settings[REPORT_CONFIG_KEYS.defaultScopeHtml] !== undefined
+    ? String(settings[REPORT_CONFIG_KEYS.defaultScopeHtml])
+    : DEFAULT_SCOPE_HTML;
+  const defaultRecommendationsHtml = settings[REPORT_CONFIG_KEYS.defaultRecommendationsHtml] !== undefined
+    ? String(settings[REPORT_CONFIG_KEYS.defaultRecommendationsHtml])
+    : DEFAULT_RECOMMENDATIONS_HTML;
 
   return {
     logoVextrom,
@@ -199,7 +210,11 @@ async function getReportConfigSettings() {
     logoCover,
     templateKey,
     footerHtml,
+    defaultScopeHtml,
+    defaultRecommendationsHtml,
     defaultFooterHtml: DEFAULT_FOOTER_HTML,
+    defaultSystemScopeHtml: DEFAULT_SCOPE_HTML,
+    defaultSystemRecommendationsHtml: DEFAULT_RECOMMENDATIONS_HTML,
     templateOptions: getReportTemplateOptions()
   };
 }
@@ -210,16 +225,32 @@ async function saveReportConfigSettings(payload = {}) {
   const logoCover = String(payload.logoCover || "").trim();
   const templateKey = normalizeReportTemplateKey(payload.templateKey);
   const footerHtml = payload.footerHtml !== undefined ? String(payload.footerHtml) : DEFAULT_FOOTER_HTML;
+  const defaultScopeHtml = payload.defaultScopeHtml !== undefined
+    ? String(payload.defaultScopeHtml)
+    : DEFAULT_SCOPE_HTML;
+  const defaultRecommendationsHtml = payload.defaultRecommendationsHtml !== undefined
+    ? String(payload.defaultRecommendationsHtml)
+    : DEFAULT_RECOMMENDATIONS_HTML;
 
   await Promise.all([
     upsertSetting(REPORT_CONFIG_KEYS.logoVextrom, logoVextrom),
     upsertSetting(REPORT_CONFIG_KEYS.logoChloride, logoChloride),
     upsertSetting(REPORT_CONFIG_KEYS.logoCover, logoCover),
     upsertSetting(REPORT_CONFIG_KEYS.defaultTemplate, templateKey),
-    upsertSetting(REPORT_CONFIG_KEYS.footerHtml, footerHtml)
+    upsertSetting(REPORT_CONFIG_KEYS.footerHtml, footerHtml),
+    upsertSetting(REPORT_CONFIG_KEYS.defaultScopeHtml, defaultScopeHtml),
+    upsertSetting(REPORT_CONFIG_KEYS.defaultRecommendationsHtml, defaultRecommendationsHtml)
   ]);
 
-  return { logoVextrom, logoChloride, logoCover, templateKey, footerHtml };
+  return {
+    logoVextrom,
+    logoChloride,
+    logoCover,
+    templateKey,
+    footerHtml,
+    defaultScopeHtml,
+    defaultRecommendationsHtml
+  };
 }
 
 module.exports = {

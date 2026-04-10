@@ -1,6 +1,10 @@
 const db = require("../../db");
 const { SECTION_DEFINITIONS, SECTION_SEED_HTML } = require("../constants");
 const EMPTY_DELTA = { ops: [{ insert: "\n" }] };
+const DEFAULT_SECTION_CONFIG_KEYS = {
+  scope: "report.preview.sections.scope.default_html",
+  recommendations: "report.preview.sections.recommendations.default_html"
+};
 
 function toInt(value) {
   const num = Number(value);
@@ -1091,6 +1095,20 @@ async function updateReport(id, payload) {
 }
 
 async function ensureDefaultSections(serviceReportId) {
+  const [configuredScopeHtml, configuredRecommendationsHtml] = await Promise.all([
+    getAppSetting(DEFAULT_SECTION_CONFIG_KEYS.scope),
+    getAppSetting(DEFAULT_SECTION_CONFIG_KEYS.recommendations)
+  ]);
+  const scopeHtmlFromSettings = configuredScopeHtml == null
+    ? SECTION_SEED_HTML.scope
+    : configuredScopeHtml;
+  const recommendationsHtmlFromSettings = configuredRecommendationsHtml == null
+    ? SECTION_SEED_HTML.recommendations
+    : configuredRecommendationsHtml;
+  const seededContentBySection = {
+    scope: String(scopeHtmlFromSettings || ""),
+    recommendations: String(recommendationsHtmlFromSettings || "")
+  };
   const defaultSections = [
     { key: "scope", title: "ESCOPO", sortOrder: 1 },
     { key: "technical_description", title: "DESCRIÇÃO TECNICA", sortOrder: 2 },
@@ -1098,6 +1116,13 @@ async function ensureDefaultSections(serviceReportId) {
     { key: "conclusion", title: "CONCLUSÃO", sortOrder: 4 }
   ];
   for (const section of defaultSections) {
+    const seededHtml = String(seededContentBySection[section.key] || "");
+    const seededText = stripHtmlToText(seededHtml);
+    const hasSeededContent = Boolean(seededHtml.trim());
+    const contentDelta = hasSeededContent ? deltaFromText(seededText) : EMPTY_DELTA;
+    const contentHtml = hasSeededContent ? seededHtml : "<p><br></p>";
+    const contentText = hasSeededContent ? seededText : "";
+
     // eslint-disable-next-line no-await-in-loop
     await db.query(
       `
@@ -1131,43 +1156,46 @@ async function ensureDefaultSections(serviceReportId) {
         deltaFromText(section.title),
         `<p>${section.title}</p>`,
         section.title,
-        EMPTY_DELTA,
-        "<p><br></p>",
-        "",
+        contentDelta,
+        contentHtml,
+        contentText,
         "",
         "",
         section.sortOrder
       ]
     );
 
-    // Backward compatibility: clear old seeded default content if it was never edited.
-    // This keeps preview strictly aligned with what was typed in rich text.
-    // eslint-disable-next-line no-await-in-loop
-    await db.query(
-      `
-        UPDATE service_report_sections
-        SET
-          content_delta_json = $3,
-          content_html = $4,
-          content_text = $5,
-          updated_at = NOW()
-        WHERE service_report_id = $1
-          AND section_key = $2
-          AND (
-            content_html = $6
-            OR content_text = $7
-          )
-      `,
-      [
-        serviceReportId,
-        section.key,
-        EMPTY_DELTA,
-        "<p><br></p>",
-        "",
-        String(SECTION_SEED_HTML[section.key] || ""),
-        stripHtmlToText(SECTION_SEED_HTML[section.key] || "")
-      ]
-    );
+    if (hasSeededContent) {
+      // Se a secao ja existir (conflito), aplica o seed quando o conteudo ainda estiver vazio.
+      // Isso garante que scope/recommendations carreguem content_html padrao na criacao da OS.
+      // eslint-disable-next-line no-await-in-loop
+      await db.query(
+        `
+          UPDATE service_report_sections
+          SET
+            content_delta_json = $3,
+            content_html = $4,
+            content_text = $5,
+            updated_at = NOW()
+          WHERE service_report_id = $1
+            AND section_key = $2
+            AND (
+              content_html IS NULL
+              OR BTRIM(content_html) = ''
+              OR content_html = '<p><br></p>'
+              OR content_text IS NULL
+              OR BTRIM(content_text) = ''
+            )
+        `,
+        [
+          serviceReportId,
+          section.key,
+          contentDelta,
+          contentHtml,
+          contentText
+        ]
+      );
+    }
   }
 }
 
@@ -2056,3 +2084,4 @@ module.exports = {
   updateSignRequest,
   deleteSignRequest
 };
+
