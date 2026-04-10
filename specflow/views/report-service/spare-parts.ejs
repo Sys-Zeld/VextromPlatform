@@ -710,7 +710,7 @@
             <span id="aiJsonBadge" class="badge bg-secondary ms-1"></span>
           </div>
           <p class="text-muted small mb-2">Revise os dados antes de importar. Você pode editar o JSON manualmente se necessário.</p>
-          <textarea id="aiImportJsonEditor" class="form-control font-monospace" rows="14" style="font-size:0.76rem;" placeholder="JSON gerado pela IA aparecerá aqui..."></textarea>
+          <textarea id="aiImportJsonEditor" class="form-control font-monospace" rows="14" style="font-size:0.76rem;" placeholder="JSON gerado pela IA aparecerá aqui..." spellcheck="false"></textarea>
           <div id="aiJsonValidStatus" class="mt-2 small"></div>
         </div>
 
@@ -749,6 +749,39 @@
   var importSpinner = document.getElementById("aiImportSpinner");
   var importResult = document.getElementById("aiImportResult");
 
+  var _extractStartedAt = null;
+  var _extractTimer = null;
+
+  function formatElapsedTime(ms) {
+    var sec = Math.max(0, Math.floor((ms || 0) / 1000));
+    var mm = String(Math.floor(sec / 60)).padStart(2, "0");
+    var ss = String(sec % 60).padStart(2, "0");
+    return mm + ":" + ss;
+  }
+
+  function setExtractStatus(text, elapsed, cls) {
+    extractStatus.className = "mt-2 small " + (cls || "text-muted");
+    extractStatus.textContent = "Status: " + text + " | Tempo: " + formatElapsedTime(elapsed);
+  }
+
+  function startExtractTimer() {
+    _extractStartedAt = Date.now();
+    clearInterval(_extractTimer);
+    setExtractStatus("Processando...", 0, "text-warning");
+    _extractTimer = setInterval(function () {
+      setExtractStatus("Processando...", Date.now() - _extractStartedAt, "text-warning");
+    }, 1000);
+  }
+
+  function stopExtractTimer(statusText, cls) {
+    clearInterval(_extractTimer);
+    _extractTimer = null;
+    var elapsed = _extractStartedAt ? (Date.now() - _extractStartedAt) : 0;
+    setExtractStatus(statusText || "Concluído", elapsed, cls || "text-muted");
+    _extractStartedAt = null;
+    return elapsed;
+  }
+
   if (!modal) return;
 
   modal.addEventListener("show.bs.modal", function () {
@@ -774,41 +807,61 @@
 
     extractBtn.disabled = true;
     extractSpinner.classList.remove("d-none");
-    extractStatus.textContent = "Enviando PDF para a IA, aguarde...";
     importBtn.disabled = true;
     jsonReviewSection.style.display = "none";
     jsonEditor.value = "";
     importResult.textContent = "";
+    startExtractTimer();
 
-    fetch(aiExtractUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": file.type || "application/pdf",
-        "x-csrf-token": csrfToken,
-        "x-file-name": encodeURIComponent(file.name),
-        "x-ai-prompt": encodeURIComponent(promptTextarea.value.trim())
-      },
-      credentials: "same-origin",
-      body: file
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        extractSpinner.classList.add("d-none");
-        extractBtn.disabled = false;
-        if (!data || !data.ok) {
-          extractStatus.innerHTML = "<span class='text-danger'>\u274C " + (data && data.message ? data.message : "Erro ao extrair.") + "</span>";
-          return;
-        }
-        extractStatus.innerHTML = "<span class='text-success'>\u2705 IA retornou <strong>" + (data.count || 0) + "</strong> item(s). Revise abaixo antes de importar.</span>";
-        jsonEditor.value = JSON.stringify(data.spareParts, null, 2);
-        jsonReviewSection.style.display = "";
-        validateJson();
+    var reader = new FileReader();
+    reader.onerror = function () {
+      stopExtractTimer("Falha", "text-danger");
+      extractSpinner.classList.add("d-none");
+      extractBtn.disabled = false;
+      extractStatus.textContent = "Status: Erro ao ler o arquivo. | Tempo: --:--";
+    };
+    reader.onload = function () {
+      var dataUrl = String(reader.result || "");
+      var commaIdx = dataUrl.indexOf(",");
+      var fileBase64 = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : "";
+
+      fetch(aiExtractUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          fileName: file.name || "documento.pdf",
+          mimeType: file.type || "application/pdf",
+          fileBase64: fileBase64,
+          promptTemplate: promptTextarea.value.trim()
+        })
       })
-      .catch(function () {
-        extractSpinner.classList.add("d-none");
-        extractBtn.disabled = false;
-        extractStatus.innerHTML = "<span class='text-danger'>\u274C Falha na comunicacao com o servidor.</span>";
-      });
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          extractSpinner.classList.add("d-none");
+          extractBtn.disabled = false;
+          if (!data || !data.ok) {
+            var errMsg = (data && data.message ? data.message : "Erro ao extrair.");
+            var elapsed = stopExtractTimer("Falha", "text-danger");
+            extractStatus.className = "mt-2 small text-danger";
+            extractStatus.textContent = "Status: \u274C " + errMsg + " | Tempo: " + formatElapsedTime(elapsed);
+            return;
+          }
+          stopExtractTimer("Conclu\u00EDdo", "text-success");
+          jsonEditor.value = JSON.stringify(data.spareParts, null, 2);
+          jsonReviewSection.style.display = "";
+          validateJson();
+        })
+        .catch(function () {
+          stopExtractTimer("Falha", "text-danger");
+          extractSpinner.classList.add("d-none");
+          extractBtn.disabled = false;
+        });
+    };
+    reader.readAsDataURL(file);
   });
 
   jsonEditor.addEventListener("input", validateJson);

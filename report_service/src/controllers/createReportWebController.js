@@ -1057,18 +1057,27 @@ function createReportWebController(deps) {
       if (!extractSparePartsFromDocument) {
         return res.status(503).json({ ok: false, message: "Servico de IA nao disponivel." });
       }
-      const fileBuffer = Buffer.isBuffer(req.body) ? req.body : null;
-      if (!fileBuffer || fileBuffer.length === 0) {
+      const fileBase64 = String(req.body.fileBase64 || "").trim();
+      if (!fileBase64) {
         return res.status(422).json({ ok: false, message: "Arquivo PDF invalido ou vazio." });
       }
-      const contentType = String(req.headers["content-type"] || "application/pdf").split(";")[0].trim();
-      const fileName = sanitizeInput(req.headers["x-file-name"] ? decodeURIComponent(req.headers["x-file-name"]) : "documento.pdf");
-      const promptTemplate = sanitizeInput(req.headers["x-ai-prompt"] ? decodeURIComponent(req.headers["x-ai-prompt"]) : "");
+      let fileBuffer;
+      try {
+        fileBuffer = Buffer.from(fileBase64, "base64");
+      } catch (_e) {
+        return res.status(422).json({ ok: false, message: "Falha ao decodificar o arquivo." });
+      }
+      if (!fileBuffer.length) {
+        return res.status(422).json({ ok: false, message: "Arquivo PDF invalido ou vazio." });
+      }
+      const fileName = sanitizeInput(String(req.body.fileName || "documento.pdf"));
+      const mimeType = String(req.body.mimeType || "application/pdf").split(";")[0].trim() || "application/pdf";
+      const promptTemplate = sanitizeInput(String(req.body.promptTemplate || ""));
 
       const result = await extractSparePartsFromDocument({
         fileBuffer,
         fileName,
-        mimeType: contentType,
+        mimeType,
         promptTemplate
       });
 
