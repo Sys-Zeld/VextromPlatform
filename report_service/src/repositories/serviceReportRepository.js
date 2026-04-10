@@ -1327,6 +1327,15 @@ async function createSection(serviceReportId, payload = {}) {
   return getSectionByKey(serviceReportId, sectionKey);
 }
 
+async function reorderSections(serviceReportId, orderedKeys) {
+  for (let i = 0; i < orderedKeys.length; i++) {
+    await db.query(
+      `UPDATE service_report_sections SET sort_order = $1, updated_at = NOW() WHERE service_report_id = $2 AND section_key = $3`,
+      [i + 1, serviceReportId, orderedKeys[i]]
+    );
+  }
+}
+
 async function deleteSection(serviceReportId, sectionKey) {
   const result = await db.query(
     `
@@ -2040,6 +2049,7 @@ module.exports = {
   getSectionByKey,
   createSection,
   upsertSection,
+  reorderSections,
   deleteSection,
   listComponents,
   createComponent,

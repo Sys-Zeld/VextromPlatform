@@ -456,3 +456,26 @@
     border-left: 0;
   }
 }
+
+/* Reorder sections modal */
+.reorder-section-item {
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.reorder-section-item.reorder-dragging {
+  opacity: 0.45;
+  background: #f0f4f1;
+}
+
+.reorder-section-item.reorder-drop-over {
+  background: #e8f4ea;
+  outline: 2px dashed #5b9c6b;
+  outline-offset: -2px;
+}
+
+.reorder-drag-handle {
+  font-size: 1rem;
+  cursor: grab;
+  padding: 0 4px;
+}

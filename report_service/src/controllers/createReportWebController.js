@@ -1980,15 +1980,71 @@ function createReportWebController(deps) {
       const orderId = Number(req.params.id);
       if (!await ensureOrderEditable(req, res, orderId)) return;
       const report = await service.ensureReportForOrder(orderId);
-      await service.createReportSection(report.id, {
+
+      const beforeSections = await repo.listSections(report.id);
+
+      const sections = await service.createReportSection(report.id, {
         sectionTitle: sanitizeInput(req.body.section_title) || "NOVO CAPITULO",
         sectionTitleText: sanitizeInput(req.body.section_title) || "NOVO CAPITULO",
         contentText: "",
         contentHtml: "<p><br></p>",
         isVisible: true
       });
+
+      const insertAfter = sanitizeInput(req.body.insert_after || "").trim();
+      if (insertAfter && insertAfter !== "end") {
+        const beforeKeys = new Set(beforeSections.map((s) => s.section_key));
+        const newSection = sections.find((s) => !beforeKeys.has(s.section_key));
+        if (newSection) {
+          const existingKeys = beforeSections.map((s) => s.section_key);
+          const newOrderedKeys = [];
+          if (insertAfter === "start") {
+            newOrderedKeys.push(newSection.section_key);
+            newOrderedKeys.push(...existingKeys);
+          } else {
+            let inserted = false;
+            for (const key of existingKeys) {
+              newOrderedKeys.push(key);
+              if (key === insertAfter) {
+                newOrderedKeys.push(newSection.section_key);
+                inserted = true;
+              }
+            }
+            if (!inserted) newOrderedKeys.push(newSection.section_key);
+          }
+          await repo.reorderSections(report.id, newOrderedKeys);
+        }
+      }
+
       const createRedirectBase = buildOrderEditorRedirect(req, orderId);
       return res.redirect(`${createRedirectBase}?saved=1`);
+    },
+
+    async reorderSections(req, res) {
+      const orderId = Number(req.params.id);
+      if (!await ensureOrderEditable(req, res, orderId)) return;
+      const report = await service.ensureReportForOrder(orderId);
+
+      let orderedKeys;
+      try {
+        orderedKeys = JSON.parse(req.body.section_keys || "[]");
+      } catch (_e) {
+        orderedKeys = [];
+      }
+
+      if (!Array.isArray(orderedKeys) || !orderedKeys.length) {
+        return res.status(422).json({ ok: false, message: "Lista de capitulos invalida." });
+      }
+
+      const sections = await repo.listSections(report.id);
+      const validKeys = new Set(sections.map((s) => s.section_key));
+      const cleanKeys = orderedKeys.map((k) => String(k)).filter((k) => validKeys.has(k));
+
+      await repo.reorderSections(report.id, cleanKeys);
+
+      const isJsonReq = String(req.headers.accept || "").includes("application/json");
+      if (isJsonReq) return res.json({ ok: true });
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async deleteSection(req, res) {

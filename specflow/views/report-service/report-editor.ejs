@@ -302,12 +302,27 @@
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <h2 class="h6 app-card-title mb-0">Capitulos editaveis do relatorio</h2>
-            <form method="post" action="/admin/report-service/orders/<%= order.id %>/sections" class="d-flex gap-2 align-items-center">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-              <input type="hidden" name="return_to" value="report-editor" />
-              <input class="form-control form-control-sm" name="section_title" placeholder="Titulo do novo capitulo" required />
-              <button class="btn btn-outline-primary btn-sm" type="submit">Adicionar capitulo</button>
-            </form>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+              <form method="post" action="/admin/report-service/orders/<%= order.id %>/sections" class="d-flex gap-2 align-items-center flex-wrap">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+                <input type="hidden" name="return_to" value="report-editor" />
+                <input class="form-control form-control-sm" name="section_title" placeholder="Titulo do novo capitulo" required style="min-width:180px;" />
+                <select class="form-select form-select-sm" name="insert_after" style="min-width:160px;">
+                  <option value="end">Inserir no final</option>
+                  <option value="start">Inserir no inicio</option>
+                  <% sections.forEach((sec, idx) => { %>
+                    <option value="<%= sec.section_key %>">Apos: <%= idx + 1 %>. <%= sec.section_title_text || sec.section_key %></option>
+                  <% }) %>
+                </select>
+                <button class="btn btn-outline-primary btn-sm" type="submit">Adicionar capitulo</button>
+              </form>
+              <button
+                class="btn btn-outline-secondary btn-sm"
+                type="button"
+                data-bs-toggle="modal"
+                data-bs-target="#reorderSectionsModal"
+              >Reordenar capitulos</button>
+            </div>
           </div>
           <div class="report-section-cards">
             <% sections.forEach((section, index) => { %>
@@ -395,6 +410,40 @@
 
               </form>
             <% }) %>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <%# ===== MODAL REORDENAR CAPITULOS ===== %>
+    <div class="modal fade" id="reorderSectionsModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Reordenar capitulos</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body p-0">
+            <p class="px-3 pt-3 text-muted small mb-2">Arraste os capitulos para definir a ordem desejada e clique em Salvar.</p>
+            <ul class="list-group list-group-flush" id="reorderSectionsList">
+              <% sections.forEach((sec, idx) => { %>
+                <li
+                  class="list-group-item d-flex align-items-center gap-2 reorder-section-item"
+                  data-section-key="<%= sec.section_key %>"
+                  draggable="true"
+                  style="cursor:grab;"
+                >
+                  <span class="reorder-drag-handle text-muted" title="Arrastar">&#9776;</span>
+                  <span class="badge bg-secondary-subtle text-secondary-emphasis border reorder-section-idx"><%= idx + 1 %></span>
+                  <span class="flex-grow-1 small fw-medium"><%= sec.section_title_text || sec.section_key %></span>
+                </li>
+              <% }) %>
+            </ul>
+          </div>
+          <div class="modal-footer gap-2">
+            <span id="reorderSectionsStatus" class="text-muted small me-auto"></span>
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+            <button type="button" class="btn btn-primary btn-sm" id="saveReorderBtn">Salvar ordem</button>
           </div>
         </div>
       </div>
@@ -1108,6 +1157,100 @@
 <script>
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   window.scrollTo(0, 0);
+</script>
+
+<script>
+(function () {
+  var list = document.getElementById("reorderSectionsList");
+  var saveBtn = document.getElementById("saveReorderBtn");
+  var statusEl = document.getElementById("reorderSectionsStatus");
+  var csrfToken = "<%= csrfToken %>";
+  var reorderUrl = "/admin/report-service/orders/<%= order.id %>/sections/reorder";
+
+  if (!list || !saveBtn) return;
+
+  var draggingEl = null;
+
+  list.addEventListener("dragstart", function (e) {
+    draggingEl = e.target.closest(".reorder-section-item");
+    if (draggingEl) {
+      draggingEl.classList.add("reorder-dragging");
+      e.dataTransfer.effectAllowed = "move";
+    }
+  });
+
+  list.addEventListener("dragend", function () {
+    if (draggingEl) draggingEl.classList.remove("reorder-dragging");
+    draggingEl = null;
+    list.querySelectorAll(".reorder-drop-over").forEach(function (el) {
+      el.classList.remove("reorder-drop-over");
+    });
+    updateIndexBadges();
+  });
+
+  list.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    var target = e.target.closest(".reorder-section-item");
+    if (!target || target === draggingEl) return;
+    list.querySelectorAll(".reorder-drop-over").forEach(function (el) { el.classList.remove("reorder-drop-over"); });
+    target.classList.add("reorder-drop-over");
+    var rect = target.getBoundingClientRect();
+    var midY = rect.top + rect.height / 2;
+    if (e.clientY < midY) {
+      list.insertBefore(draggingEl, target);
+    } else {
+      list.insertBefore(draggingEl, target.nextSibling);
+    }
+  });
+
+  list.addEventListener("dragleave", function (e) {
+    var target = e.target.closest(".reorder-section-item");
+    if (target) target.classList.remove("reorder-drop-over");
+  });
+
+  list.addEventListener("drop", function (e) {
+    e.preventDefault();
+  });
+
+  function updateIndexBadges() {
+    var items = list.querySelectorAll(".reorder-section-item");
+    items.forEach(function (item, i) {
+      var badge = item.querySelector(".reorder-section-idx");
+      if (badge) badge.textContent = i + 1;
+    });
+  }
+
+  saveBtn.addEventListener("click", function () {
+    var items = list.querySelectorAll(".reorder-section-item");
+    var keys = Array.prototype.map.call(items, function (el) { return el.getAttribute("data-section-key"); });
+    saveBtn.disabled = true;
+    if (statusEl) statusEl.textContent = "Salvando...";
+    fetch(reorderUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/json",
+        "x-csrf-token": csrfToken
+      },
+      credentials: "same-origin",
+      body: "_csrf=" + encodeURIComponent(csrfToken) + "&section_keys=" + encodeURIComponent(JSON.stringify(keys))
+    })
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        if (data && data.ok) {
+          if (statusEl) statusEl.textContent = "Ordem salva!";
+          setTimeout(function () { window.location.reload(); }, 600);
+        } else {
+          throw new Error(data && data.message ? data.message : "Erro ao salvar.");
+        }
+      })
+      .catch(function (err) {
+        if (statusEl) statusEl.textContent = err && err.message ? err.message : "Erro ao salvar.";
+        saveBtn.disabled = false;
+      });
+  });
+})();
 </script>
 
 <%- include("../partials/footer") %>
