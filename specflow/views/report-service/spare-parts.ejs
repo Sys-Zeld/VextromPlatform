@@ -595,16 +595,18 @@
       var searchLower = searchTerm.toLowerCase();
 
       // Filter data: no search → all rows; search → match any text field
-      var filtered = allData;
-      if (searchLower) {
-        filtered = allData.filter(function (row) {
-          return [row.id, row.description, row.manufacturer, row.equipmentModel,
-                  row.partNumber, row.leadTime, row.obsolete, row.replacedBy, row.family]
-            .some(function (v) {
-              return String(v || "").toLowerCase().indexOf(searchLower) >= 0;
-            });
-        });
-      }
+      var filtered = searchLower
+        ? allData.filter(function (row) {
+            return [row.id, row.description, row.manufacturer, row.equipmentModel,
+                    row.partNumber, row.leadTime, row.obsolete, row.replacedBy, row.family]
+              .some(function (v) {
+                return String(v || "").toLowerCase().indexOf(searchLower) >= 0;
+              });
+          })
+        : allData.slice();
+
+      // Sort by ID ascending
+      filtered.sort(function (a, b) { return a.id - b.id; });
 
       // Column definitions for print (same order as grid, excluding actions)
       var cols = [
