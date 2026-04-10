@@ -44,7 +44,8 @@
     spare_part_invalid: t("rs.spare.errSpareInvalid"),
     spare_part_not_found: t("rs.spare.errSpareNotFound"),
     quantity_invalid: t("rs.spare.errQuantityInvalid"),
-    family_empty: t("rs.spare.errFamilyEmpty")
+    family_empty: t("rs.spare.errFamilyEmpty"),
+    pn_duplicate: t("rs.spare.errPnDuplicate")
   };
   const errorMessage = error && errorMessages[error] ? errorMessages[error] : "";
 %>
@@ -945,7 +946,11 @@
           importBtn.disabled = false;
           return;
         }
-        importResult.innerHTML = "<span class='text-success'>\u2705 Importados: <strong>" + data.inserted + "</strong> &mdash; Ignorados (j\u00e1 existem): <strong>" + data.skipped + "</strong></span>";
+        var skipParts = [];
+        if (data.skippedExisting > 0) skipParts.push(data.skippedExisting + " PN j\u00e1 cadastrado" + (data.skippedExisting > 1 ? "s" : ""));
+        if (data.skippedIntraJson > 0) skipParts.push(data.skippedIntraJson + " PN duplicado" + (data.skippedIntraJson > 1 ? "s" : "") + " no JSON");
+        var skipMsg = skipParts.length ? " &mdash; Ignorados: <strong>" + data.skipped + "</strong> (" + skipParts.join(", ") + ")" : (data.skipped > 0 ? " &mdash; Ignorados: <strong>" + data.skipped + "</strong>" : "");
+        importResult.innerHTML = "<span class='text-success'>\u2705 Importados: <strong>" + data.inserted + "</strong>" + skipMsg + "</span>";
         if (data.inserted > 0) {
           setTimeout(function () { window.location.href = "/admin/report-service/spare-parts?created=1"; }, 1600);
         }

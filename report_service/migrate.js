@@ -94,6 +94,7 @@ async function migrateServiceReport() {
   await db.query(`ALTER TABLE service_report_spare_parts ADD COLUMN IF NOT EXISTS equipment_model TEXT NOT NULL DEFAULT '';`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_spare_parts_part_number ON service_report_spare_parts (part_number);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_spare_parts_family ON service_report_spare_parts (equipment_family);`);
+  await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sr_spare_parts_pn_unique ON service_report_spare_parts (LOWER(part_number)) WHERE part_number <> '';`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS service_report_equipment_spare_parts (

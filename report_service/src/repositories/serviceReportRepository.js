@@ -526,34 +526,45 @@ async function getSparePartById(id) {
 }
 
 async function createSparePart(payload) {
-  const result = await db.query(
-    `
-      INSERT INTO service_report_spare_parts (
-        description,
-        manufacturer,
-        equipment_model,
-        part_number,
-        lead_time,
-        is_obsolete,
-        replaced_by_part_number,
-        equipment_family,
-        created_at,
-        updated_at
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
-      RETURNING *
-    `,
-    [
-      payload.description,
-      payload.manufacturer || "",
-      payload.equipmentModel || "",
-      payload.partNumber || "",
-      payload.leadTime || "",
-      Boolean(payload.isObsolete),
-      payload.replacedByPartNumber || "",
-      payload.equipmentFamily || ""
-    ]
-  );
+  let result;
+  try {
+    result = await db.query(
+      `
+        INSERT INTO service_report_spare_parts (
+          description,
+          manufacturer,
+          equipment_model,
+          part_number,
+          lead_time,
+          is_obsolete,
+          replaced_by_part_number,
+          equipment_family,
+          created_at,
+          updated_at
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),NOW())
+        RETURNING *
+      `,
+      [
+        payload.description,
+        payload.manufacturer || "",
+        payload.equipmentModel || "",
+        payload.partNumber || "",
+        payload.leadTime || "",
+        Boolean(payload.isObsolete),
+        payload.replacedByPartNumber || "",
+        payload.equipmentFamily || ""
+      ]
+    );
+  } catch (err) {
+    if (err.code === "23505") {
+      const conflict = new Error("Part Number ja cadastrado.");
+      conflict.statusCode = 409;
+      conflict.code = "pn_duplicate";
+      throw conflict;
+    }
+    throw err;
+  }
   return result.rows[0];
 }
 
@@ -568,63 +579,101 @@ async function getExistingPartNumbers(partNumbers) {
 }
 
 async function bulkCreateSpareParts(items) {
-  if (!items || !items.length) return { inserted: 0, skipped: 0, items: [] };
+  if (!items || !items.length) return { inserted: 0, skipped: 0, skippedIntraJson: 0, skippedExisting: 0, items: [] };
 
   const withPn = items.filter((item) => String(item.partNumber || "").trim());
   const withoutPn = items.filter((item) => !String(item.partNumber || "").trim());
 
-  const existingPns = await getExistingPartNumbers(
-    withPn.map((item) => String(item.partNumber).trim())
-  );
-
-  const toInsert = [
-    ...withPn.filter((item) => !existingPns.has(String(item.partNumber).trim().toLowerCase())),
-    ...withoutPn
-  ];
-
-  const inserted = [];
-  for (const payload of toInsert) {
-    // eslint-disable-next-line no-await-in-loop
-    const row = await createSparePart(payload);
-    inserted.push(row);
+  // 1. Deduplica PNs dentro do próprio JSON (mantém primeira ocorrência, case-insensitive)
+  const seenInJson = new Set();
+  const uniqueWithPn = [];
+  let skippedIntraJson = 0;
+  for (const item of withPn) {
+    const key = String(item.partNumber).trim().toLowerCase();
+    if (seenInJson.has(key)) {
+      skippedIntraJson++;
+    } else {
+      seenInJson.add(key);
+      uniqueWithPn.push(item);
+    }
   }
 
+  // 2. Verifica PNs já existentes no banco
+  const existingPns = await getExistingPartNumbers(
+    uniqueWithPn.map((item) => String(item.partNumber).trim())
+  );
+
+  const newWithPn = uniqueWithPn.filter((item) => !existingPns.has(String(item.partNumber).trim().toLowerCase()));
+  const skippedExisting = uniqueWithPn.length - newWithPn.length;
+
+  const toInsert = [...newWithPn, ...withoutPn];
+
+  const inserted = [];
+  let skippedByConstraint = 0;
+  for (const payload of toInsert) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const row = await createSparePart(payload);
+      inserted.push(row);
+    } catch (err) {
+      if (err.code === "pn_duplicate") {
+        skippedByConstraint++;
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  const totalSkipped = skippedIntraJson + skippedExisting + skippedByConstraint;
   return {
     inserted: inserted.length,
-    skipped: items.length - toInsert.length,
+    skipped: totalSkipped,
+    skippedIntraJson,
+    skippedExisting: skippedExisting + skippedByConstraint,
     items: inserted
   };
 }
 
 async function updateSparePart(id, payload) {
-  const result = await db.query(
-    `
-      UPDATE service_report_spare_parts
-      SET
-        description = $2,
-        manufacturer = $3,
-        equipment_model = $4,
-        part_number = $5,
-        lead_time = $6,
-        is_obsolete = $7,
-        replaced_by_part_number = $8,
-        equipment_family = $9,
-        updated_at = NOW()
-      WHERE id = $1
-      RETURNING *
-    `,
-    [
-      id,
-      payload.description,
-      payload.manufacturer || "",
-      payload.equipmentModel || "",
-      payload.partNumber || "",
-      payload.leadTime || "",
-      Boolean(payload.isObsolete),
-      payload.replacedByPartNumber || "",
-      payload.equipmentFamily || ""
-    ]
-  );
+  let result;
+  try {
+    result = await db.query(
+      `
+        UPDATE service_report_spare_parts
+        SET
+          description = $2,
+          manufacturer = $3,
+          equipment_model = $4,
+          part_number = $5,
+          lead_time = $6,
+          is_obsolete = $7,
+          replaced_by_part_number = $8,
+          equipment_family = $9,
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [
+        id,
+        payload.description,
+        payload.manufacturer || "",
+        payload.equipmentModel || "",
+        payload.partNumber || "",
+        payload.leadTime || "",
+        Boolean(payload.isObsolete),
+        payload.replacedByPartNumber || "",
+        payload.equipmentFamily || ""
+      ]
+    );
+  } catch (err) {
+    if (err.code === "23505") {
+      const conflict = new Error("Part Number ja cadastrado.");
+      conflict.statusCode = 409;
+      conflict.code = "pn_duplicate";
+      throw conflict;
+    }
+    throw err;
+  }
   return result.rows[0] || null;
 }
 

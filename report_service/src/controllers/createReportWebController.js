@@ -1005,16 +1005,23 @@ function createReportWebController(deps) {
         return res.status(422).send("Descricao e obrigatoria.");
       }
 
-      await repo.createSparePart({
-        description,
-        manufacturer: sanitizeInput(req.body.manufacturer),
-        equipmentModel: sanitizeInput(req.body.equipment_model),
-        partNumber: sanitizeInput(req.body.part_number),
-        leadTime: sanitizeInput(req.body.lead_time),
-        isObsolete: req.body.is_obsolete === "on" || req.body.is_obsolete === "true",
-        replacedByPartNumber: sanitizeInput(req.body.replaced_by_part_number),
-        equipmentFamily: sanitizeInput(req.body.equipment_family)
-      });
+      try {
+        await repo.createSparePart({
+          description,
+          manufacturer: sanitizeInput(req.body.manufacturer),
+          equipmentModel: sanitizeInput(req.body.equipment_model),
+          partNumber: sanitizeInput(req.body.part_number),
+          leadTime: sanitizeInput(req.body.lead_time),
+          isObsolete: req.body.is_obsolete === "on" || req.body.is_obsolete === "true",
+          replacedByPartNumber: sanitizeInput(req.body.replaced_by_part_number),
+          equipmentFamily: sanitizeInput(req.body.equipment_family)
+        });
+      } catch (err) {
+        if (err.code === "pn_duplicate") {
+          return res.redirect("/admin/report-service/spare-parts?error=pn_duplicate");
+        }
+        throw err;
+      }
       return res.redirect("/admin/report-service/spare-parts?created=1");
     },
 
@@ -1028,16 +1035,24 @@ function createReportWebController(deps) {
         return res.status(422).send("Descricao e obrigatoria.");
       }
 
-      const updated = await repo.updateSparePart(sparePartId, {
-        description,
-        manufacturer: sanitizeInput(req.body.manufacturer),
-        equipmentModel: sanitizeInput(req.body.equipment_model),
-        partNumber: sanitizeInput(req.body.part_number),
-        leadTime: sanitizeInput(req.body.lead_time),
-        isObsolete: req.body.is_obsolete === "on" || req.body.is_obsolete === "true",
-        replacedByPartNumber: sanitizeInput(req.body.replaced_by_part_number),
-        equipmentFamily: sanitizeInput(req.body.equipment_family)
-      });
+      let updated;
+      try {
+        updated = await repo.updateSparePart(sparePartId, {
+          description,
+          manufacturer: sanitizeInput(req.body.manufacturer),
+          equipmentModel: sanitizeInput(req.body.equipment_model),
+          partNumber: sanitizeInput(req.body.part_number),
+          leadTime: sanitizeInput(req.body.lead_time),
+          isObsolete: req.body.is_obsolete === "on" || req.body.is_obsolete === "true",
+          replacedByPartNumber: sanitizeInput(req.body.replaced_by_part_number),
+          equipmentFamily: sanitizeInput(req.body.equipment_family)
+        });
+      } catch (err) {
+        if (err.code === "pn_duplicate") {
+          return res.redirect("/admin/report-service/spare-parts?error=pn_duplicate");
+        }
+        throw err;
+      }
       if (!updated) {
         return res.status(404).send("Spare-part nao encontrado.");
       }
@@ -1111,7 +1126,13 @@ function createReportWebController(deps) {
       }
 
       const result = await repo.bulkCreateSpareParts(normalized);
-      return res.json({ ok: true, inserted: result.inserted, skipped: result.skipped });
+      return res.json({
+        ok: true,
+        inserted: result.inserted,
+        skipped: result.skipped,
+        skippedIntraJson: result.skippedIntraJson,
+        skippedExisting: result.skippedExisting
+      });
     },
 
     async getSparePartsAiConfig(_req, res) {
