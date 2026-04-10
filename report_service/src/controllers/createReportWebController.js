@@ -1216,15 +1216,30 @@ function createReportWebController(deps) {
       if (!equipment) {
         return res.redirect("/admin/report-service/spare-parts?error=equipment_not_found");
       }
-      const family = sanitizeInput(equipment.model_family);
-      if (!family) {
-        return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&error=family_empty`);
+
+      const linkMode = sanitizeInput(req.body.link_mode) === "model" ? "model" : "family";
+
+      // Resolve the reference value from the equipment based on chosen mode:
+      // - family: matches spare.equipment_model against equipment.model_family (existing behaviour)
+      // - model:  matches spare.equipment_model against equipment.type (direct model-to-model)
+      const referenceValue = linkMode === "model"
+        ? sanitizeInput(equipment.type || "")
+        : sanitizeInput(equipment.model_family || "");
+
+      if (!referenceValue) {
+        const errorKey = linkMode === "model" ? "model_empty" : "family_empty";
+        return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&error=${errorKey}`);
       }
 
       const spareParts = await repo.listSpareParts();
-      const matching = spareParts.filter((item) => isModelMatch(item.equipment_model, family));
+
+      // spare.equipment_model is always compared against the resolved reference value
+      const matching = spareParts.filter((item) =>
+        isModelMatch(sanitizeInput(item.equipment_model || ""), referenceValue)
+      );
+
       if (!matching.length) {
-        return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&auto_no_match=1`);
+        return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&auto_no_match=1&link_mode=${linkMode}`);
       }
 
       const alreadyLinkedRows = await repo.listSparePartsByEquipment(equipmentId);
@@ -1238,7 +1253,7 @@ function createReportWebController(deps) {
           linkedCount += 1;
         }
       }
-      return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&auto_linked=${linkedCount}`);
+      return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&auto_linked=${linkedCount}&link_mode=${linkMode}`);
     },
 
     async createEquipment(req, res) {

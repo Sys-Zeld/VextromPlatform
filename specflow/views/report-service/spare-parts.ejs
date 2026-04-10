@@ -45,6 +45,7 @@
     spare_part_not_found: t("rs.spare.errSpareNotFound"),
     quantity_invalid: t("rs.spare.errQuantityInvalid"),
     family_empty: t("rs.spare.errFamilyEmpty"),
+    model_empty: t("rs.spare.errModelEmpty"),
     pn_duplicate: t("rs.spare.errPnDuplicate")
   };
   const errorMessage = error && errorMessages[error] ? errorMessages[error] : "";
@@ -163,10 +164,17 @@
               <strong>Model Family:</strong> <%= selectedEquipment.model_family || '-' %>
             </div>
 
-            <form method="post" action="/admin/report-service/spare-parts/equipment-links/auto-family" class="mb-3 d-flex justify-content-end">
+            <div class="mb-3 d-flex justify-content-end">
+              <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#autoLinkModal">
+                &#128279; <%= t("rs.spare.autoLinkTitle") %>
+              </button>
+            </div>
+
+            <%# Hidden form submitted by the modal %>
+            <form method="post" action="/admin/report-service/spare-parts/equipment-links/auto-family" id="autoLinkForm">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
               <input type="hidden" name="equipment_id" value="<%= selectedEquipment.id %>" />
-              <button class="btn btn-outline-primary btn-sm" type="submit"><%= t("rs.spare.linkByFamily") %></button>
+              <input type="hidden" name="link_mode" id="autoLinkMode" value="family" />
             </form>
 
             <form method="post" action="/admin/report-service/spare-parts/equipment-links" class="row g-2 mb-3">
@@ -671,6 +679,64 @@
       win.print();
     });
   })();
+</script>
+
+<%# ===== MODAL AUTO-LINK SPARE PARTS ===== %>
+<div class="modal fade" id="autoLinkModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">&#128279; <%= t("rs.spare.autoLinkTitle") %></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3"><%= t("rs.spare.autoLinkSubtitle") %></p>
+
+        <div class="d-flex flex-column gap-2">
+          <label class="d-flex align-items-start gap-3 p-3 border rounded cursor-pointer" id="autoLinkOptFamily" style="cursor:pointer;">
+            <input type="radio" name="autoLinkChoice" value="family" class="form-check-input mt-1 flex-shrink-0" checked />
+            <div>
+              <div class="fw-semibold small"><%= t("rs.spare.autoLinkByFamily") %></div>
+              <div class="text-muted" style="font-size:0.78rem;"><%= t("rs.spare.autoLinkByFamilyDesc") %></div>
+              <% if (selectedEquipment && selectedEquipment.model_family) { %>
+                <div class="mt-1"><span class="badge bg-secondary"><%= selectedEquipment.model_family %></span></div>
+              <% } %>
+            </div>
+          </label>
+
+          <label class="d-flex align-items-start gap-3 p-3 border rounded cursor-pointer" id="autoLinkOptModel" style="cursor:pointer;">
+            <input type="radio" name="autoLinkChoice" value="model" class="form-check-input mt-1 flex-shrink-0" />
+            <div>
+              <div class="fw-semibold small"><%= t("rs.spare.autoLinkByModel") %></div>
+              <div class="text-muted" style="font-size:0.78rem;"><%= t("rs.spare.autoLinkByModelDesc") %></div>
+              <% if (selectedEquipment && selectedEquipment.type) { %>
+                <div class="mt-1"><span class="badge bg-secondary"><%= selectedEquipment.type %></span></div>
+              <% } %>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><%= t("rs.cancel") %></button>
+        <button type="button" class="btn btn-primary btn-sm" id="autoLinkConfirmBtn"><%= t("rs.spare.autoLinkConfirm") %></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var confirmBtn = document.getElementById("autoLinkConfirmBtn");
+  var form = document.getElementById("autoLinkForm");
+  var modeInput = document.getElementById("autoLinkMode");
+  if (!confirmBtn || !form || !modeInput) return;
+
+  confirmBtn.addEventListener("click", function () {
+    var selected = document.querySelector('input[name="autoLinkChoice"]:checked');
+    modeInput.value = selected ? selected.value : "family";
+    form.submit();
+  });
+})();
 </script>
 
 <%# ===== MODAL IMPORTAR COM IA ===== %>
