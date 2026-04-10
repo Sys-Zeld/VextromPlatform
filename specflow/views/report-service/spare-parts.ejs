@@ -690,11 +690,11 @@
         <div class="mb-4">
           <div class="d-flex align-items-center gap-2 mb-2">
             <span class="badge bg-secondary rounded-pill">3</span>
-            <strong class="small">Enviar documento PDF</strong>
+            <strong class="small">Enviar documento para a IA</strong>
           </div>
-          <p class="text-muted small mb-2">Selecione um PDF com a lista de spare parts. A IA irá ler e extrair todos os dados automaticamente.</p>
+          <p class="text-muted small mb-2">Selecione um documento com a lista de spare parts (PDF, TXT ou XLSX). A IA irá ler e extrair todos os dados automaticamente.</p>
           <div class="d-flex gap-2 align-items-center flex-wrap">
-            <input class="form-control form-control-sm" type="file" id="aiImportPdfFile" accept="application/pdf,.pdf" style="max-width:360px;" />
+            <input class="form-control form-control-sm" type="file" id="aiImportPdfFile" accept="application/pdf,.pdf,text/plain,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,application/vnd.ms-excel,.xls" style="max-width:420px;" />
             <button class="btn btn-outline-primary btn-sm" type="button" id="aiExtractBtn" disabled>
               <span id="aiExtractSpinner" class="spinner-border spinner-border-sm d-none me-1" role="status"></span>
               Extrair com IA
@@ -703,14 +703,16 @@
           <div id="aiExtractStatus" class="mt-2 small text-muted"></div>
         </div>
 
-        <div class="mb-2" id="aiJsonReviewSection" style="display:none;">
+        <div class="mb-2" id="aiJsonReviewSection">
           <div class="d-flex align-items-center gap-2 mb-2">
             <span class="badge bg-success rounded-pill">4</span>
-            <strong class="small">Revisar JSON extraído</strong>
+            <strong class="small">Revisar JSON</strong>
             <span id="aiJsonBadge" class="badge bg-secondary ms-1"></span>
+            <span class="text-muted fw-normal small ms-auto">ou carregue um JSON diretamente:</span>
+            <input type="file" id="aiJsonFileInput" accept="application/json,.json" class="form-control form-control-sm" style="max-width:200px;" />
           </div>
-          <p class="text-muted small mb-2">Revise os dados antes de importar. Você pode editar o JSON manualmente se necessário.</p>
-          <textarea id="aiImportJsonEditor" class="form-control font-monospace" rows="14" style="font-size:0.76rem;" placeholder="JSON gerado pela IA aparecerá aqui..." spellcheck="false"></textarea>
+          <p class="text-muted small mb-2">Revise os dados antes de importar. Você pode editar o JSON manualmente, colá-lo diretamente ou carregar um arquivo <code>.json</code>.</p>
+          <textarea id="aiImportJsonEditor" class="form-control font-monospace" rows="14" style="font-size:0.76rem;" placeholder="JSON gerado pela IA ou colado/carregado diretamente..." spellcheck="false"></textarea>
           <div id="aiJsonValidStatus" class="mt-2 small"></div>
         </div>
 
@@ -741,10 +743,10 @@
   var extractStatus = document.getElementById("aiExtractStatus");
   var promptTextarea = document.getElementById("aiImportPrompt");
   var schemaEl = document.getElementById("aiImportSchema");
-  var jsonReviewSection = document.getElementById("aiJsonReviewSection");
   var jsonEditor = document.getElementById("aiImportJsonEditor");
   var jsonBadge = document.getElementById("aiJsonBadge");
   var jsonValidStatus = document.getElementById("aiJsonValidStatus");
+  var jsonFileInput = document.getElementById("aiJsonFileInput");
   var importBtn = document.getElementById("aiImportBtn");
   var importSpinner = document.getElementById("aiImportSpinner");
   var importResult = document.getElementById("aiImportResult");
@@ -808,7 +810,6 @@
     extractBtn.disabled = true;
     extractSpinner.classList.remove("d-none");
     importBtn.disabled = true;
-    jsonReviewSection.style.display = "none";
     jsonEditor.value = "";
     importResult.textContent = "";
     startExtractTimer();
@@ -852,7 +853,6 @@
           }
           stopExtractTimer("Conclu\u00EDdo", "text-success");
           jsonEditor.value = JSON.stringify(data.spareParts, null, 2);
-          jsonReviewSection.style.display = "";
           validateJson();
         })
         .catch(function () {
@@ -865,6 +865,24 @@
   });
 
   jsonEditor.addEventListener("input", validateJson);
+
+  if (jsonFileInput) {
+    jsonFileInput.addEventListener("change", function () {
+      var file = jsonFileInput.files && jsonFileInput.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onerror = function () {
+        jsonValidStatus.innerHTML = "<span class='text-danger'>\u274C Falha ao ler o arquivo JSON.</span>";
+      };
+      reader.onload = function () {
+        var text = String(reader.result || "").trim();
+        jsonEditor.value = text;
+        jsonFileInput.value = "";
+        validateJson();
+      };
+      reader.readAsText(file, "utf-8");
+    });
+  }
 
   function validateJson() {
     var raw = jsonEditor.value.trim();
