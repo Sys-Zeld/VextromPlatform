@@ -578,6 +578,16 @@ async function getExistingPartNumbers(partNumbers) {
   return new Set(result.rows.map((r) => r.pn));
 }
 
+async function getSparePartsByPartNumbers(partNumbers) {
+  if (!partNumbers.length) return [];
+  const placeholders = partNumbers.map((_, i) => `$${i + 1}`).join(", ");
+  const result = await db.query(
+    `SELECT id, part_number FROM service_report_spare_parts WHERE LOWER(part_number) = ANY(ARRAY[${placeholders}]) AND part_number <> ''`,
+    partNumbers.map((pn) => String(pn).toLowerCase())
+  );
+  return result.rows;
+}
+
 async function bulkCreateSpareParts(items) {
   if (!items || !items.length) return { inserted: 0, skipped: 0, skippedIntraJson: 0, skippedExisting: 0, items: [] };
 
@@ -2108,6 +2118,7 @@ module.exports = {
   getSparePartById,
   createSparePart,
   bulkCreateSpareParts,
+  getSparePartsByPartNumbers,
   updateSparePart,
   deleteSparePart,
   listSparePartsByEquipment,

@@ -1039,6 +1039,32 @@
           <div id="aiJsonValidStatus" class="mt-2 small"></div>
         </div>
 
+        <div class="mb-2 mt-3 pt-3 border-top" id="aiEquipmentSection">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-secondary rounded-pill">5</span>
+            <strong class="small">Associar ao equipamento <span class="text-muted fw-normal">(opcional)</span></strong>
+          </div>
+          <p class="text-muted small mb-2">
+            Se selecionar um equipamento, todos os spare parts importados serão associados a ele.<br />
+            PNs já cadastrados serão apenas vinculados (sem duplicação). PNs novos serão cadastrados e vinculados.
+          </p>
+          <div class="row g-2">
+            <div class="col-12 col-md-6">
+              <select class="form-select form-select-sm" id="aiImportCustomerSelect">
+                <option value="">— Nenhum cliente (não associar) —</option>
+                <% (customers || []).forEach(function(c) { %>
+                  <option value="<%= c.id %>"><%= c.name %></option>
+                <% }); %>
+              </select>
+            </div>
+            <div class="col-12 col-md-6">
+              <select class="form-select form-select-sm" id="aiImportEquipmentSelect" disabled>
+                <option value="">— Selecione um cliente primeiro —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
       </div>
       <div class="modal-footer gap-2 flex-wrap">
         <span id="aiImportResult" class="small me-auto"></span>
@@ -1052,6 +1078,11 @@
   </div>
 </div>
 
+<script>
+  window._aiAllEquipments = <%- JSON.stringify((allEquipments || []).map(function(e) {
+    return { id: e.id, tag_number: e.tag_number || '', dt_number: e.dt_number || '', serial_number: e.serial_number || '', customer_id: e.customer_id };
+  })).replace(/</g, "\\u003c") %>;
+</script>
 <script>
 (function () {
   var csrfToken = "<%= csrfToken %>";
@@ -1073,6 +1104,45 @@
   var importBtn = document.getElementById("aiImportBtn");
   var importSpinner = document.getElementById("aiImportSpinner");
   var importResult = document.getElementById("aiImportResult");
+  var customerSelect = document.getElementById("aiImportCustomerSelect");
+  var equipmentSelect = document.getElementById("aiImportEquipmentSelect");
+  var allEquipments = window._aiAllEquipments || [];
+
+  function buildEquipmentLabel(eq) {
+    var parts = [eq.tag_number, eq.dt_number, eq.serial_number].filter(Boolean);
+    return parts.length ? parts.join(" - ") : "ID " + eq.id;
+  }
+
+  function filterEquipments(customerId) {
+    equipmentSelect.innerHTML = "";
+    var noneOpt = document.createElement("option");
+    noneOpt.value = "";
+    if (!customerId) {
+      noneOpt.textContent = "— Selecione um cliente primeiro —";
+      equipmentSelect.appendChild(noneOpt);
+      equipmentSelect.disabled = true;
+      return;
+    }
+    noneOpt.textContent = "— Nenhum equipamento (não associar) —";
+    equipmentSelect.appendChild(noneOpt);
+    var filtered = allEquipments.filter(function(e) { return Number(e.customer_id) === Number(customerId); });
+    filtered.forEach(function(eq) {
+      var opt = document.createElement("option");
+      opt.value = eq.id;
+      opt.textContent = buildEquipmentLabel(eq);
+      equipmentSelect.appendChild(opt);
+    });
+    equipmentSelect.disabled = filtered.length === 0;
+    if (filtered.length === 0) {
+      noneOpt.textContent = "— Nenhum equipamento para este cliente —";
+    }
+  }
+
+  if (customerSelect) {
+    customerSelect.addEventListener("change", function() {
+      filterEquipments(customerSelect.value);
+    });
+  }
 
   var _extractStartedAt = null;
   var _extractTimer = null;
@@ -1250,6 +1320,8 @@
     var body = new URLSearchParams();
     body.append("_csrf", csrfToken);
     body.append("spare_parts", JSON.stringify(parsed));
+    var selectedEquipmentId = equipmentSelect && equipmentSelect.value ? equipmentSelect.value : "";
+    if (selectedEquipmentId) body.append("equipment_id", selectedEquipmentId);
 
     fetch(aiBulkImportUrl, {
       method: "POST",
@@ -1272,7 +1344,8 @@
         if (data.skippedExisting > 0) skipParts.push(data.skippedExisting + " PN j\u00e1 cadastrado" + (data.skippedExisting > 1 ? "s" : ""));
         if (data.skippedIntraJson > 0) skipParts.push(data.skippedIntraJson + " PN duplicado" + (data.skippedIntraJson > 1 ? "s" : "") + " no JSON");
         var skipMsg = skipParts.length ? " &mdash; Ignorados: <strong>" + data.skipped + "</strong> (" + skipParts.join(", ") + ")" : (data.skipped > 0 ? " &mdash; Ignorados: <strong>" + data.skipped + "</strong>" : "");
-        importResult.innerHTML = "<span class='text-success'>\u2705 Importados: <strong>" + data.inserted + "</strong>" + skipMsg + "</span>";
+        var linkedMsg = (data.linked > 0) ? " &mdash; Vinculados ao equipamento: <strong>" + data.linked + "</strong>" : "";
+        importResult.innerHTML = "<span class='text-success'>\u2705 Importados: <strong>" + data.inserted + "</strong>" + skipMsg + linkedMsg + "</span>";
         if (data.inserted > 0) {
           setTimeout(function () { window.location.href = "/admin/report-service/spare-parts?created=1"; }, 1600);
         }

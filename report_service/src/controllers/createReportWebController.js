@@ -980,6 +980,7 @@ function createReportWebController(deps) {
         pageTitle: "Service Report - Spare Parts",
         spareParts,
         equipments: filteredEquipments,
+        allEquipments: equipments,
         customers,
         selectedEquipment,
         selectedEquipmentId: selectedEquipment ? selectedEquipment.id : 0,
@@ -1110,6 +1111,9 @@ function createReportWebController(deps) {
         return res.status(422).json({ ok: false, message: "Nenhum spare part para importar." });
       }
 
+      const equipmentId = Number(req.body.equipment_id || 0);
+      const hasEquipment = Number.isInteger(equipmentId) && equipmentId > 0;
+
       const normalized = items.map((item) => ({
         description: sanitizeInput(String(item.description || "")).trim(),
         manufacturer: sanitizeInput(String(item.manufacturer || "")).trim(),
@@ -1126,12 +1130,36 @@ function createReportWebController(deps) {
       }
 
       const result = await repo.bulkCreateSpareParts(normalized);
+
+      let linked = 0;
+      if (hasEquipment) {
+        // IDs recém-inseridos
+        const newIds = (result.items || []).map((item) => Number(item.id));
+
+        // IDs de PNs já existentes que foram pulados no bulk (precisamos vincular também)
+        const allPartNumbers = normalized
+          .map((item) => String(item.partNumber || "").trim())
+          .filter(Boolean);
+        const existingRows = allPartNumbers.length > 0
+          ? await repo.getSparePartsByPartNumbers(allPartNumbers)
+          : [];
+        const existingIds = existingRows.map((r) => Number(r.id));
+
+        const allIds = [...new Set([...newIds, ...existingIds])];
+        for (const id of allIds) {
+          // eslint-disable-next-line no-await-in-loop
+          await repo.linkSparePartToEquipmentIfMissing(equipmentId, id);
+          linked++;
+        }
+      }
+
       return res.json({
         ok: true,
         inserted: result.inserted,
         skipped: result.skipped,
         skippedIntraJson: result.skippedIntraJson,
-        skippedExisting: result.skippedExisting
+        skippedExisting: result.skippedExisting,
+        linked
       });
     },
 
