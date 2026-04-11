@@ -251,9 +251,15 @@ function createReportWebController(deps) {
       cliente: order.customer_name || "",
       local: order.site_name || "",
       data_abertura: (() => {
-        const raw = order.opening_date ? String(order.opening_date).slice(0, 10) : "";
-        const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        return m ? `${m[3]}/${m[2]}/${m[1]}` : raw;
+        const val = order.opening_date;
+        if (!val) return "";
+        // node-postgres retorna colunas DATE como objetos Date (meia-noite UTC)
+        // String(dateObj) produz "Sat Apr 11 2026..." que quebra o regex ISO
+        const iso = val instanceof Date
+          ? `${val.getUTCFullYear()}-${String(val.getUTCMonth() + 1).padStart(2, "0")}-${String(val.getUTCDate()).padStart(2, "0")}`
+          : String(val).slice(0, 10);
+        const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
       })(),
       status: order.status || "",
       tecnicos: techNames
