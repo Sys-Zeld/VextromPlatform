@@ -644,6 +644,94 @@ async function bulkCreateSpareParts(items) {
   };
 }
 
+/**
+ * Import/upsert spare parts for a given equipment.
+ * Rules:
+ *  - Row has a PN that matches an existing spare part → UPDATE the spare part record + link to equipment
+ *  - Row has a PN that does NOT exist → CREATE the spare part + link to equipment
+ *  - Row has no PN → CREATE (description-only) + link to equipment
+ *  - quantity from XLSX is applied to the equipment link row
+ */
+async function bulkUpsertLinkedSpareParts(equipmentId, items) {
+  let updated = 0;
+  let inserted = 0;
+  let linked = 0;
+
+  for (const item of items) {
+    const pn = String(item.partNumber || "").trim();
+    const pnLower = pn.toLowerCase();
+    let sparePartId = null;
+
+    if (pn) {
+      // Try to find existing spare part by PN
+      const findRes = await db.query( // eslint-disable-line no-await-in-loop
+        `SELECT id FROM service_report_spare_parts WHERE LOWER(part_number) = $1 AND part_number <> '' LIMIT 1`,
+        [pnLower]
+      );
+
+      if (findRes.rows.length > 0) {
+        // UPDATE existing record
+        sparePartId = findRes.rows[0].id;
+        await db.query( // eslint-disable-line no-await-in-loop
+          `UPDATE service_report_spare_parts
+           SET description = $2, manufacturer = $3, equipment_model = $4,
+               lead_time = $5, is_obsolete = $6, replaced_by_part_number = $7,
+               equipment_family = $8, updated_at = NOW()
+           WHERE id = $1`,
+          [
+            sparePartId,
+            item.description,
+            item.manufacturer || "",
+            item.equipmentModel || "",
+            item.leadTime || "",
+            Boolean(item.isObsolete),
+            item.replacedByPartNumber || "",
+            item.equipmentFamily || ""
+          ]
+        );
+        updated++;
+      }
+    }
+
+    if (!sparePartId) {
+      // INSERT new spare part
+      try {
+        const row = await createSparePart(item); // eslint-disable-line no-await-in-loop
+        sparePartId = row.id;
+        inserted++;
+      } catch (err) {
+        // PN race condition — try to find it again
+        if (err.code === "pn_duplicate" && pn) {
+          const retryRes = await db.query( // eslint-disable-line no-await-in-loop
+            `SELECT id FROM service_report_spare_parts WHERE LOWER(part_number) = $1 AND part_number <> '' LIMIT 1`,
+            [pnLower]
+          );
+          if (retryRes.rows.length > 0) {
+            sparePartId = retryRes.rows[0].id;
+            updated++;
+          }
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    if (sparePartId) {
+      const qty = Number.isInteger(Number(item.quantity)) && Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+      await db.query( // eslint-disable-line no-await-in-loop
+        `INSERT INTO service_report_equipment_spare_parts (equipment_id, spare_part_id, quantity, created_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (equipment_id, spare_part_id)
+         DO UPDATE SET quantity = EXCLUDED.quantity`,
+        [equipmentId, sparePartId, qty]
+      );
+      linked++;
+    }
+  }
+
+  return { updated, inserted, linked };
+}
+
 async function updateSparePart(id, payload) {
   let result;
   try {
@@ -2118,6 +2206,7 @@ module.exports = {
   getSparePartById,
   createSparePart,
   bulkCreateSpareParts,
+  bulkUpsertLinkedSpareParts,
   getSparePartsByPartNumbers,
   updateSparePart,
   deleteSparePart,

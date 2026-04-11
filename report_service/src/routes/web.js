@@ -122,6 +122,7 @@ function createReportServiceWebRouter(deps) {
   router.post("/spare-parts/:id/update", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateSparePart));
   router.post("/spare-parts/:id/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteSparePart));
   router.post("/spare-parts/equipment-links", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.linkSparePartToEquipment));
+  router.post("/spare-parts/equipment-links/import", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.importLinkedSpareParts));
   router.post("/spare-parts/equipment-links/auto-family", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.autoLinkSparePartsByFamily));
   router.post("/spare-parts/equipment-links/:equipmentId/:sparePartId/quantity", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateSparePartQuantityByEquipment));
   router.post("/spare-parts/equipment-links/:equipmentId/:sparePartId/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.unlinkSparePartFromEquipment));

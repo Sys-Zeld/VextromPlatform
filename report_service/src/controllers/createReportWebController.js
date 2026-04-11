@@ -978,8 +978,14 @@ function createReportWebController(deps) {
 
       const linkedSpareParts = selectedEquipment ? await repo.listSparePartsByEquipment(selectedEquipment.id) : [];
       const linkedIds = new Set(linkedSpareParts.map((item) => Number(item.id)));
+      const linkedPns = new Set(linkedSpareParts.map((item) => (item.part_number || "").trim().toLowerCase()).filter(Boolean));
       const availableSpareParts = selectedEquipment
-        ? spareParts.filter((item) => !linkedIds.has(Number(item.id)))
+        ? spareParts.filter((item) => {
+            if (linkedIds.has(Number(item.id))) return false;
+            const pn = (item.part_number || "").trim().toLowerCase();
+            if (pn && linkedPns.has(pn)) return false;
+            return true;
+          })
         : spareParts;
 
       return res.render("report-service/spare-parts", {
@@ -1169,6 +1175,55 @@ function createReportWebController(deps) {
       });
     },
 
+    async importLinkedSpareParts(req, res) {
+      const equipmentId = Number(req.body.equipment_id);
+      if (!Number.isInteger(equipmentId) || equipmentId <= 0) {
+        return res.status(422).json({ ok: false, message: "Equipamento inválido." });
+      }
+
+      const equipment = await repo.getEquipmentById(equipmentId);
+      if (!equipment) {
+        return res.status(404).json({ ok: false, message: "Equipamento não encontrado." });
+      }
+
+      let rows;
+      try {
+        rows = Array.isArray(req.body.rows) ? req.body.rows : JSON.parse(req.body.rows || "[]");
+      } catch (_e) {
+        return res.status(422).json({ ok: false, message: "Dados inválidos." });
+      }
+
+      if (!Array.isArray(rows) || !rows.length) {
+        return res.status(422).json({ ok: false, message: "Nenhuma linha para importar." });
+      }
+
+      const normalized = rows.map((r) => ({
+        description: sanitizeInput(String(r.description || "")).trim(),
+        manufacturer: sanitizeInput(String(r.manufacturer || "")).trim(),
+        partNumber: sanitizeInput(String(r.part_number || "")).trim(),
+        equipmentModel: sanitizeInput(String(r.equipment_model || "")).trim(),
+        equipmentFamily: sanitizeInput(String(r.equipment_family || "")).trim(),
+        leadTime: sanitizeInput(String(r.lead_time || "")).trim(),
+        replacedByPartNumber: sanitizeInput(String(r.replaced_by_part_number || "")).trim(),
+        isObsolete: r.is_obsolete === true || String(r.is_obsolete || "").toLowerCase() === "true"
+          || String(r.is_obsolete || "").toLowerCase() === "sim",
+        quantity: Number.isInteger(Number(r.quantity)) && Number(r.quantity) > 0 ? Number(r.quantity) : 1
+      })).filter((r) => r.description);
+
+      if (!normalized.length) {
+        return res.status(422).json({ ok: false, message: "Nenhuma linha com descrição válida." });
+      }
+
+      const result = await repo.bulkUpsertLinkedSpareParts(equipmentId, normalized);
+
+      return res.json({
+        ok: true,
+        updated: result.updated,
+        inserted: result.inserted,
+        linked: result.linked
+      });
+    },
+
     async getSparePartsAiConfig(_req, res) {
       return res.json({
         ok: true,
@@ -1200,6 +1255,18 @@ function createReportWebController(deps) {
       }
       if (!sparePart) {
         return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&error=spare_part_not_found`);
+      }
+
+      // Block if equipment already has a spare part with the same PN
+      if (sparePart.part_number) {
+        const alreadyLinked = await repo.listSparePartsByEquipment(equipmentId);
+        const pnLower = sparePart.part_number.trim().toLowerCase();
+        const conflict = alreadyLinked.find(
+          (item) => (item.part_number || "").trim().toLowerCase() === pnLower
+        );
+        if (conflict) {
+          return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&error=pn_duplicate`);
+        }
       }
 
       await repo.linkSparePartToEquipment(equipmentId, sparePartId, quantity);

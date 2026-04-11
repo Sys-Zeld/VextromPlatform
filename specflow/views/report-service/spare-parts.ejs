@@ -203,8 +203,11 @@
 
             <div class="d-flex justify-content-between align-items-center mb-2">
               <span class="small text-muted"><%= t("rs.spare.linkedSparePartsLabel") %></span>
-              <div class="d-flex gap-1">
+              <div class="d-flex gap-1 flex-wrap">
                 <button class="btn btn-outline-secondary btn-sm" type="button" id="exportLinkedSparePartsBtn">&#8595; Exportar</button>
+                <label class="btn btn-outline-success btn-sm mb-0" for="importLinkedXlsxInput" style="cursor:pointer;" title="Importar XLSX (atualiza existentes e insere novos)">&#8593; Importar XLSX
+                  <input type="file" id="importLinkedXlsxInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="d-none" />
+                </label>
                 <button class="btn btn-primary btn-sm" type="button" id="printLinkedSparePartsBtn"><%= t("rs.spare.printList") %></button>
               </div>
             </div>
@@ -638,6 +641,143 @@
       win.document.close();
       win.focus();
       win.print();
+    });
+  })();
+</script>
+<script>
+  // ── IMPORT XLSX para spare-parts do equipamento ─────────────────────────
+  (function () {
+    var fileInput = document.getElementById("importLinkedXlsxInput");
+    if (!fileInput) return;
+
+    var EQUIPMENT_ID = <%- JSON.stringify(selectedEquipment ? Number(selectedEquipment.id) : 0) %>;
+    var CSRF_TOKEN   = <%- JSON.stringify(csrfToken) %>;
+    var IMPORT_URL   = "/admin/report-service/spare-parts/equipment-links/import";
+
+    // Column header aliases (case-insensitive) used in the export XLSX
+    var COL_ALIASES = {
+      id:                   ["id"],
+      description:          ["descrição", "descricao", "description"],
+      part_number:          ["part number", "pn", "part_number", "partnumber"],
+      manufacturer:         ["fabricante", "manufacturer"],
+      quantity:             ["qtd", "quantidade", "quantity"],
+      is_obsolete:          ["obsoleto", "obsolete", "is_obsolete"],
+      equipment_model:      ["modelo", "model", "equipment_model"],
+      equipment_family:     ["model family", "family", "equipment_family"],
+      lead_time:            ["lead time", "lead_time"],
+      replaced_by_part_number: ["substituido por", "replaced by", "replaced_by_part_number"]
+    };
+
+    function normalizeHeader(h) {
+      return String(h || "").trim().toLowerCase();
+    }
+
+    function mapHeaders(headers) {
+      // Returns { fieldName: colIndex }
+      var map = {};
+      headers.forEach(function (h, idx) {
+        var norm = normalizeHeader(h);
+        Object.keys(COL_ALIASES).forEach(function (field) {
+          if (COL_ALIASES[field].indexOf(norm) !== -1 && !(field in map)) {
+            map[field] = idx;
+          }
+        });
+      });
+      return map;
+    }
+
+    function parseXlsx(file, callback) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          var wb = XLSX.read(e.target.result, { type: "array" });
+          var ws = wb.Sheets[wb.SheetNames[0]];
+          var raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+          if (!raw.length) return callback(new Error("Planilha vazia."), null);
+
+          var headers = raw[0].map(String);
+          var headerMap = mapHeaders(headers);
+
+          if (!("description" in headerMap)) {
+            return callback(new Error("Coluna 'Descrição' não encontrada na planilha."), null);
+          }
+
+          var rows = [];
+          for (var i = 1; i < raw.length; i++) {
+            var r = raw[i];
+            var desc = String(r[headerMap.description] !== undefined ? r[headerMap.description] : "").trim();
+            if (!desc) continue;
+
+            var qty = "quantity" in headerMap ? Number(r[headerMap.quantity]) : 1;
+            if (!Number.isInteger(qty) || qty <= 0) qty = 1;
+
+            var obsoleteRaw = "is_obsolete" in headerMap ? String(r[headerMap.is_obsolete] || "").trim().toLowerCase() : "";
+            var isObsolete = obsoleteRaw === "sim" || obsoleteRaw === "true" || obsoleteRaw === "yes";
+
+            rows.push({
+              description:              desc,
+              part_number:              "part_number" in headerMap ? String(r[headerMap.part_number] || "").trim() : "",
+              manufacturer:             "manufacturer" in headerMap ? String(r[headerMap.manufacturer] || "").trim() : "",
+              quantity:                 qty,
+              is_obsolete:              isObsolete,
+              equipment_model:          "equipment_model" in headerMap ? String(r[headerMap.equipment_model] || "").trim() : "",
+              equipment_family:         "equipment_family" in headerMap ? String(r[headerMap.equipment_family] || "").trim() : "",
+              lead_time:                "lead_time" in headerMap ? String(r[headerMap.lead_time] || "").trim() : "",
+              replaced_by_part_number:  "replaced_by_part_number" in headerMap ? String(r[headerMap.replaced_by_part_number] || "").trim() : ""
+            });
+          }
+
+          callback(null, rows);
+        } catch (err) {
+          callback(err, null);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    fileInput.addEventListener("change", function () {
+      var file = fileInput.files[0];
+      if (!file) return;
+      fileInput.value = ""; // allow re-selecting same file
+
+      if (EQUIPMENT_ID <= 0) {
+        alert("Selecione um equipamento antes de importar.");
+        return;
+      }
+
+      if (!window.XLSX) {
+        alert("Biblioteca XLSX não carregada. Recarregue a página.");
+        return;
+      }
+
+      parseXlsx(file, function (err, rows) {
+        if (err) { alert("Erro ao ler o arquivo: " + err.message); return; }
+        if (!rows.length) { alert("Nenhuma linha com descrição encontrada na planilha."); return; }
+
+        if (!confirm("Importar " + rows.length + " linha(s)?\n\n• Spare-parts existentes (mesmo PN) serão ATUALIZADOS.\n• Novos serão CRIADOS e vinculados ao equipamento.")) return;
+
+        var body = new URLSearchParams();
+        body.append("_csrf", CSRF_TOKEN);
+        body.append("equipment_id", String(EQUIPMENT_ID));
+        body.append("rows", JSON.stringify(rows));
+
+        fetch(IMPORT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString()
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data.ok) { alert("Erro: " + (data.message || "Falha na importação.")); return; }
+            var msg = "Importação concluída!\n"
+              + "• Atualizados: " + data.updated + "\n"
+              + "• Inseridos: " + data.inserted + "\n"
+              + "• Vinculados: " + data.linked;
+            alert(msg);
+            window.location.reload();
+          })
+          .catch(function (e) { alert("Erro de rede: " + e.message); });
+      });
     });
   })();
 </script>
