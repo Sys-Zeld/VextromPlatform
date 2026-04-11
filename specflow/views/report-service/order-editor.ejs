@@ -141,7 +141,7 @@
               <select class="form-select" name="equipment_id" required>
                 <option value="">Selecione equipamento</option>
                 <% equipments.forEach((equipment) => { %>
-                  <option value="<%= equipment.id %>">#<%= equipment.id %> - <%= equipment.type %> (<%= equipment.serial_number || "-" %>)</option>
+                  <option value="<%= equipment.id %>"><%= equipment.tag_number || '-' %> - <%= equipment.dt_number || '-' %> - <%= equipment.serial_number || '-' %></option>
                 <% }) %>
                 <% if (!equipments.length) { %>
                   <option value="" disabled>Nenhum equipamento do cliente/site desta OS</option>

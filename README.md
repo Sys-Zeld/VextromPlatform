@@ -199,7 +199,7 @@ Validacao de seguranca no restore:
 ### Manutencao de dados (Report Service)
 
 - `npm run report-service:spare-parts:clear` — apaga todos os spare parts e vinculos com equipamentos (pede confirmacao digitando `CONFIRMAR`)
-- `npm run report-service:os:init -- <ANO>:<NUMERO>` — redefine o número inicial da próxima OS para um determinado ano
+- `npm run report-service:os:init -- <numero>:<ano>` — redefine o número inicial da próxima OS para um determinado ano
 
   ```bash
   # Próxima OS de 2025 começa em 001
