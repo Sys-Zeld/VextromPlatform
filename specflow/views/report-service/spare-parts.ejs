@@ -163,9 +163,7 @@
           <% if (selectedEquipment) { %>
             <div class="alert alert-light border mb-3">
               <strong><%= t("rs.spare.selectedEquipLabel") %>:</strong>
-              #<%= selectedEquipment.id %> - <%= selectedEquipment.type || '-' %> (Serial: <%= selectedEquipment.serial_number || '-' %>)
-              <br />
-              <strong>Model Family:</strong> <%= selectedEquipment.model_family || '-' %>
+              <%= selectedEquipment.tag_number || '-' %> - <%= selectedEquipment.dt_number || '-' %>
             </div>
 
             <div class="mb-3 d-flex justify-content-end">
@@ -188,9 +186,7 @@
                 <select class="form-select" name="spare_part_id" required>
                   <option value=""><%= t("rs.spare.selectSpareToLink") %></option>
                   <% (availableSpareParts || []).forEach((item) => { %>
-                    <option value="<%= item.id %>">
-                      #<%= item.id %> - <%= item.description || '-' %> (PN: <%= item.part_number || '-' %>)
-                    </option>
+                    <option value="<%= item.id %>"><%= item.description || '-' %> - <%= item.part_number || '-' %></option>
                   <% }) %>
                   <% if (!(availableSpareParts || []).length) { %>
                     <option value="" disabled><%= t("rs.spare.noSpareAvailable") %></option>
