@@ -91,6 +91,39 @@
           }, 80);
         }
 
+        // ---- Scroll position preservation across form submits ----
+        (function () {
+          var SCROLL_KEY = "_vx_scroll_" + location.pathname;
+
+          // Save scroll position before any form submit (GET or POST)
+          var allForms = document.querySelectorAll("form");
+          Array.prototype.slice.call(allForms).forEach(function (form) {
+            form.addEventListener("submit", function () {
+              try {
+                sessionStorage.setItem(SCROLL_KEY, String(Math.round(window.scrollY)));
+              } catch (_e) {}
+            });
+          });
+
+          // Restore scroll position on page load
+          var savedY = 0;
+          try {
+            savedY = parseInt(sessionStorage.getItem(SCROLL_KEY) || "0", 10);
+          } catch (_e) {}
+
+          if (savedY > 0) {
+            try { sessionStorage.removeItem(SCROLL_KEY); } catch (_e) {}
+            // Only restore if no alert will take focus (centerFirstSystemAlert handles that case)
+            var hasVisibleAlert = Array.prototype.slice.call(document.querySelectorAll(".alert")).some(isVisibleAlert);
+            if (!hasVisibleAlert) {
+              // Use requestAnimationFrame to wait for layout to be ready
+              requestAnimationFrame(function () {
+                window.scrollTo({ top: savedY, behavior: "instant" });
+              });
+            }
+          }
+        })();
+
         centerFirstSystemAlert();
       })();
     </script>

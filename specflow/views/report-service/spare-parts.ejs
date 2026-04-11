@@ -147,7 +147,7 @@
                 <option value=""><%= Number(selectedCustomerId) > 0 ? t("rs.spare.selectEquipmentCustomer") : t("rs.spare.selectEquipment") %></option>
                 <% (equipments || []).forEach((equipment) => { %>
                   <option value="<%= equipment.id %>" <%= Number(selectedEquipmentId) === Number(equipment.id) ? 'selected' : '' %>>
-                    #<%= equipment.id %> - <%= equipment.tag_number || '-' %> - <%= equipment.dt_number || '-' %> - <%= equipment.site_name || '-' %>
+                    <%= equipment.tag_number || '-' %> - <%= equipment.dt_number || '-' %> - <%= equipment.site_name || '-' %>
                   </option>
                 <% }) %>
               </select>
