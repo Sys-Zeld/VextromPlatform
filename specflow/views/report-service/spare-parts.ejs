@@ -119,6 +119,9 @@
             </div>
           </form>
 
+          <div class="d-flex justify-content-end mb-1">
+            <span id="sparePartsCounter" class="text-muted small"></span>
+          </div>
           <div class="spare-parts-grid-wrap">
             <div id="sparePartsGrid"></div>
           </div>
@@ -208,6 +211,9 @@
                 <button class="btn btn-outline-secondary btn-sm" type="button" id="exportLinkedSparePartsBtn">&#8595; Exportar</button>
                 <button class="btn btn-primary btn-sm" type="button" id="printLinkedSparePartsBtn"><%= t("rs.spare.printList") %></button>
               </div>
+            </div>
+            <div class="d-flex justify-content-end mb-1">
+              <span id="linkedSparePartsCounter" class="text-muted small"></span>
             </div>
             <div class="spare-parts-grid-wrap">
               <div id="linkedSparePartsGrid"></div>
@@ -335,6 +341,19 @@
       return;
     }
 
+    var spareCounter = document.getElementById("sparePartsCounter");
+
+    function updateSpareCounter(total, filtered) {
+      if (!spareCounter) return;
+      if (filtered !== undefined && filtered !== total) {
+        spareCounter.textContent = filtered + " de " + total + " itens";
+      } else {
+        spareCounter.textContent = total + " itens";
+      }
+    }
+
+    updateSpareCounter(data.length);
+
     new window.gridjs.Grid({
       columns: [
         { id: "id", name: i18n.colId, width: "80px" },
@@ -359,6 +378,18 @@
         error: i18n.error
       }
     }).render(gridTarget);
+
+    // Atualiza contador quando GridJS re-renderiza (busca / paginação)
+    (new MutationObserver(function () {
+      var tbody = gridTarget.querySelector(".gridjs-tbody");
+      if (!tbody) return;
+      var rows = tbody.querySelectorAll(".gridjs-tr");
+      var noResults = tbody.querySelector(".gridjs-notfound");
+      var visible = noResults ? 0 : rows.length;
+      var searchInput = gridTarget.querySelector(".gridjs-search-input");
+      var hasFilter = searchInput && searchInput.value.trim().length > 0;
+      updateSpareCounter(data.length, hasFilter ? visible : data.length);
+    })).observe(gridTarget, { childList: true, subtree: true });
 
     function openEditModal(item) {
       editForm.action = "/admin/report-service/spare-parts/" + encodeURIComponent(String(item.id)) + "/update";
@@ -466,6 +497,19 @@
       };
     });
 
+    var linkedCounter = document.getElementById("linkedSparePartsCounter");
+
+    function updateLinkedCounter(total, filtered) {
+      if (!linkedCounter) return;
+      if (filtered !== undefined && filtered !== total) {
+        linkedCounter.textContent = filtered + " de " + total + " itens";
+      } else {
+        linkedCounter.textContent = total + " itens";
+      }
+    }
+
+    updateLinkedCounter(data.length);
+
     new window.gridjs.Grid({
       columns: [
         { id: "id", name: i18n.colId, width: "70px" },
@@ -487,6 +531,18 @@
         error: i18n.error
       }
     }).render(linkedTarget);
+
+    // Atualiza contador quando GridJS re-renderiza (busca / paginação)
+    (new MutationObserver(function () {
+      var tbody = linkedTarget.querySelector(".gridjs-tbody");
+      if (!tbody) return;
+      var rows = tbody.querySelectorAll(".gridjs-tr");
+      var noResults = tbody.querySelector(".gridjs-notfound");
+      var visible = noResults ? 0 : rows.length;
+      var searchInput = linkedTarget.querySelector(".gridjs-search-input");
+      var hasFilter = searchInput && searchInput.value.trim().length > 0;
+      updateLinkedCounter(data.length, hasFilter ? visible : data.length);
+    })).observe(linkedTarget, { childList: true, subtree: true });
   })();
 </script>
 <script>
