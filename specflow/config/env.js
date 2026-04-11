@@ -101,6 +101,7 @@ module.exports = {
     pepper: process.env.API_KEY_PEPPER || process.env.ADMIN_SESSION_SECRET || "change-me-too",
     defaultTtlDays: Math.max(1, Number(process.env.API_KEY_DEFAULT_TTL_DAYS || 365))
   },
+  aiProvider: String(process.env.AI_PROVIDER || "openai").toLowerCase(),
   openai: {
     apiKey: process.env.OPENAI_API_KEY || "",
     model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
@@ -109,6 +110,15 @@ module.exports = {
     maxOutputRetries: Math.max(0, Number(process.env.OPENAI_MAX_OUTPUT_RETRIES || 2)),
     maxOutputTokensCap: Math.max(1000, Number(process.env.OPENAI_MAX_OUTPUT_TOKENS_CAP || 20000)),
     requestTimeoutMs: Math.max(30000, Number(process.env.OPENAI_REQUEST_TIMEOUT_MS || 300000))
+  },
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY || "",
+    model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6",
+    baseUrl: String(process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/+$/, ""),
+    maxOutputTokens: Math.max(1000, Number(process.env.ANTHROPIC_MAX_OUTPUT_TOKENS || 8000)),
+    maxOutputRetries: Math.max(0, Number(process.env.ANTHROPIC_MAX_OUTPUT_RETRIES || 2)),
+    maxOutputTokensCap: Math.max(1000, Number(process.env.ANTHROPIC_MAX_OUTPUT_TOKENS_CAP || 20000)),
+    requestTimeoutMs: Math.max(30000, Number(process.env.ANTHROPIC_REQUEST_TIMEOUT_MS || 300000))
   },
   storage: {
     docsDir: process.env.DOCS_DIR || path.join(process.cwd(), "dados", "docs")

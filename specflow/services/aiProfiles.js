@@ -9,6 +9,7 @@ function stripJsonCodeFence(raw) {
     .trim();
 }
 
+// ---- OpenAI-specific output extraction ----
 function extractOutputText(responseJson) {
   if (responseJson && typeof responseJson.output_text === "string" && responseJson.output_text.trim()) {
     return responseJson.output_text;
@@ -74,6 +75,18 @@ function buildProfileAiPrompt({ jsonModelTemplate, userInstructions = "", prompt
   return sections.join("\n");
 }
 
+// ---- Provider helpers ----
+function getActiveProvider() {
+  return String(env.aiProvider || "openai").toLowerCase();
+}
+
+function getProviderConfig() {
+  const provider = getActiveProvider();
+  if (provider === "anthropic") return env.anthropic;
+  return env.openai;
+}
+
+// ---- OpenAI caller ----
 function isMaxTokensIncomplete(payload) {
   return Boolean(
     payload
@@ -120,12 +133,160 @@ async function callOpenAiResponsesApi(body) {
     err.debug = { openaiResponse: payload };
     throw err;
   }
+  payload._provider = "openai";
   return payload;
 }
 
+// ---- Anthropic caller ----
+async function callAnthropicMessagesApi(body) {
+  const cfg = env.anthropic;
+  const timeoutMs = cfg.requestTimeoutMs || 300000;
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(`${cfg.baseUrl}/v1/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": cfg.apiKey,
+        "anthropic-version": "2023-06-01"
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+  } catch (fetchErr) {
+    clearTimeout(timeoutHandle);
+    if (fetchErr.name === "AbortError") {
+      const err = new Error(`Timeout apos ${Math.round(timeoutMs / 1000)}s aguardando resposta da Anthropic. Tente com um documento menor ou aumente ANTHROPIC_REQUEST_TIMEOUT_MS.`);
+      err.statusCode = 504;
+      throw err;
+    }
+    throw fetchErr;
+  }
+  clearTimeout(timeoutHandle);
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = payload && payload.error && payload.error.message
+      ? payload.error.message
+      : "Falha ao chamar API da Anthropic.";
+    const err = new Error(message);
+    err.statusCode = response.status || 502;
+    err.debug = { anthropicResponse: payload };
+    throw err;
+  }
+  payload._provider = "anthropic";
+  return payload;
+}
+
+// ---- Unified output extraction and truncation detection ----
+function extractAiText(payload) {
+  if (payload && payload._provider === "anthropic") {
+    if (!Array.isArray(payload.content) || !payload.content.length) return "";
+    return String(payload.content[0].text || "").trim();
+  }
+  return extractOutputText(payload);
+}
+
+function isAiTruncated(payload) {
+  if (payload && payload._provider === "anthropic") {
+    return payload.stop_reason === "max_tokens";
+  }
+  return isMaxTokensIncomplete(payload);
+}
+
+// ---- Unified AI caller ----
+// userParts: array of { type: "text", text } or { type: "file", dataUrl, fileName, mimeType }
+async function callAiApi({ systemPrompt, userParts, maxTokens, temperature = 0.1 }) {
+  const provider = getActiveProvider();
+  const cfg = getProviderConfig();
+
+  if (provider === "anthropic") {
+    const content = userParts.map((part) => {
+      if (part.type === "text") {
+        return { type: "text", text: part.text };
+      }
+      // file/document
+      const base64 = part.dataUrl.replace(/^data:[^;]+;base64,/, "");
+      const mediaType = String(part.mimeType || "application/octet-stream").toLowerCase();
+      // Anthropic documents only support PDF and plain text
+      if (mediaType !== "application/pdf" && !mediaType.startsWith("text/")) {
+        const err = new Error(
+          `O provedor Anthropic nao suporta arquivos do tipo '${mediaType}'. Use PDF ou TXT, ou configure AI_PROVIDER=openai.`
+        );
+        err.statusCode = 422;
+        throw err;
+      }
+      return {
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: mediaType,
+          data: base64
+        }
+      };
+    });
+
+    const body = {
+      model: cfg.model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [{ role: "user", content }]
+    };
+    return callAnthropicMessagesApi(body);
+  }
+
+  // OpenAI (default)
+  const inputContent = userParts.map((part) => {
+    if (part.type === "text") {
+      return { type: "input_text", text: part.text };
+    }
+    return {
+      type: "input_file",
+      filename: part.fileName || "documento",
+      file_data: part.dataUrl
+    };
+  });
+
+  const body = {
+    model: cfg.model,
+    temperature,
+    max_output_tokens: maxTokens,
+    input: [
+      {
+        role: "system",
+        content: [{ type: "input_text", text: systemPrompt }]
+      },
+      {
+        role: "user",
+        content: inputContent
+      }
+    ]
+  };
+  return callOpenAiResponsesApi(body);
+}
+
+function stripQuillHtml(raw) {
+  return String(raw || "")
+    .replace(/\sclass="[^"]*"/gi, "")
+    .replace(/\sstyle="[^"]*"/gi, "")
+    .replace(/\sdata-[^=]+="[^"]*"/gi, "")
+    .replace(/<span>/gi, "")
+    .replace(/<\/span>/gi, "")
+    .replace(/(<br\s*\/?>\s*){2,}/gi, "<br>")
+    .trim();
+}
+
 async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType, jsonModelTemplate, userInstructions = "", promptTemplate = "" }) {
-  if (!env.openai.apiKey) {
-    const err = new Error("OPENAI_API_KEY nao configurada no ambiente.");
+  const provider = getActiveProvider();
+  const cfg = getProviderConfig();
+  const providerKeyName = provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+
+  if (!cfg.apiKey) {
+    const err = new Error(`${providerKeyName} nao configurada no ambiente.`);
     err.statusCode = 500;
     throw err;
   }
@@ -144,54 +305,32 @@ async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType,
     throw err;
   }
   const promptText = buildProfileAiPrompt({ jsonModelTemplate: template, userInstructions, promptTemplate });
-  const initialOutputTokens = Math.min(env.openai.maxOutputTokens, env.openai.maxOutputTokensCap);
-  const maxRetries = env.openai.maxOutputRetries;
+  const initialOutputTokens = Math.min(cfg.maxOutputTokens, cfg.maxOutputTokensCap);
+  const maxRetries = cfg.maxOutputRetries;
   const attemptsDebug = [];
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    const maxOutputTokens = Math.min(initialOutputTokens * (2 ** attempt), env.openai.maxOutputTokensCap);
-    const body = {
-      model: env.openai.model,
-      temperature: 0.1,
-      max_output_tokens: maxOutputTokens,
-      input: [
-        {
-          role: "system",
-          content: [
-            {
-              type: "input_text",
-              text: "Voce extrai requisitos de especificacao tecnica de documentos e retorna somente JSON valido."
-            }
-          ]
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: promptText
-            },
-            {
-              type: "input_file",
-              filename: fileName || "documento",
-              file_data: dataUrl
-            }
-          ]
-        }
-      ]
-    };
+    const maxOutputTokens = Math.min(initialOutputTokens * (2 ** attempt), cfg.maxOutputTokensCap);
 
     // eslint-disable-next-line no-await-in-loop
-    const payload = await callOpenAiResponsesApi(body);
-    const rawText = extractOutputText(payload);
+    const payload = await callAiApi({
+      systemPrompt: "Voce extrai requisitos de especificacao tecnica de documentos e retorna somente JSON valido.",
+      userParts: [
+        { type: "text", text: promptText },
+        { type: "file", dataUrl, fileName: fileName || "documento", mimeType: safeMimeType }
+      ],
+      maxTokens: maxOutputTokens,
+      temperature: 0.1
+    });
+
+    const rawText = extractAiText(payload);
     const cleanedText = stripJsonCodeFence(rawText);
-    const truncatedByTokens = isMaxTokensIncomplete(payload);
+    const truncatedByTokens = isAiTruncated(payload);
 
     attemptsDebug.push({
       attempt: attempt + 1,
+      provider,
       maxOutputTokens,
-      status: payload && payload.status ? payload.status : "",
-      incompleteReason: payload && payload.incomplete_details ? payload.incomplete_details.reason : "",
       outputTextLength: cleanedText.length
     });
 
@@ -215,7 +354,7 @@ async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType,
       err.debug = {
         rawText,
         cleanedText,
-        openaiResponse: payload,
+        aiResponse: payload,
         attempts: attemptsDebug
       };
       throw err;
@@ -226,7 +365,7 @@ async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType,
       debug: {
         rawText,
         cleanedText,
-        openaiResponse: payload,
+        aiResponse: payload,
         attempts: attemptsDebug
       }
     };
@@ -238,17 +377,6 @@ async function generateProfileJsonFromDocument({ fileBuffer, fileName, mimeType,
   throw err;
 }
 
-function stripQuillHtml(raw) {
-  return String(raw || "")
-    .replace(/\sclass="[^"]*"/gi, "")
-    .replace(/\sstyle="[^"]*"/gi, "")
-    .replace(/\sdata-[^=]+="[^"]*"/gi, "")
-    .replace(/<span>/gi, "")
-    .replace(/<\/span>/gi, "")
-    .replace(/(<br\s*\/?>\s*){2,}/gi, "<br>")
-    .trim();
-}
-
 async function reviseTextWithAi({
   text,
   html = "",
@@ -257,8 +385,12 @@ async function reviseTextWithAi({
   preserveFormatting = false,
   maxOutputTokens = null
 }) {
-  if (!env.openai.apiKey) {
-    const err = new Error("OPENAI_API_KEY nao configurada no ambiente.");
+  const provider = getActiveProvider();
+  const cfg = getProviderConfig();
+  const providerKeyName = provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+
+  if (!cfg.apiKey) {
+    const err = new Error(`${providerKeyName} nao configurada no ambiente.`);
     err.statusCode = 500;
     throw err;
   }
@@ -272,27 +404,16 @@ async function reviseTextWithAi({
   }
 
   const tokenCap = maxOutputTokens
-    ? Math.min(maxOutputTokens, env.openai.maxOutputTokensCap)
-    : Math.min(1200, env.openai.maxOutputTokensCap);
+    ? Math.min(maxOutputTokens, cfg.maxOutputTokensCap)
+    : Math.min(1200, cfg.maxOutputTokensCap);
 
-  let body;
+  let systemPrompt;
+  let userText;
+
   if (systemInstruction) {
-    // Modo traducao: instrucao no system message, apenas o texto na mensagem de usuario
-    body = {
-      model: env.openai.model,
-      temperature: 0.2,
-      max_output_tokens: tokenCap,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: String(systemInstruction).trim() }]
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: sourceText }]
-        }
-      ]
-    };
+    // Modo traducao: instrucao no system, texto do usuario na mensagem
+    systemPrompt = String(systemInstruction).trim();
+    userText = sourceText;
   } else {
     const instruction = String(prompt || "Revise o texto abaixo sem mudar muitas palavras").trim();
     const wantsHtml = Boolean(preserveFormatting);
@@ -303,39 +424,22 @@ async function reviseTextWithAi({
     const outputInstruction = wantsHtml
       ? "Retorne somente HTML revisado, sem markdown, sem explicacoes e preservando a estrutura de tags HTML."
       : "Retorne somente o texto revisado, sem explicacoes.";
-    body = {
-      model: env.openai.model,
-      temperature: 0.2,
-      max_output_tokens: tokenCap,
-      input: [
-        {
-          role: "system",
-          content: [
-            {
-              type: "input_text",
-              text: "Voce revisa textos tecnicos em portugues mantendo o sentido e alterando o minimo possivel."
-            }
-          ]
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: `${instruction}\n\n${reviewTarget}\n\n${outputInstruction}`
-            }
-          ]
-        }
-      ]
-    };
+    systemPrompt = "Voce revisa textos tecnicos em portugues mantendo o sentido e alterando o minimo possivel.";
+    userText = `${instruction}\n\n${reviewTarget}\n\n${outputInstruction}`;
   }
 
-  const payload = await callOpenAiResponsesApi(body);
-  const revised = stripJsonCodeFence(extractOutputText(payload)).trim();
+  const payload = await callAiApi({
+    systemPrompt,
+    userParts: [{ type: "text", text: userText }],
+    maxTokens: tokenCap,
+    temperature: 0.2
+  });
+
+  const revised = stripJsonCodeFence(extractAiText(payload)).trim();
   if (!revised) {
     const err = new Error("A IA nao retornou texto revisado.");
     err.statusCode = 422;
-    err.debug = { openaiResponse: payload };
+    err.debug = { aiResponse: payload };
     throw err;
   }
 
@@ -343,13 +447,13 @@ async function reviseTextWithAi({
     return {
       revisedHtml: revised,
       revisedText: revised,
-      debug: { openaiResponse: payload }
+      debug: { aiResponse: payload }
     };
   }
 
   return {
     revisedText: revised,
-    debug: { openaiResponse: payload }
+    debug: { aiResponse: payload }
   };
 }
 
@@ -400,8 +504,12 @@ function buildSparePartsPrompt(promptTemplate) {
 }
 
 async function extractSparePartsFromDocument({ fileBuffer, fileName, mimeType, promptTemplate = "" }) {
-  if (!env.openai.apiKey) {
-    const err = new Error("OPENAI_API_KEY nao configurada no ambiente.");
+  const provider = getActiveProvider();
+  const cfg = getProviderConfig();
+  const providerKeyName = provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+
+  if (!cfg.apiKey) {
+    const err = new Error(`${providerKeyName} nao configurada no ambiente.`);
     err.statusCode = 500;
     throw err;
   }
@@ -414,54 +522,32 @@ async function extractSparePartsFromDocument({ fileBuffer, fileName, mimeType, p
   const safeMimeType = String(mimeType || "application/octet-stream").trim().toLowerCase();
   const dataUrl = `data:${safeMimeType};base64,${fileBuffer.toString("base64")}`;
   const promptText = buildSparePartsPrompt(promptTemplate);
-  const initialOutputTokens = Math.min(env.openai.maxOutputTokens, env.openai.maxOutputTokensCap);
-  const maxRetries = env.openai.maxOutputRetries;
+  const initialOutputTokens = Math.min(cfg.maxOutputTokens, cfg.maxOutputTokensCap);
+  const maxRetries = cfg.maxOutputRetries;
   const attemptsDebug = [];
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    const maxOutputTokens = Math.min(initialOutputTokens * (2 ** attempt), env.openai.maxOutputTokensCap);
-    const body = {
-      model: env.openai.model,
-      temperature: 0.1,
-      max_output_tokens: maxOutputTokens,
-      input: [
-        {
-          role: "system",
-          content: [
-            {
-              type: "input_text",
-              text: "Voce extrai listas de spare parts de documentos tecnicos e retorna somente JSON valido (array)."
-            }
-          ]
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: promptText
-            },
-            {
-              type: "input_file",
-              filename: fileName || "documento",
-              file_data: dataUrl
-            }
-          ]
-        }
-      ]
-    };
+    const maxOutputTokens = Math.min(initialOutputTokens * (2 ** attempt), cfg.maxOutputTokensCap);
 
     // eslint-disable-next-line no-await-in-loop
-    const payload = await callOpenAiResponsesApi(body);
-    const rawText = extractOutputText(payload);
+    const payload = await callAiApi({
+      systemPrompt: "Voce extrai listas de spare parts de documentos tecnicos e retorna somente JSON valido (array).",
+      userParts: [
+        { type: "text", text: promptText },
+        { type: "file", dataUrl, fileName: fileName || "documento", mimeType: safeMimeType }
+      ],
+      maxTokens: maxOutputTokens,
+      temperature: 0.1
+    });
+
+    const rawText = extractAiText(payload);
     const cleanedText = stripJsonCodeFence(rawText);
-    const truncatedByTokens = isMaxTokensIncomplete(payload);
+    const truncatedByTokens = isAiTruncated(payload);
 
     attemptsDebug.push({
       attempt: attempt + 1,
+      provider,
       maxOutputTokens,
-      status: payload && payload.status ? payload.status : "",
-      incompleteReason: payload && payload.incomplete_details ? payload.incomplete_details.reason : "",
       outputTextLength: cleanedText.length
     });
 
@@ -482,20 +568,20 @@ async function extractSparePartsFromDocument({ fileBuffer, fileName, mimeType, p
           : "A IA retornou conteudo que nao e JSON valido."
       );
       err.statusCode = 422;
-      err.debug = { rawText, cleanedText, openaiResponse: payload, attempts: attemptsDebug };
+      err.debug = { rawText, cleanedText, aiResponse: payload, attempts: attemptsDebug };
       throw err;
     }
 
     if (!Array.isArray(parsed)) {
       const err = new Error("A IA nao retornou um array JSON de spare parts.");
       err.statusCode = 422;
-      err.debug = { rawText, cleanedText, openaiResponse: payload, attempts: attemptsDebug };
+      err.debug = { rawText, cleanedText, aiResponse: payload, attempts: attemptsDebug };
       throw err;
     }
 
     return {
       spareParts: parsed,
-      debug: { rawText, cleanedText, openaiResponse: payload, attempts: attemptsDebug }
+      debug: { rawText, cleanedText, aiResponse: payload, attempts: attemptsDebug }
     };
   }
 
