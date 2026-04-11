@@ -347,7 +347,7 @@
             <div class="col-12 col-md-4">
               <select class="form-select" name="equipment_id" id="componentEquipmentSelect">
                 <option value="">Sem equipamento</option>
-                <% orderEquipments.forEach((item) => { %><option value="<%= item.equipment_id %>"><%= item.type %></option><% }) %>
+                <% orderEquipments.forEach((item) => { %><option value="<%= item.equipment_id %>"><%= item.tag_number || '-' %></option><% }) %>
               </select>
             </div>
             <div class="col-12 col-md-4"><input class="form-control" name="quantity" placeholder="Quantidade" /></div>
@@ -522,7 +522,8 @@
         var opt = document.createElement("option");
         opt.value = String(item.description || "");
         opt.setAttribute("data-part-number", String(item.part_number || ""));
-        opt.innerHTML = esc(item.description || "-");
+        var pn = item.part_number ? esc(item.part_number) + " - " : "";
+        opt.innerHTML = pn + esc(item.description || "-");
         descriptionSelect.appendChild(opt);
       });
 
