@@ -547,48 +547,56 @@
     if (!printBtn) return;
 
     printBtn.addEventListener("click", function () {
+      var allData = window._linkedSparePartsRaw || [];
+      var i18n = window._linkedSparePartsI18n || {};
       var grid = document.getElementById("linkedSparePartsGrid");
-      if (!grid) return;
 
       // Equipment info from the alert block
       var equipmentInfo = (function () {
-        var alert = document.querySelector(".alert.alert-light.border");
-        return alert ? alert.innerText.replace(/\s+/g, " ").trim() : "";
+        var alertEl = document.querySelector(".alert.alert-light.border");
+        return alertEl ? alertEl.innerText.replace(/\s+/g, " ").trim() : "";
       })();
 
-      // Column headers — exclude last "Acoes" column
-      var headers = [];
-      var thEls = grid.querySelectorAll(".gridjs-thead .gridjs-th");
-      thEls.forEach(function (th, i) {
-        if (i < thEls.length - 1) headers.push(th.innerText.trim());
-      });
-
-      // Visible (filtered) rows — for quantity column read the input value, skip actions
-      var rows = [];
-      var trEls = grid.querySelectorAll(".gridjs-tbody .gridjs-tr");
-      trEls.forEach(function (tr) {
-        var cells = tr.querySelectorAll(".gridjs-td");
-        var rowData = [];
-        cells.forEach(function (td, i) {
-          if (i >= cells.length - 1) return; // skip actions column
-          // For quantity cell, read the input value if present
-          var input = td.querySelector("input[type='number']");
-          rowData.push(input ? input.value : td.innerText.trim());
-        });
-        if (rowData.length) rows.push(rowData);
-      });
-
-      var searchInput = grid.querySelector(".gridjs-search-input");
+      // Get current search term from GridJS input
+      var searchInput = grid ? grid.querySelector(".gridjs-search-input") : null;
       var searchTerm = searchInput ? searchInput.value.trim() : "";
+      var searchLower = searchTerm.toLowerCase();
+
+      // Filter data: no search → all rows sorted by ID; search → match any text field
+      var filtered = searchLower
+        ? allData.filter(function (row) {
+            return [row.id, row.description, row.part_number, row.manufacturer,
+                    row.equipment_family, row.equipment_model]
+              .some(function (v) { return String(v || "").toLowerCase().includes(searchLower); });
+          })
+        : allData.slice();
+
+      filtered.sort(function (a, b) { return Number(a.id || 0) - Number(b.id || 0); });
+
       var now = new Date().toLocaleString("pt-BR");
 
-      var headerRow = headers.map(function (h) { return "<th>" + h + "</th>"; }).join("");
-      var bodyRows = rows.map(function (r) {
-        return "<tr>" + r.map(function (c) { return "<td>" + c + "</td>"; }).join("") + "</tr>";
+      function esc(v) {
+        return String(v || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      var headers = [i18n.colId || "ID", i18n.colDescription || "Descrição",
+                     i18n.colPartNumber || "PN", i18n.colManufacturer || "Fabricante",
+                     i18n.colQuantity || "Qtd", i18n.colObsolete || "Obsoleto"];
+
+      var headerRow = headers.map(function (h) { return "<th>" + esc(h) + "</th>"; }).join("");
+      var bodyRows = filtered.map(function (row) {
+        return "<tr>"
+          + "<td>" + esc(row.id) + "</td>"
+          + "<td>" + esc(row.description) + "</td>"
+          + "<td>" + esc(row.part_number) + "</td>"
+          + "<td>" + esc(row.manufacturer) + "</td>"
+          + "<td>" + esc(row.quantity || 1) + "</td>"
+          + "<td>" + (row.is_obsolete ? (i18n.yes || "Sim") : (i18n.no || "Não")) + "</td>"
+          + "</tr>";
       }).join("");
 
       var filterLine = searchTerm
-        ? "<p class=\"filter\">Filtro aplicado: <strong>" + searchTerm + "</strong></p>"
+        ? "<p class=\"filter\">Filtro aplicado: <strong>" + esc(searchTerm) + "</strong></p>"
         : "";
 
       var html = "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" />"
@@ -614,12 +622,12 @@
         + "<div>"
         + "<div style=\"font-size:9px;opacity:.55;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;\">SERVICE REPORT</div>"
         + "<h1>Spare-Parts do Equipamento</h1>"
-        + (equipmentInfo ? "<div class=\"banner-equip\">" + equipmentInfo + "</div>" : "")
+        + (equipmentInfo ? "<div class=\"banner-equip\">" + esc(equipmentInfo) + "</div>" : "")
         + "</div>"
         + "<div class=\"banner-meta\">Gerado em:<br/>" + now + "</div>"
         + "</div>"
         + filterLine
-        + "<p class=\"count\">" + rows.length + " registro(s)</p>"
+        + "<p class=\"count\">" + filtered.length + " registro(s)</p>"
         + "<table><thead><tr>" + headerRow + "</tr></thead>"
         + "<tbody>" + bodyRows + "</tbody></table>"
         + "</body></html>";
