@@ -475,7 +475,7 @@ Analise o documento enviado e extraia TODAS os componentes encontrados.
 
 Lembre-se de tirar todos os componentes duplicado a chave unica é PN (part_number). Se o mesmo PN aparecer mais de uma vez, mantenha somente a primeira ocorrencia e descarte as demais.
 
-Igual de campos:
+Igualdade de campos:
 Chloride Reference = Part No, Part Number, PN => part_number
 Material Description, Item, Component => description
 Supply, Maker => manufacturer
