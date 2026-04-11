@@ -154,13 +154,13 @@
 
           <div class="table-responsive mt-3">
             <table class="table table-sm app-table mb-0">
-              <thead><tr><th>ID Ref</th><th>Tipo</th><th>Serial</th><th>Tag</th><th>Acoes</th></tr></thead>
+              <thead><tr><th>ID Ref</th><th>DT</th><th>Serial</th><th>Tag</th><th>Acoes</th></tr></thead>
               <tbody>
                 <% if (!orderEquipments.length) { %><tr><td colspan="5" class="text-center text-muted py-3">Sem equipamentos associados.</td></tr><% } %>
                 <% orderEquipments.forEach((item) => { %>
                   <tr>
                     <td><%= item.ref_id || item.equipment_id %></td>
-                    <td><%= item.type %></td>
+                    <td><%= item.dt_number || "-" %></td>
                     <td><%= item.serial_number || "-" %></td>
                     <td><%= item.tag_number || "-" %></td>
                     <td>
