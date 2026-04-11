@@ -64,6 +64,7 @@
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/orders"><%= t("rs.orders.pageTitle") %></a>
         <a class="btn btn-outline-secondary btn-sm" href="/admin/report-service/equipments"><%= t("rs.equip.pageTitle") %></a>
         <button class="btn btn-primary btn-sm" type="button" id="printSparePartsBtn"><%= t("rs.spare.printList") %></button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" id="exportSparePartsBtn">&#8595; Exportar</button>
         <button class="btn btn-outline-success btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#aiImportModal">&#129302; Importar com IA</button>
       </div>
     </div>
@@ -203,7 +204,10 @@
 
             <div class="d-flex justify-content-between align-items-center mb-2">
               <span class="small text-muted"><%= t("rs.spare.linkedSparePartsLabel") %></span>
-              <button class="btn btn-primary btn-sm" type="button" id="printLinkedSparePartsBtn"><%= t("rs.spare.printList") %></button>
+              <div class="d-flex gap-1">
+                <button class="btn btn-outline-secondary btn-sm" type="button" id="exportLinkedSparePartsBtn">&#8595; Exportar</button>
+                <button class="btn btn-primary btn-sm" type="button" id="printLinkedSparePartsBtn"><%= t("rs.spare.printList") %></button>
+              </div>
             </div>
             <div class="spare-parts-grid-wrap">
               <div id="linkedSparePartsGrid"></div>
@@ -257,6 +261,7 @@
 </form>
 
 <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
   (function () {
     var spareParts = <%- JSON.stringify(spareParts || []).replace(/</g, "\\u003c") %>;
@@ -417,6 +422,9 @@
       error: <%- JSON.stringify(t("rs.error")) %>,
       noLinked: <%- JSON.stringify(t("rs.spare.noLinked")) %>
     };
+
+    window._linkedSparePartsRaw = linkedData;
+    window._linkedSparePartsI18n = i18n;
 
     if (!linkedData.length) {
       linkedTarget.innerHTML = "<div class=\"text-center text-muted py-4\">" + i18n.noLinked + "</div>";
@@ -679,6 +687,241 @@
       win.print();
     });
   })();
+</script>
+
+<%# ===== MODAL EXPORTAR ===== %>
+<div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:360px;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">&#8595; Exportar lista</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted mb-3">Escolha o formato de exportação:</p>
+        <div class="d-flex flex-column gap-2">
+          <label class="d-flex align-items-center gap-3 p-3 border rounded" style="cursor:pointer;">
+            <input type="radio" name="exportFormat" value="xlsx" class="form-check-input flex-shrink-0" checked />
+            <div>
+              <div class="fw-semibold small">&#128196; XLSX (Excel)</div>
+              <div class="text-muted" style="font-size:0.78rem;">Arquivo Excel pronto para edição</div>
+            </div>
+          </label>
+          <label class="d-flex align-items-center gap-3 p-3 border rounded" style="cursor:pointer;">
+            <input type="radio" name="exportFormat" value="pdf" class="form-check-input flex-shrink-0" />
+            <div>
+              <div class="fw-semibold small">&#128247; PDF</div>
+              <div class="text-muted" style="font-size:0.78rem;">Abre janela de impressão para salvar como PDF</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm" id="exportConfirmBtn">Exportar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var exportContext = null; // "global" | "linked"
+  var exportModalEl = document.getElementById("exportModal");
+
+  function getModal() {
+    if (!exportModalEl) return null;
+    if (window.bootstrap && window.bootstrap.Modal) {
+      return window.bootstrap.Modal.getOrCreateInstance(exportModalEl);
+    }
+    return null;
+  }
+
+  function openExportModal(ctx) {
+    exportContext = ctx;
+    var m = getModal();
+    if (m) {
+      m.show();
+    } else {
+      // fallback: toggle class manually if Bootstrap not ready
+      exportModalEl.style.display = "block";
+      exportModalEl.classList.add("show");
+      document.body.classList.add("modal-open");
+    }
+  }
+
+  function closeExportModal() {
+    var m = getModal();
+    if (m) {
+      m.hide();
+    } else {
+      exportModalEl.style.display = "none";
+      exportModalEl.classList.remove("show");
+      document.body.classList.remove("modal-open");
+    }
+  }
+
+  var btnGlobal = document.getElementById("exportSparePartsBtn");
+  var btnLinked = document.getElementById("exportLinkedSparePartsBtn");
+  var confirmBtn = document.getElementById("exportConfirmBtn");
+
+  if (btnGlobal) btnGlobal.addEventListener("click", function () { openExportModal("global"); });
+  if (btnLinked) btnLinked.addEventListener("click", function () { openExportModal("linked"); });
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", function () {
+      var fmt = (document.querySelector('input[name="exportFormat"]:checked') || {}).value || "xlsx";
+      closeExportModal();
+      if (exportContext === "linked") runExportLinked(fmt);
+      else runExportGlobal(fmt);
+    });
+  }
+
+  // ── Shared print CSS ──────────────────────────────────────────────────
+  var PRINT_CSS = "*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }"
+    + "body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1f2937; padding: 24px; }"
+    + ".banner { background: linear-gradient(135deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.28) 60%,rgba(0,0,0,.10) 100%) #4e8c38; color:#fff; border-radius:8px; padding:14px 20px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }"
+    + ".banner h1 { font-size:15px; font-weight:700; margin-bottom:4px; }"
+    + ".banner-sub { font-size:10px; opacity:.75; }"
+    + ".banner-meta { font-size:10px; opacity:.7; text-align:right; white-space:nowrap; }"
+    + ".filter { font-size:10px; color:#6b7280; margin-bottom:10px; }"
+    + ".count { font-size:10px; color:#6b7280; margin-bottom:8px; }"
+    + "table { width:100%; border-collapse:collapse; }"
+    + "thead th { background:#4e8c38; color:#fff; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; padding:7px 8px; text-align:left; }"
+    + "tbody tr { border-bottom:1px solid #e5e7eb; }"
+    + "tbody tr:nth-child(even) { background:#f9fafb; }"
+    + "tbody td { padding:6px 8px; vertical-align:middle; }"
+    + "tbody td:first-child { color:#6b7280; font-size:10px; }"
+    + "@media print { body { padding:12px; } }";
+
+  function buildPrintHtml(title, subtitle, filterLine, countLine, cols, rows) {
+    var now = new Date().toLocaleString("pt-BR");
+    var headerRow = cols.map(function (c) { return "<th>" + c + "</th>"; }).join("");
+    var bodyRows = rows.map(function (r) {
+      return "<tr>" + r.map(function (v) { return "<td>" + String(v == null ? "-" : v).replace(/<[^>]*>/g, "") + "</td>"; }).join("") + "</tr>";
+    }).join("");
+    return "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\"><title>" + title + "</title>"
+      + "<style>" + PRINT_CSS + "</style></head><body>"
+      + "<div class=\"banner\"><div>"
+      + "<div style=\"font-size:9px;opacity:.55;text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px;\">SERVICE REPORT</div>"
+      + "<h1>" + title + "</h1>"
+      + (subtitle ? "<div class=\"banner-sub\">" + subtitle + "</div>" : "")
+      + "</div><div class=\"banner-meta\">Gerado em:<br/>" + now + "</div></div>"
+      + (filterLine ? "<p class=\"filter\">" + filterLine + "</p>" : "")
+      + "<p class=\"count\">" + countLine + "</p>"
+      + "<table><thead><tr>" + headerRow + "</tr></thead><tbody>" + bodyRows + "</tbody></table>"
+      + "</body></html>";
+  }
+
+  function openPrintWindow(html) {
+    var win = window.open("", "_blank");
+    if (!win) { alert("Permita pop-ups para exportar."); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  }
+
+  function exportXLSX(colLabels, rows, sheetName, filename) {
+    if (!window.XLSX) { alert("Biblioteca XLSX não carregada."); return; }
+    var aoa = [colLabels].concat(rows.map(function (r) {
+      return r.map(function (v) { return v == null ? "" : String(v).replace(/<[^>]*>/g, ""); });
+    }));
+    var ws = window.XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = colLabels.map(function (h) { return { wch: Math.max(h.length + 4, 16) }; });
+    var wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    window.XLSX.writeFile(wb, filename);
+  }
+
+  // ── GLOBAL export ─────────────────────────────────────────────────────
+  function runExportGlobal(fmt) {
+    var allData = window._sparePartsGridData || [];
+    var i18n = window._sparePartsGridI18n || {};
+    var grid = document.getElementById("sparePartsGrid");
+    var searchInput = grid ? grid.querySelector(".gridjs-search-input") : null;
+    var searchTerm = searchInput ? searchInput.value.trim() : "";
+    var sl = searchTerm.toLowerCase();
+
+    var filtered = sl
+      ? allData.filter(function (row) {
+          return [row.id, row.description, row.manufacturer, row.equipmentModel,
+                  row.partNumber, row.leadTime, row.obsolete, row.replacedBy, row.family]
+            .some(function (v) { return String(v || "").toLowerCase().indexOf(sl) >= 0; });
+        })
+      : allData.slice();
+    filtered.sort(function (a, b) { return a.id - b.id; });
+
+    var colLabels = [
+      i18n.colId || "ID",
+      i18n.colDescription || "Descrição",
+      i18n.colManufacturer || "Fabricante",
+      i18n.colModel || "Modelo",
+      i18n.colPartNumber || "Part Number",
+      i18n.colLeadTime || "Lead Time",
+      i18n.colObsolete || "Obsoleto",
+      i18n.colReplacedBy || "Substituído por",
+      i18n.colFamily || "Família"
+    ];
+    var colKeys = ["id", "description", "manufacturer", "equipmentModel", "partNumber", "leadTime", "obsolete", "replacedBy", "family"];
+    var rows = filtered.map(function (row) { return colKeys.map(function (k) { return row[k]; }); });
+
+    if (fmt === "pdf") {
+      var filterLine = searchTerm ? "Filtro: <strong>" + searchTerm + "</strong>" : "";
+      openPrintWindow(buildPrintHtml("Lista de Spare-Parts", "", filterLine, filtered.length + " registro(s)", colLabels, rows));
+    } else {
+      exportXLSX(colLabels, rows, "Spare Parts", "spare-parts.xlsx");
+    }
+  }
+
+  // ── LINKED export ─────────────────────────────────────────────────────
+  function runExportLinked(fmt) {
+    var raw = window._linkedSparePartsRaw || [];
+    var i18n = window._linkedSparePartsI18n || {};
+
+    // Read current quantity values from DOM inputs (user may have changed them)
+    var qtyMap = {};
+    var grid = document.getElementById("linkedSparePartsGrid");
+    if (grid) {
+      grid.querySelectorAll(".gridjs-tbody .gridjs-tr").forEach(function (tr, idx) {
+        var input = tr.querySelector("input[type='number']");
+        var row = raw[idx];
+        if (input && row) qtyMap[Number(row.id)] = input.value;
+      });
+    }
+
+    var equipmentInfo = (function () {
+      var el = document.querySelector(".alert.alert-light.border");
+      return el ? el.innerText.replace(/\s+/g, " ").trim() : "";
+    })();
+
+    var colLabels = [
+      i18n.colId || "ID",
+      i18n.colDescription || "Descrição",
+      i18n.colPartNumber || "Part Number",
+      i18n.colManufacturer || "Fabricante",
+      i18n.colQuantity || "Qtd",
+      i18n.colObsolete || "Obsoleto"
+    ];
+    var rows = raw.slice().sort(function (a, b) { return Number(a.id) - Number(b.id); })
+      .map(function (row) {
+        return [
+          row.id,
+          row.description || "-",
+          row.part_number || "-",
+          row.manufacturer || "-",
+          qtyMap[Number(row.id)] !== undefined ? qtyMap[Number(row.id)] : Number(row.quantity || 1),
+          row.is_obsolete ? (i18n.yes || "Sim") : (i18n.no || "Não")
+        ];
+      });
+
+    if (fmt === "pdf") {
+      openPrintWindow(buildPrintHtml("Spare-Parts do Equipamento", equipmentInfo, "", rows.length + " registro(s)", colLabels, rows));
+    } else {
+      exportXLSX(colLabels, rows, "Spare Parts", "spare-parts-equipamento.xlsx");
+    }
+  }
+})();
 </script>
 
 <%# ===== MODAL AUTO-LINK SPARE PARTS ===== %>

@@ -107,7 +107,8 @@ module.exports = {
     baseUrl: String(process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/+$/, ""),
     maxOutputTokens: Math.max(1000, Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 8000)),
     maxOutputRetries: Math.max(0, Number(process.env.OPENAI_MAX_OUTPUT_RETRIES || 2)),
-    maxOutputTokensCap: Math.max(1000, Number(process.env.OPENAI_MAX_OUTPUT_TOKENS_CAP || 20000))
+    maxOutputTokensCap: Math.max(1000, Number(process.env.OPENAI_MAX_OUTPUT_TOKENS_CAP || 20000)),
+    requestTimeoutMs: Math.max(30000, Number(process.env.OPENAI_REQUEST_TIMEOUT_MS || 300000))
   },
   storage: {
     docsDir: process.env.DOCS_DIR || path.join(process.cwd(), "dados", "docs")

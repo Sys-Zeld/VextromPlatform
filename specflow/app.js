@@ -5168,10 +5168,18 @@ async function initializeSpecflow() {
 }
 
 function startSpecflowServer() {
-  app.listen(env.port, () => {
+  const AI_TIMEOUT_MS = env.openai && env.openai.requestTimeoutMs ? env.openai.requestTimeoutMs : 300000;
+  const SERVER_TIMEOUT_MS = AI_TIMEOUT_MS + 30000; // server keeps socket open longer than AI timeout
+
+  const server = app.listen(env.port, () => {
     // eslint-disable-next-line no-console
     console.log(`Server running on ${env.appBaseUrl}`);
   });
+
+  // Prevent Node.js from closing long-running AI request connections
+  server.setTimeout(SERVER_TIMEOUT_MS);
+  server.headersTimeout = SERVER_TIMEOUT_MS + 1000;
+  server.requestTimeout = SERVER_TIMEOUT_MS + 2000;
 }
 
 module.exports = {

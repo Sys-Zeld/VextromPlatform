@@ -84,14 +84,31 @@ function isMaxTokensIncomplete(payload) {
 }
 
 async function callOpenAiResponsesApi(body) {
-  const response = await fetch(`${env.openai.baseUrl}/responses`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${env.openai.apiKey}`
-    },
-    body: JSON.stringify(body)
-  });
+  const timeoutMs = env.openai.requestTimeoutMs || 300000;
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(`${env.openai.baseUrl}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.openai.apiKey}`
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+  } catch (fetchErr) {
+    clearTimeout(timeoutHandle);
+    if (fetchErr.name === "AbortError") {
+      const err = new Error(`Timeout apos ${Math.round(timeoutMs / 1000)}s aguardando resposta da OpenAI. Tente com um documento menor ou aumente OPENAI_REQUEST_TIMEOUT_MS.`);
+      err.statusCode = 504;
+      throw err;
+    }
+    throw fetchErr;
+  }
+  clearTimeout(timeoutHandle);
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
