@@ -471,7 +471,15 @@ const SPARE_PARTS_JSON_SCHEMA = JSON.stringify([
 ], null, 2);
 
 const SPARE_PARTS_DEFAULT_PROMPT = `
-Analise o documento enviado e extraia TODAS os componentes encontrados.
+Analise o documento enviado e extraia TODAS os componentes encontrados. 
+
+Lembre-se de tirar todos os componentes duplicado a chave unica é PN (part_number). Se o mesmo PN aparecer mais de uma vez, mantenha somente a primeira ocorrencia e descarte as demais.
+
+Igual de campos:
+Chloride Reference = Part No, Part Number, PN => part_number
+Material Description, Item, Component => description
+Supply, Maker => manufacturer
+
 
 Retorne APENAS um array JSON puro, sem markdown, sem comentários, sem texto adicional.
 O JSON deve começar com [ e terminar com ].
@@ -483,7 +491,8 @@ Regras:
 - part_number: número de referência/código da peça (PN, Reference, Part No, etc.)
 - description: nome ou descrição da peça — obrigatório, nunca vazio
 - manufacturer: fabricante (string vazia "" se não identificado)
-- equipment_family / equipment_model: família e modelo do equipamento (se disponível no documento)
+- equipment_family = Coloque sempre APODYS1
+- equipment_model: Deixe vazio
 - lead_time: prazo de entrega (string vazia "" se não informado)
 - is_obsolete: true somente se explicitamente marcado como obsoleto/descontinuado
 - replaced_by_part_number: PN da peça substituta (string vazia "" se não aplicável)

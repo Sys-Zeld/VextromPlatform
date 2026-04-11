@@ -5168,18 +5168,32 @@ async function initializeSpecflow() {
 }
 
 function startSpecflowServer() {
-  const AI_TIMEOUT_MS = env.openai && env.openai.requestTimeoutMs ? env.openai.requestTimeoutMs : 300000;
-  const SERVER_TIMEOUT_MS = AI_TIMEOUT_MS + 30000; // server keeps socket open longer than AI timeout
+  // Use timeout from the active AI provider config
+  const activeProvider = String(env.aiProvider || "openai").toLowerCase();
+  const activeProviderCfg = activeProvider === "anthropic" ? env.anthropic : env.openai;
+  const AI_TIMEOUT_MS = (activeProviderCfg && activeProviderCfg.requestTimeoutMs)
+    ? activeProviderCfg.requestTimeoutMs
+    : 300000;
+  // Server keeps socket open longer than the AI fetch timeout so Node never
+  // cuts the connection before the AI caller has a chance to abort cleanly.
+  const SERVER_TIMEOUT_MS = AI_TIMEOUT_MS + 60000;
 
   const server = app.listen(env.port, () => {
     // eslint-disable-next-line no-console
-    console.log(`Server running on ${env.appBaseUrl}`);
+    console.log(`Server running on ${env.appBaseUrl} [AI provider: ${activeProvider}, timeout: ${AI_TIMEOUT_MS / 1000}s]`);
   });
 
-  // Prevent Node.js from closing long-running AI request connections
+  // Prevent Node.js from closing long-running AI request connections.
   server.setTimeout(SERVER_TIMEOUT_MS);
   server.headersTimeout = SERVER_TIMEOUT_MS + 1000;
   server.requestTimeout = SERVER_TIMEOUT_MS + 2000;
+
+  // keepAliveTimeout must be > Apache/Nginx KeepAliveTimeout (default 5s) to
+  // avoid the race condition where the reverse proxy reuses a socket that Node
+  // already closed. 65s is a safe value above any typical proxy keep-alive.
+  server.keepAliveTimeout = 65000;
+  // headersTimeout must be > keepAliveTimeout
+  server.headersTimeout = Math.max(server.headersTimeout, server.keepAliveTimeout + 1000);
 }
 
 module.exports = {
