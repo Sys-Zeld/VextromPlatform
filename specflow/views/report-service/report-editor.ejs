@@ -55,6 +55,15 @@
     const year = String(date.getFullYear());
     return `${day}/${month}/${year}`;
   }
+
+  function getReorderSectionLabel(section) {
+    const fallback = String(section && section.section_key ? section.section_key : "").trim();
+    const raw = String(section && section.section_title_text ? section.section_title_text : "").trim();
+    const firstLine = raw.split(/\r?\n/)[0] || "";
+    const normalized = firstLine.replace(/\s+/g, " ").trim();
+    if (!normalized) return fallback || "Sem titulo";
+    return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized;
+  }
 %>
 
 <section class="token-console">
@@ -435,7 +444,7 @@
                 >
                   <span class="reorder-drag-handle text-muted" title="Arrastar">&#9776;</span>
                   <span class="badge bg-secondary-subtle text-secondary-emphasis border reorder-section-idx"><%= idx + 1 %></span>
-                  <span class="flex-grow-1 small fw-medium"><%= sec.section_title_text || sec.section_key %></span>
+                  <span class="flex-grow-1 small fw-medium"><%= getReorderSectionLabel(sec) %></span>
                 </li>
               <% }) %>
             </ul>
