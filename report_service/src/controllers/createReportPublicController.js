@@ -4,6 +4,7 @@ const service = require("../services/serviceReportService");
 const { renderReportPreviewHtml } = require("../services/reportTemplateService");
 const { getReportConfigSettings } = require("../services/reportConfigSettings");
 const { getReportServiceEmailSettings, getTemplateByPurpose } = require("../services/emailSettings");
+const { buildPdfBufferFromUrl } = require("../services/serviceReportPdfService");
 const crypto = require("crypto");
 const env = require("../../../specflow/config/env");
 
@@ -128,14 +129,18 @@ function createReportPublicController(deps) {
   <link href="/public/css/report-preview.css" rel="stylesheet" />
   <link href="/public/css/report-print.css" rel="stylesheet" />
   <style>
-    .report-print-btn {
+    .rpt-action-bar {
       position: fixed;
       top: 16px;
       right: 16px;
       z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: stretch;
+    }
+    .report-print-btn, .report-pdf-btn {
       padding: 10px 20px;
-      background: #4f7d33;
-      color: #fff;
       border: none;
       border-radius: 8px;
       font-size: 0.9rem;
@@ -144,16 +149,140 @@ function createReportPublicController(deps) {
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
+      white-space: nowrap;
     }
+    .report-print-btn { background: #4f7d33; color: #fff; }
     .report-print-btn:hover { background: #3d6228; }
-    @media print { .report-print-btn { display: none !important; } }
+    .report-pdf-btn { background: #1a56a0; color: #fff; }
+    .report-pdf-btn:hover:not(:disabled) { background: #134080; }
+    .report-pdf-btn:disabled { background: #6a96cc; cursor: wait; }
+    #rpt-print-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: rgba(0,0,0,0.45);
+      align-items: center;
+      justify-content: center;
+    }
+    #rpt-print-modal .rpt-modal-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 32px 36px;
+      max-width: 440px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+      font-family: sans-serif;
+    }
+    #rpt-print-modal h2 {
+      margin: 0 0 8px;
+      font-size: 1.1rem;
+      color: #1f1f1f;
+    }
+    #rpt-print-modal p.rpt-modal-sub {
+      margin: 0 0 20px;
+      font-size: 0.82rem;
+      color: #666;
+    }
+    #rpt-print-modal ul {
+      margin: 0 0 24px;
+      padding: 0 0 0 18px;
+      font-size: 0.9rem;
+      color: #2a2a2a;
+      line-height: 1.9;
+    }
+    #rpt-print-modal ul li strong { color: #1f1f1f; }
+    #rpt-print-modal .rpt-modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    #rpt-print-modal .rpt-modal-cancel {
+      padding: 9px 18px;
+      border: 1px solid #ccc;
+      background: #fff;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      color: #555;
+    }
+    #rpt-print-modal .rpt-modal-confirm {
+      padding: 9px 20px;
+      background: #4f7d33;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    #rpt-print-modal .rpt-modal-confirm:hover { background: #3d6228; }
+    @media print {
+      .rpt-action-bar { display: none !important; }
+      #rpt-print-modal { display: none !important; }
+    }
   </style>
 </head>
 <body>
-<button class="report-print-btn" onclick="window.print()">&#128424; Imprimir</button>
+<div class="rpt-action-bar">
+  <button class="report-print-btn" onclick="document.getElementById('rpt-print-modal').style.display='flex'">&#128424; Imprimir</button>
+  <button class="report-pdf-btn" id="rpt-pdf-btn" onclick="rptGerarPdf()">&#128196; Gerar PDF</button>
+</div>
+<div id="rpt-print-modal" role="dialog" aria-modal="true" aria-labelledby="rpt-modal-title">
+  <div class="rpt-modal-box">
+    <h2 id="rpt-modal-title">Configurar impressao</h2>
+    <p class="rpt-modal-sub">Para melhor resultado, use as configuracoes abaixo na janela de impressao:</p>
+    <ul>
+      <li><strong>Impressora:</strong> Salvar como PDF</li>
+      <li><strong>Papel:</strong> A4</li>
+      <li><strong>Margens:</strong> Padrao</li>
+      <li><strong>Escala:</strong> 100%</li>
+      <li><strong>Graficos de segundo plano:</strong> Ativado</li>
+    </ul>
+    <div class="rpt-modal-actions">
+      <button class="rpt-modal-cancel" onclick="document.getElementById('rpt-print-modal').style.display='none'">Cancelar</button>
+      <button class="rpt-modal-confirm" onclick="document.getElementById('rpt-print-modal').style.display='none'; window.print()">&#128424; Imprimir</button>
+    </div>
+  </div>
+</div>
 ${reportHtml}
-<script src="/public/js/report-pagination.js?v=${cv}"></script>${autoPrint ? `
+<script src="/public/js/report-pagination.js?v=${cv}"></script>
+<script>
+(function () {
+  var PDF_URL = '/r/signed/${encodeURIComponent(token)}/pdf';
+  var PDF_FILENAME = '${String(signRequest.report_number || "relatorio").replace(/'/g, "")}.pdf';
+  window.rptGerarPdf = function () {
+    var btn = document.getElementById('rpt-pdf-btn');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    btn.innerHTML = '&#9203; Gerando...';
+    fetch(PDF_URL, { credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('Erro ' + r.status);
+        return r.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = PDF_FILENAME;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      })
+      .catch(function (e) {
+        alert('Erro ao gerar PDF: ' + e.message);
+      })
+      .finally(function () {
+        btn.disabled = false;
+        btn.innerHTML = '&#128196; Gerar PDF';
+      });
+  };
+}());
+</script>${autoPrint ? `
 <script>
 (function () {
   function tryPrint() {
@@ -173,6 +302,32 @@ ${reportHtml}
 </script>` : ""}
 </body>
 </html>`);
+    },
+
+    async clientSignedReportPdf(req, res) {
+      const token = sanitizeInput(String(req.params.token || "")).trim();
+      if (!token) return res.status(404).send("Link invalido.");
+
+      const signRequest = await repo.getSignRequestByToken(token);
+      if (!signRequest) return res.status(404).send("Link nao encontrado.");
+
+      const status = String(signRequest.status || "").toLowerCase();
+      if (status === "pending" && !hasValidEmailProof(req, signRequest)) {
+        return res.status(403).send("Acesso negado.");
+      }
+      if (!["pending", "signed"].includes(status)) {
+        return res.status(403).send("Relatorio nao disponivel.");
+      }
+
+      const signedPageUrl = `${resolveRequestBaseUrl(req)}/r/signed/${encodeURIComponent(token)}`;
+      const buffer = await buildPdfBufferFromUrl(signedPageUrl, {
+        cookieHeader: String(req.headers.cookie || "")
+      });
+
+      const reportNumber = String(signRequest.report_number || "relatorio").replace(/[^a-zA-Z0-9._-]/g, "_");
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${reportNumber}.pdf"`);
+      return res.send(buffer);
     },
 
     async clientSignPage(req, res) {
