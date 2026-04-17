@@ -290,7 +290,7 @@ function createReportApiController(deps) {
       const reportConfig = await getReportConfigSettings();
       const templateKey = normalizeReportTemplateKey(req.body && req.body.template_key ? req.body.template_key : reportConfig.templateKey);
       const htmlSource = await renderReportPreviewHtml(aggregate, { reportConfig, templateKey });
-      fs.writeFileSync(service.resolveReportHtmlPath(reportId), htmlSource, "utf8");
+      await fs.promises.writeFile(service.resolveReportHtmlPath(reportId), htmlSource, "utf8");
       await generatePdfToFile(aggregate, outputPath, htmlSource);
       await service.updateReport(reportId, { pdfPath: outputPath, status: "issued", issueDate: new Date().toISOString().slice(0, 10) });
       return ok(res, {

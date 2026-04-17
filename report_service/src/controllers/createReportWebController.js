@@ -1745,10 +1745,10 @@ function createReportWebController(deps) {
       }
 
       const targetDir = path.join(process.cwd(), "docs", "report", "img", "logos");
-      fs.mkdirSync(targetDir, { recursive: true });
+      await fs.promises.mkdir(targetDir, { recursive: true });
       const unique = crypto.randomBytes(6).toString("hex");
       const finalName = `logo-${brand}-${Date.now()}-${unique}${ext === ".jpeg" ? ".jpg" : ext}`;
-      fs.writeFileSync(path.join(targetDir, finalName), buffer);
+      await fs.promises.writeFile(path.join(targetDir, finalName), buffer);
 
       return res.status(201).json({ ok: true, data: { filePath: `/docs/report/img/logos/${finalName}` } });
     },
@@ -1779,11 +1779,11 @@ function createReportWebController(deps) {
         return res.status(400).json({ ok: false, error: "Arquivo de imagem invalido." });
       }
       const targetDir = path.join(process.cwd(), "docs", "report", "img");
-      fs.mkdirSync(targetDir, { recursive: true });
+      await fs.promises.mkdir(targetDir, { recursive: true });
       const fileSafeBase = path.basename(fileNameBase, extFromName || path.extname(fileNameBase)).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || "imagem";
       const unique = crypto.randomBytes(6).toString("hex");
       const finalName = `config-${Date.now()}-${fileSafeBase}-${unique}${ext === ".jpeg" ? ".jpg" : ext}`;
-      fs.writeFileSync(path.join(targetDir, finalName), buffer);
+      await fs.promises.writeFile(path.join(targetDir, finalName), buffer);
       return res.status(201).json({ ok: true, data: { filePath: finalName } });
     },
 
@@ -2875,12 +2875,12 @@ function createReportWebController(deps) {
       }
 
       const targetDir = path.join(process.cwd(), "docs", "report", "img");
-      fs.mkdirSync(targetDir, { recursive: true });
+      await fs.promises.mkdir(targetDir, { recursive: true });
       const fileSafeBase = path.basename(fileNameBase, extFromName || path.extname(fileNameBase)).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) || "imagem";
       const unique = crypto.randomBytes(6).toString("hex");
       const finalName = `${Date.now()}-${fileSafeBase}-${unique}${ext === ".jpeg" ? ".jpg" : ext}`;
       const absolutePath = path.join(targetDir, finalName);
-      fs.writeFileSync(absolutePath, buffer);
+      await fs.promises.writeFile(absolutePath, buffer);
 
       const created = await repo.createImage({
         serviceReportId: report.id,
@@ -3133,9 +3133,9 @@ ${bodyHtml}
       const requestedTemplateKey = sanitizeInput(req.body.template_key || req.query.template_key);
       const { reportConfig, templateKey } = await resolveRenderConfig(requestedTemplateKey, null);
       const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
-      fs.writeFileSync(service.resolveReportHtmlPath(report.id), htmlSource, "utf8");
+      await fs.promises.writeFile(service.resolveReportHtmlPath(report.id), htmlSource, "utf8");
       const pdfBuffer = await buildPdfFromPreviewRoute(req, orderId, templateKey, payload);
-      fs.writeFileSync(outputPath, pdfBuffer);
+      await fs.promises.writeFile(outputPath, pdfBuffer);
       await service.updateReport(report.id, {
         pdfPath: outputPath,
         status: "issued",

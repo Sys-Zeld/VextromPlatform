@@ -697,9 +697,7 @@ function sanitizeImportedBackupFileName(fileName) {
 function buildImportedBackupFilePath(originalFileName) {
   const safeName = sanitizeImportedBackupFileName(originalFileName);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupDir = getBackupDirectoryPath();
-  fs.mkdirSync(backupDir, { recursive: true });
-  return path.join(backupDir, `db-import-${timestamp}-${safeName}`);
+  return path.join(getBackupDirectoryPath(), `db-import-${timestamp}-${safeName}`);
 }
 
 function sanitizeImportedAssetsZipFileName(fileName) {
@@ -716,9 +714,7 @@ function sanitizeImportedAssetsZipFileName(fileName) {
 function buildImportedAssetsZipFilePath(originalFileName) {
   const safeName = sanitizeImportedAssetsZipFileName(originalFileName);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const backupDir = getBackupDirectoryPath();
-  fs.mkdirSync(backupDir, { recursive: true });
-  return path.join(backupDir, `assets-import-${timestamp}-${safeName}`);
+  return path.join(getBackupDirectoryPath(), `assets-import-${timestamp}-${safeName}`);
 }
 
 function resolveImportedZipBuffer(req) {
@@ -746,14 +742,31 @@ function extractAssetsZipPathFromOutput(output) {
   return "";
 }
 
-function findLatestAssetsZipInBackupDir() {
+async function pathExists(filePath) {
+  try {
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+async function findLatestAssetsZipInBackupDir() {
   const backupDir = getBackupDirectoryPath();
-  if (!fs.existsSync(backupDir)) return "";
-  const files = fs.readdirSync(backupDir)
-    .filter((f) => /^assets-(?:backup|import)-.*\.zip$/i.test(f))
-    .map((f) => ({ name: f, mtime: fs.statSync(path.join(backupDir, f)).mtimeMs }))
+  if (!await pathExists(backupDir)) return "";
+  const entries = await fs.promises.readdir(backupDir, { withFileTypes: true });
+  const files = await Promise.all(entries
+    .filter((entry) => entry && entry.isFile && entry.isFile())
+    .map(async (entry) => {
+      const fullPath = path.join(backupDir, entry.name);
+      const stat = await fs.promises.stat(fullPath);
+      return { name: entry.name, mtime: stat.mtimeMs };
+    }));
+  const sorted = files
+    .filter((f) => /^assets-(?:backup|import)-.*\.zip$/i.test(f.name))
+    .map((f) => ({ name: f.name, mtime: f.mtime }))
     .sort((a, b) => b.mtime - a.mtime);
-  return files.length ? files[0].name : "";
+  return sorted.length ? sorted[0].name : "";
 }
 
 function resolveImportedSqlBuffer(req) {
@@ -2484,14 +2497,14 @@ app.post("/admin/maintenance/system/command", csrfProtection, requireAdminAuth, 
     label = "npm run assets:backup";
     execution = await runNodeScripts([{ script: "scripts/backup-assets.js" }]);
     if (execution.ok) {
-      const zipName = extractAssetsZipPathFromOutput(execution.output) || findLatestAssetsZipInBackupDir();
+      const zipName = extractAssetsZipPathFromOutput(execution.output) || await findLatestAssetsZipInBackupDir();
       if (zipName) {
         downloadPath = `/admin/assets-backup/download?filename=${encodeURIComponent(zipName)}`;
       }
     }
   } else if (action === "assets_restore") {
     label = "npm run assets:restore";
-    const latestZip = findLatestAssetsZipInBackupDir();
+    const latestZip = await findLatestAssetsZipInBackupDir();
     if (!latestZip) {
       execution = { ok: false, code: -1, output: "Nenhum arquivo assets-backup-*.zip encontrado em dados/backups." };
     } else {
@@ -3259,7 +3272,8 @@ app.post(
     try {
       const imported = resolveImportedSqlBuffer(req);
       const outputPath = buildImportedBackupFilePath(imported.fileName);
-      fs.writeFileSync(outputPath, imported.buffer);
+      await fs.promises.mkdir(getBackupDirectoryPath(), { recursive: true });
+      await fs.promises.writeFile(outputPath, imported.buffer);
       await syncBackupsFromDirectory(getBackupDirectoryPath());
       return res.status(200).json({
         ok: true,
@@ -3290,7 +3304,7 @@ app.get("/admin/backups/:id/download", requireAdminAuth, requireMaintenanceAdmin
     return sendStandardError(req, res, 404);
   }
 
-  if (!fs.existsSync(backup.filePath)) {
+  if (!await pathExists(backup.filePath)) {
     return sendStandardError(req, res, 404);
   }
 
@@ -3303,7 +3317,7 @@ app.get("/admin/assets-backup/download", requireAdminAuth, requireMaintenanceAdm
     return sendStandardError(req, res, 400);
   }
   const filePath = path.join(getBackupDirectoryPath(), fileName);
-  if (!fs.existsSync(filePath)) {
+  if (!await pathExists(filePath)) {
     return sendStandardError(req, res, 404);
   }
   return res.download(filePath, fileName);
@@ -3318,7 +3332,8 @@ app.post(
     try {
       const imported = resolveImportedZipBuffer(req);
       const outputPath = buildImportedAssetsZipFilePath(imported.fileName);
-      fs.writeFileSync(outputPath, imported.buffer);
+      await fs.promises.mkdir(getBackupDirectoryPath(), { recursive: true });
+      await fs.promises.writeFile(outputPath, imported.buffer);
       const restoreExecution = await runNodeScripts([
         { script: "scripts/restore-assets.js", args: [`--file=${outputPath}`] }
       ]);
@@ -4593,7 +4608,7 @@ app.get("/form/:token/documents/:id/download", asyncHandler(async (req, res) => 
 
   const safeStoredName = path.basename(String(document.storedName || ""));
   const absolutePath = path.join(path.resolve(env.storage.docsDir), safeStoredName);
-  if (!fs.existsSync(absolutePath)) {
+  if (!await pathExists(absolutePath)) {
     return sendStandardError(req, res, 404);
   }
 
@@ -4624,9 +4639,9 @@ app.post("/form/:token/documents/:id/delete", csrfProtection, asyncHandler(async
 
   const safeStoredName = path.basename(String(document.storedName || ""));
   const absolutePath = path.join(path.resolve(env.storage.docsDir), safeStoredName);
-  if (fs.existsSync(absolutePath)) {
+  if (await pathExists(absolutePath)) {
     try {
-      fs.unlinkSync(absolutePath);
+      await fs.promises.unlink(absolutePath);
     } catch (_err) {
       // Keep DB deletion as source of truth; file cleanup is best-effort.
     }
@@ -4648,7 +4663,7 @@ app.get("/admin/documents/:id/download", requireAdminAuth, asyncHandler(async (r
 
   const safeStoredName = path.basename(String(document.storedName || ""));
   const absolutePath = path.join(path.resolve(env.storage.docsDir), safeStoredName);
-  if (!fs.existsSync(absolutePath)) {
+  if (!await pathExists(absolutePath)) {
     return sendStandardError(req, res, 404);
   }
 

@@ -2,6 +2,7 @@ const fs = require("fs");
 const PDFDocument = require("pdfkit");
 const { formatServiceOrderDisplay } = require("../utils/serviceOrderDisplay");
 const env = require("../../../specflow/config/env");
+const path = require("path");
 
 function getPuppeteerOrNull() {
   try {
@@ -231,9 +232,9 @@ async function compressImageBuffer(buffer, ext) {
 }
 
 const IMG_MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
+let previewStaticAssetsPromise = null;
 
 function buildImageRouteMap() {
-  const path = require("path");
   return [
     { prefix: "/docs/report/img/", dir: path.join(process.cwd(), "docs", "report", "img") },
     { prefix: "/public/", dir: path.resolve(__dirname, "..", "..", "..", "specflow", "public") }
@@ -241,17 +242,20 @@ function buildImageRouteMap() {
 }
 
 async function resolveImageFromPath(urlPath) {
-  const path = require("path");
   const routeMap = buildImageRouteMap();
   for (const route of routeMap) {
     if (urlPath.startsWith(route.prefix)) {
       const rel = decodeURIComponent(urlPath.slice(route.prefix.length));
       const filePath = path.join(route.dir, rel);
-      if (!fs.existsSync(filePath)) return null;
+      try {
+        await fs.promises.access(filePath, fs.constants.F_OK);
+      } catch (_err) {
+        return null;
+      }
       const ext = path.extname(filePath).replace(".", "").toLowerCase();
       const mime = IMG_MIME[ext];
       if (!mime) return null;
-      const raw = fs.readFileSync(filePath);
+      const raw = await fs.promises.readFile(filePath);
       if (ext === "svg") return { body: raw, mime };
       const compressExt = ext === "png" ? "png" : "jpeg";
       const { buffer, mime: outMime } = await compressImageBuffer(raw, compressExt);
@@ -283,15 +287,27 @@ async function preloadImageCache(html, baseUrl) {
   return cache;
 }
 
+async function loadPreviewStaticAssets() {
+  if (!previewStaticAssetsPromise) {
+    previewStaticAssetsPromise = Promise.all([
+      fs.promises.readFile(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-preview.css"), "utf8"),
+      fs.promises.readFile(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-print.css"), "utf8"),
+      fs.promises.readFile(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "js", "report-pagination.js"), "utf8")
+    ]).then(([cssPreview, cssPrint, paginationJs]) => ({ cssPreview, cssPrint, paginationJs }))
+      .catch((err) => {
+        previewStaticAssetsPromise = null;
+        throw err;
+      });
+  }
+  return previewStaticAssetsPromise;
+}
+
 async function buildPdfBufferFromHtml(html, fallbackPayload) {
   const puppeteer = getPuppeteerOrNull();
   if (!puppeteer) {
     return buildPdfBuffer(fallbackPayload || {});
   }
-  const path = require("path");
-  const cssPreview = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-preview.css"), "utf8");
-  const cssPrint = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-print.css"), "utf8");
-  const paginationJs = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "js", "report-pagination.js"), "utf8");
+  const { cssPreview, cssPrint, paginationJs } = await loadPreviewStaticAssets();
 
   // Base URL fictícia — só usada internamente para que o Puppeteer resolva as URLs das imagens
   const appBaseUrl = String(env.appBaseUrl || "http://localhost:3000").replace(/\/+$/, "");
@@ -417,7 +433,7 @@ async function generatePdfToFile(payload, outputPath, htmlSource = "") {
   const buffer = htmlSource
     ? await buildPdfBufferFromHtml(htmlSource, payload)
     : await buildPdfBuffer(payload);
-  fs.writeFileSync(outputPath, buffer);
+  await fs.promises.writeFile(outputPath, buffer);
   return outputPath;
 }
 

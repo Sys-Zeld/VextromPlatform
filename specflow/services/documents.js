@@ -14,11 +14,23 @@ function buildDocumentDownloadPath(documentId) {
 }
 
 function ensureDocsDirectory() {
-  try {
-    fs.mkdirSync(DOCS_DIR, { recursive: true });
-  } catch (err) {
+  return fs.promises.mkdir(DOCS_DIR, { recursive: true }).catch((err) => {
     if (err.code === "EACCES") {
       const permissionError = new Error(`No write permission for docs directory: ${DOCS_DIR}`);
+      permissionError.statusCode = 500;
+      permissionError.errorCode = "DOC_STORAGE_PERMISSION";
+      throw permissionError;
+    }
+    throw err;
+  });
+}
+
+async function writeDocumentFile(diskPath, buffer) {
+  try {
+    await fs.promises.writeFile(diskPath, buffer);
+  } catch (err) {
+    if (err.code === "EACCES") {
+      const permissionError = new Error(`No write permission for file: ${diskPath}`);
       permissionError.statusCode = 500;
       permissionError.errorCode = "DOC_STORAGE_PERMISSION";
       throw permissionError;
@@ -129,20 +141,10 @@ async function saveEquipmentDocument({ equipmentId, token, originalName, mimeTyp
     throw err;
   }
 
-  ensureDocsDirectory();
+  await ensureDocsDirectory();
   const storedName = createStoredName(token, originalName);
   const diskPath = path.join(DOCS_DIR, storedName);
-  try {
-    fs.writeFileSync(diskPath, buffer);
-  } catch (err) {
-    if (err.code === "EACCES") {
-      const permissionError = new Error(`No write permission for file: ${diskPath}`);
-      permissionError.statusCode = 500;
-      permissionError.errorCode = "DOC_STORAGE_PERMISSION";
-      throw permissionError;
-    }
-    throw err;
-  }
+  await writeDocumentFile(diskPath, buffer);
   const relativePath = `/dados/docs/${storedName}`;
   const externalUrl = `${env.appBaseUrl.replace(/\/+$/, "")}${relativePath}`;
 

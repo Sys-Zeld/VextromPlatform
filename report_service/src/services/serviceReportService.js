@@ -9,6 +9,8 @@ const {
   COMPONENT_CATEGORIES,
   SIGNER_TYPES
 } = require("../constants");
+let reportPdfDirReady = false;
+let reportHtmlDirReady = false;
 
 function ensureStatus(value, allowed, fallback) {
   const normalized = String(value || "").trim().toLowerCase();
@@ -455,13 +457,19 @@ async function buildReportAggregate(serviceReportId) {
 
 function resolveReportPdfPath(serviceReportId) {
   const folder = path.join(process.cwd(), "dados", "service-report-pdfs");
-  fs.mkdirSync(folder, { recursive: true });
+  if (!reportPdfDirReady) {
+    fs.mkdirSync(folder, { recursive: true });
+    reportPdfDirReady = true;
+  }
   return path.join(folder, `service-report-${serviceReportId}.pdf`);
 }
 
 function resolveReportHtmlPath(serviceReportId) {
   const folder = path.join(process.cwd(), "dados", "service-report-html");
-  fs.mkdirSync(folder, { recursive: true });
+  if (!reportHtmlDirReady) {
+    fs.mkdirSync(folder, { recursive: true });
+    reportHtmlDirReady = true;
+  }
   return path.join(folder, `service-report-${serviceReportId}.html`);
 }
 
