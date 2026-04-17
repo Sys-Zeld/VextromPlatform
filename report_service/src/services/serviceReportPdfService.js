@@ -5,20 +5,26 @@ const env = require("../../../specflow/config/env");
 const path = require("path");
 const os = require("os");
 
-function getPuppeteerOrNull() {
+function getPlaywrightOrNull() {
   try {
     // optional dependency in some environments
     // eslint-disable-next-line global-require, import/no-extraneous-dependencies
-    return require("puppeteer");
+    return require("playwright");
   } catch (err) {
     if (err && err.code === "MODULE_NOT_FOUND") return null;
     throw err;
   }
 }
 
-function launchBrowser(puppeteer) {
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
-  return puppeteer.launch({
+function launchBrowser(playwright) {
+  const chromium = playwright && playwright.chromium;
+  if (!chromium) {
+    const err = new Error("Playwright chromium nao esta disponivel.");
+    err.code = "PLAYWRIGHT_CHROMIUM_UNAVAILABLE";
+    throw err;
+  }
+  const executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
+  return chromium.launch({
     headless: true,
     executablePath,
     args: ["--no-sandbox", "--disable-setuid-sandbox"]
@@ -237,8 +243,10 @@ let previewStaticAssetsPromise = null;
 let sharedBrowserPromise = null;
 let activePdfJobs = 0;
 const pdfQueue = [];
+const REPORT_PDF_RENDERER = String(process.env.REPORT_PDF_RENDERER || "playwright").trim().toLowerCase();
 const DEFAULT_PDF_CONCURRENCY = Math.max(1, Math.min(4, Number.parseInt(process.env.REPORT_PDF_CONCURRENCY || "", 10) || Math.ceil((os.cpus() || []).length / 2) || 2));
 const IMAGE_PRELOAD_CONCURRENCY = Math.max(1, Number.parseInt(process.env.REPORT_PDF_IMAGE_PRELOAD_CONCURRENCY || "4", 10) || 4);
+let warnedPlaywrightMissingRuntime = false;
 
 function buildImageRouteMap() {
   return [
@@ -346,9 +354,9 @@ async function withPdfRenderSlot(task) {
   }
 }
 
-async function getSharedBrowser(puppeteer) {
+async function getSharedBrowser(playwright) {
   if (!sharedBrowserPromise) {
-    sharedBrowserPromise = launchBrowser(puppeteer)
+    sharedBrowserPromise = launchBrowser(playwright)
       .then((browser) => {
         browser.on("disconnected", () => {
           sharedBrowserPromise = null;
@@ -363,14 +371,14 @@ async function getSharedBrowser(puppeteer) {
   return sharedBrowserPromise;
 }
 
-async function createPdfPage(puppeteer) {
-  const browser = await getSharedBrowser(puppeteer);
+async function createPdfPage(playwright) {
+  const browser = await getSharedBrowser(playwright);
   return browser.newPage();
 }
 
-async function withPdfPage(puppeteer, task) {
+async function withPdfPage(playwright, task) {
   return withPdfRenderSlot(async () => {
-    const page = await createPdfPage(puppeteer);
+    const page = await createPdfPage(playwright);
     try {
       return await task(page);
     } finally {
@@ -379,10 +387,84 @@ async function withPdfPage(puppeteer, task) {
   });
 }
 
+function isPlaywrightRuntimeMissingError(err) {
+  const text = String((err && err.message) || "").toLowerCase();
+  return text.includes("executable doesn't exist")
+    || text.includes("playwright install")
+    || text.includes("chrome-headless-shell");
+}
+
+function warnPlaywrightFallback(err) {
+  if (warnedPlaywrightMissingRuntime) return;
+  warnedPlaywrightMissingRuntime = true;
+  const msg = err && err.message ? err.message : "Playwright runtime indisponivel.";
+  // eslint-disable-next-line no-console
+  console.warn(`[report-service] Playwright indisponivel, fallback para PDFKit: ${msg}`);
+}
+
+function decodeHtmlEntities(text) {
+  return String(text || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'");
+}
+
+function htmlToPdfKitText(html) {
+  return decodeHtmlEntities(
+    String(html || "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|section|article|header|footer|tr|h1|h2|h3|h4|h5|h6)>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "- ")
+      .replace(/<\/li>/gi, "\n")
+      .replace(/<td[^>]*>/gi, " ")
+      .replace(/<\/td>/gi, " ")
+      .replace(/<th[^>]*>/gi, " ")
+      .replace(/<\/th>/gi, " ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
+function buildPdfBufferFromHtmlWithPdfKit(html, fallbackPayload = {}) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 36, size: "A4" });
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const report = fallbackPayload && fallbackPayload.report ? fallbackPayload.report : {};
+    drawTitle(doc, report.title || "Service Report");
+    drawLine(doc, "Report Number", report.report_number);
+    drawLine(doc, "Revision", report.revision);
+    drawLine(doc, "Status", report.status);
+    doc.moveDown(0.7);
+    doc.font("Helvetica-Bold").fontSize(10).fillColor("#444").text("Preview HTML (renderer: PDFKit)");
+    doc.moveDown(0.3);
+    doc.font("Helvetica").fontSize(9).fillColor("#222");
+    doc.text(htmlToPdfKitText(html) || "-", {
+      width: doc.page.width - doc.page.margins.left - doc.page.margins.right,
+      lineGap: 2
+    });
+    doc.end();
+  });
+}
+
 async function buildPdfBufferFromHtml(html, fallbackPayload) {
-  const puppeteer = getPuppeteerOrNull();
-  if (!puppeteer) {
-    return buildPdfBuffer(fallbackPayload || {});
+  if (REPORT_PDF_RENDERER === "pdfkit") {
+    return buildPdfBufferFromHtmlWithPdfKit(html, fallbackPayload || {});
+  }
+
+  const playwright = getPlaywrightOrNull();
+  if (!playwright) {
+    return buildPdfBufferFromHtmlWithPdfKit(html, fallbackPayload || {});
   }
   const { cssPreview, cssPrint, paginationJs } = await loadPreviewStaticAssets();
 
@@ -407,53 +489,59 @@ ${html}
 </body>
 </html>`;
 
-  return withPdfPage(puppeteer, async (page) => {
+  try {
+    return await withPdfPage(playwright, async (page) => {
 
-    // Handler síncrono — sem async, sem risco de timing
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      const reqUrl = req.url();
-      const cached = imageCache.get(reqUrl);
-      if (cached) {
-        req.respond({ status: 200, contentType: cached.mime, body: cached.body });
-      } else {
-        req.abort();
-      }
+      await page.route("**/*", (route) => {
+        const reqUrl = route.request().url();
+        const cached = imageCache.get(reqUrl);
+        if (cached) {
+          return route.fulfill({ status: 200, contentType: cached.mime, body: cached.body });
+        } else {
+          return route.abort();
+        }
+      });
+
+      await page.setViewportSize({ width: 1240, height: 1754 });
+      await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
+
+      // Aguarda todas as imagens carregarem (ou falharem) + fonts + paginação
+      await page.evaluate(async () => {
+        const images = Array.from(document.images || []);
+        await Promise.all(images.map((img) => {
+          if (img.complete) return Promise.resolve();
+          return new Promise((resolve) => {
+            img.addEventListener("load", resolve, { once: true });
+            img.addEventListener("error", resolve, { once: true });
+          });
+        }));
+        if (document.fonts && document.fonts.ready) {
+          await document.fonts.ready;
+        }
+      });
+      await page.waitForFunction(() => window.__reportPaginationDone === true, { timeout: 10000 }).catch(() => {});
+
+      const buffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        margin: { top: 0, right: 0, bottom: 0, left: 0 }
+      });
+      return Buffer.from(buffer);
     });
-
-    await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
-    await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
-
-    // Aguarda todas as imagens carregarem (ou falharem) + fonts + paginação
-    await page.evaluate(async () => {
-      const images = Array.from(document.images || []);
-      await Promise.all(images.map((img) => {
-        if (img.complete) return Promise.resolve();
-        return new Promise((resolve) => {
-          img.addEventListener("load", resolve, { once: true });
-          img.addEventListener("error", resolve, { once: true });
-        });
-      }));
-      if (document.fonts && document.fonts.ready) {
-        await document.fonts.ready;
-      }
-    });
-    await page.waitForFunction(() => window.__reportPaginationDone === true, { timeout: 10000 }).catch(() => {});
-
-    const buffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 }
-    });
-    return Buffer.from(buffer);
-  });
+  } catch (err) {
+    if (isPlaywrightRuntimeMissingError(err)) {
+      warnPlaywrightFallback(err);
+      return buildPdfBufferFromHtmlWithPdfKit(html, fallbackPayload || {});
+    }
+    throw err;
+  }
 }
 
 async function buildPdfBufferFromUrl(url, options = {}) {
-  const puppeteer = getPuppeteerOrNull();
-  if (!puppeteer) {
-    const err = new Error("Puppeteer não está instalado no ambiente.");
-    err.code = "PUPPETEER_MISSING";
+  const playwright = getPlaywrightOrNull();
+  if (!playwright) {
+    const err = new Error("Playwright nao esta instalado no ambiente.");
+    err.code = "PLAYWRIGHT_MISSING";
     throw err;
   }
   const targetUrl = String(url || "").trim();
@@ -463,16 +551,15 @@ async function buildPdfBufferFromUrl(url, options = {}) {
 
   const cookieHeader = String(options.cookieHeader || "").trim();
 
-  return withPdfPage(puppeteer, async (page) => {
-    await page.setViewport({
+  return withPdfPage(playwright, async (page) => {
+    await page.setViewportSize({
       width: 1240,
-      height: 1754,
-      deviceScaleFactor: 1
+      height: 1754
     });
     if (cookieHeader) {
-      await page.setExtraHTTPHeaders({ Cookie: cookieHeader });
+      await page.context().setExtraHTTPHeaders({ Cookie: cookieHeader });
     }
-    await page.goto(targetUrl, { waitUntil: "networkidle0" });
+    await page.goto(targetUrl, { waitUntil: "networkidle" });
     await page.evaluate(async () => {
       const images = Array.from(document.images || []);
       await Promise.all(images.map((img) => {
@@ -505,13 +592,13 @@ async function generatePdfToFile(payload, outputPath, htmlSource = "") {
 }
 
 async function buildAnalyticsPdfBufferFromHtml(html) {
-  const puppeteer = getPuppeteerOrNull();
-  if (!puppeteer) {
-    throw new Error("Puppeteer não está instalado. Instale puppeteer para gerar o PDF do dashboard.");
+  const playwright = getPlaywrightOrNull();
+  if (!playwright) {
+    throw new Error("Playwright nao esta instalado. Instale playwright para gerar o PDF do dashboard.");
   }
-  return withPdfPage(puppeteer, async (page) => {
-    await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
-    await page.setContent(html, { waitUntil: "networkidle0" });
+  return withPdfPage(playwright, async (page) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setContent(html, { waitUntil: "networkidle" });
     // Wait for Chart.js to finish rendering all canvases
     await page.waitForFunction(() => window.__analyticsPdfReady === true, { timeout: 15000 }).catch(() => {});
     const buffer = await page.pdf({
