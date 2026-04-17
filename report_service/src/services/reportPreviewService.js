@@ -143,6 +143,13 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function stripHtml(value) {
+  return String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function toImagePublicSrc(filePath) {
   const raw = String(filePath || "").trim();
   if (!raw) return "";
@@ -156,13 +163,15 @@ function toImagePublicSrc(filePath) {
 
 function renderInlineImageCard(image, requestedId = null, imageLabel = "Imagem") {
   const fallbackCaption = requestedId ? `${imageLabel} ${requestedId}` : imageLabel;
-  const caption = escapeHtml((image && image.caption) || fallbackCaption);
+  const captionText = stripHtml((image && image.caption) || "") || fallbackCaption;
+  const captionHtml = escapeHtml(captionText);
+  const captionAlt = escapeHtml(stripHtml((image && image.caption) || "") || fallbackCaption);
   const publicSrc = toImagePublicSrc(image && image.filePath);
   if (!publicSrc) {
-    return `<figure class="report-inline-image-card"><div class="report-inline-image-missing">${escapeHtml(`ID ${requestedId || "-"}`)}</div><figcaption class="report-inline-image-caption">${caption}</figcaption></figure>`;
+    return `<figure class="report-inline-image-card"><div class="report-inline-image-missing">${escapeHtml(`ID ${requestedId || "-"}`)}</div><figcaption class="report-inline-image-caption">${captionHtml}</figcaption></figure>`;
   }
   const safePath = escapeHtml(publicSrc);
-  return `<figure class="report-inline-image-card"><img class="report-inline-image" src="${safePath}" alt="${caption}" width="250" height="250" style="object-fit:cover;width:250px;height:250px;display:block;" /><figcaption class="report-inline-image-caption">${caption}</figcaption></figure>`;
+  return `<figure class="report-inline-image-card"><img class="report-inline-image" src="${safePath}" alt="${captionAlt}" width="250" height="250" style="object-fit:cover;width:250px;height:250px;display:block;" /><figcaption class="report-inline-image-caption">${captionHtml}</figcaption></figure>`;
 }
 
 function formatComponentQuantity(value) {
@@ -701,6 +710,7 @@ function buildPreviewModel(payload, options = {}) {
   const systemUserFallback = String(rawOrder.created_by || rawOrder.updated_by || "").trim();
   const report = {
     ...rawReport,
+    title: String(rawOrder.title || "").trim() || String(rawReport.title || "").trim(),
     prepared_by: signedTechnicianName || preparedByRaw || systemUserFallback
   };
   const documentLang = String(rawReport.document_language || "pt").trim().toLowerCase();

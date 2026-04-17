@@ -30,6 +30,43 @@ const {
   SIGNER_TYPES
 } = require("../constants");
 
+function getSharpOrNull() {
+  try {
+    // eslint-disable-next-line global-require, import/no-extraneous-dependencies
+    return require("sharp");
+  } catch (_err) {
+    return null;
+  }
+}
+
+async function optimizeTagImageUploadBuffer(buffer, ext) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return buffer;
+  const normalizedExt = String(ext || "").toLowerCase();
+  if (![".png", ".jpg", ".jpeg", ".webp"].includes(normalizedExt)) return buffer;
+
+  const sharp = getSharpOrNull();
+  if (!sharp) return buffer;
+
+  try {
+    const source = sharp(buffer, { animated: false });
+    const metadata = await source.metadata();
+    const width = Number(metadata.width || 0);
+    const transformed = width > 1600
+      ? source.resize({ width: 1600, withoutEnlargement: true })
+      : source;
+
+    if (normalizedExt === ".png") {
+      return transformed.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
+    }
+    if (normalizedExt === ".webp") {
+      return transformed.webp({ quality: 80 }).toBuffer();
+    }
+    return transformed.jpeg({ quality: 80, mozjpeg: true }).toBuffer();
+  } catch (_err) {
+    return buffer;
+  }
+}
+
 function createReportWebController(deps) {
   const sanitizeInput = deps.sanitizeInput;
   const sanitizeRichTextInput = deps.sanitizeRichTextInput || deps.sanitizeInput;
@@ -291,13 +328,21 @@ function createReportWebController(deps) {
 
   function buildOrderEditorRedirect(req, orderId) {
     const returnTo = String((req.body && req.body.return_to) || (req.query && req.query.return_to) || "").trim().toLowerCase();
+    if (returnTo === "order-editor") {
+      return `/admin/report-service/orders/${orderId}`;
+    }
     if (returnTo === "report-editor") {
       return `/admin/report-service/orders/${orderId}/report-editor`;
     }
     const referer = String(req.headers.referer || "");
-    return referer.includes("/report-editor")
-      ? `/admin/report-service/orders/${orderId}/report-editor`
-      : `/admin/report-service/orders/${orderId}`;
+    if (referer.includes(`/admin/report-service/orders/${orderId}/report-editor`)) {
+      return `/admin/report-service/orders/${orderId}/report-editor`;
+    }
+    if (referer.includes(`/admin/report-service/orders/${orderId}`)) {
+      return `/admin/report-service/orders/${orderId}`;
+    }
+    // Default to report-editor to keep post-actions in the editor flow.
+    return `/admin/report-service/orders/${orderId}/report-editor`;
   }
 
   function isSystemAdminUser(res) {
@@ -2786,7 +2831,7 @@ function createReportWebController(deps) {
       if (!await ensureOrderEditable(req, res, orderId)) return;
       const techId = Number(req.body.technician_id);
       if (techId > 0) await repo.linkTechnicianToOrder(orderId, techId);
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async unlinkTechnicianFromOrderEditor(req, res) {
@@ -2794,7 +2839,7 @@ function createReportWebController(deps) {
       if (!await ensureOrderEditable(req, res, orderId)) return;
       const techId = Number(req.params.techId);
       await repo.unlinkTechnicianFromOrder(orderId, techId);
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async linkInstrumentToOrder(req, res) {
@@ -2827,7 +2872,7 @@ function createReportWebController(deps) {
         isLead: req.body.is_lead === "on" || req.body.is_lead === "true"
       });
       await repo.linkTechnicianToOrder(orderId, created.id);
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async addInstrument(req, res) {
@@ -2842,7 +2887,7 @@ function createReportWebController(deps) {
         calibrationDueDate: sanitizeInput(req.body.calibration_due_date) || null,
         notes: sanitizeInput(req.body.notes)
       });
-      return res.redirect(`/admin/report-service/orders/${orderId}?saved=1`);
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async importImage(req, res) {
@@ -2873,6 +2918,7 @@ function createReportWebController(deps) {
       if (!ext || !buffer.length) {
         return res.status(400).json({ ok: false, error: "Arquivo de imagem invalido." });
       }
+      const optimizedBuffer = await optimizeTagImageUploadBuffer(buffer, ext);
 
       const targetDir = path.join(process.cwd(), "docs", "report", "img");
       await fs.promises.mkdir(targetDir, { recursive: true });
@@ -2880,13 +2926,20 @@ function createReportWebController(deps) {
       const unique = crypto.randomBytes(6).toString("hex");
       const finalName = `${Date.now()}-${fileSafeBase}-${unique}${ext === ".jpeg" ? ".jpg" : ext}`;
       const absolutePath = path.join(targetDir, finalName);
-      await fs.promises.writeFile(absolutePath, buffer);
+      await fs.promises.writeFile(absolutePath, optimizedBuffer);
+
+      let captionRaw = "";
+      try {
+        captionRaw = decodeURIComponent(String(req.headers["x-caption"] || ""));
+      } catch (_err) {
+        captionRaw = String(req.headers["x-caption"] || "");
+      }
 
       const created = await repo.createImage({
         serviceReportId: report.id,
         sectionKey: "__tag__",
         filePath: finalName,
-        caption: sanitizeInput(req.headers["x-caption"] || ""),
+        caption: sanitizeInput(captionRaw),
         sortOrder: 0
       });
 
@@ -2894,9 +2947,22 @@ function createReportWebController(deps) {
         ok: true,
         data: {
           id: created.ref_id,
-          filePath: finalName
+          filePath: finalName,
+          sizeBytes: optimizedBuffer.length
         }
       });
+    },
+
+    async updateImageLabel(req, res) {
+      const orderId = Number(req.params.id);
+      if (!await ensureOrderEditable(req, res, orderId)) return;
+      const imageId = Number(req.params.imageId);
+      if (!Number.isInteger(imageId) || imageId <= 0) {
+        return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
+      }
+      const report = await service.ensureReportForOrder(orderId);
+      await repo.updateImageCaptionByRefId(report.id, imageId, sanitizeInput(req.body.caption || ""));
+      return res.redirect(`${buildOrderEditorRedirect(req, orderId)}?saved=1`);
     },
 
     async deleteImage(req, res) {

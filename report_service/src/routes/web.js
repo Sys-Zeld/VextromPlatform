@@ -89,6 +89,7 @@ function createReportServiceWebRouter(deps) {
     deps.requireAdminAuth,
     asyncHandler(controller.importImage)
   );
+  router.post("/orders/:id/images/:imageId/label", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.updateImageLabel));
   router.post("/orders/:id/images/:imageId/delete", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.deleteImage));
   router.get("/orders/:id/preview", deps.csrfProtection, deps.requireAdminAuth, asyncHandler(controller.previewPage));
   router.get("/orders/:id/preview-html", deps.requireAdminAuth, asyncHandler(controller.previewHtmlPage));

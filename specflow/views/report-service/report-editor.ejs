@@ -1,6 +1,7 @@
 ﻿<%- include("../partials/head", { pageTitle }) %>
 <link href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
 <link href="/public/css/report-editor.css" rel="stylesheet" />
 <%
   function fmtDate(value) {
@@ -30,6 +31,23 @@
       .split(/[\\/]/)
       .filter(Boolean)
       .pop() || "";
+  }
+
+  function stripHtmlTags(value) {
+    return String(value || "")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function abbreviateFileName(fileName, maxLen) {
+    const value = String(fileName || "");
+    const limit = Number(maxLen || 34);
+    if (value.length <= limit) return value;
+    const ext = value.includes(".") ? `.${value.split(".").pop()}` : "";
+    const base = ext ? value.slice(0, -ext.length) : value;
+    const keep = Math.max(8, limit - ext.length - 3);
+    return `${base.slice(0, keep)}...${ext}`;
   }
 
   function getSectionImageRegistry(sectionKey) {
@@ -527,49 +545,8 @@
             Use no texto do capitulo: <code>@img=ID</code> para renderizar a imagem no preview no ponto da tag.
           </div>
 
-          <div class="table-responsive mt-3">
-            <table class="table table-sm app-table mb-0">
-              <thead><tr><th>ID</th><th>Preview</th><th>Arquivo</th><th>Legenda</th><th>Acoes</th></tr></thead>
-              <tbody>
-                <% const tagImageRegistry = getTagImageRegistry(); %>
-                <% if (!tagImageRegistry.length) { %><tr><td colspan="5" class="text-center text-muted py-3">Sem imagens cadastradas para tags.</td></tr><% } %>
-                <% tagImageRegistry.forEach((item) => { %>
-                  <% const imgSrc = "/docs/report/img/" + encodeURIComponent(extractImageFileName(item.file_path)); %>
-                  <% const imgCaption = item.caption || extractImageFileName(item.file_path); %>
-                  <tr>
-                    <td><code><%= item.ref_id || item.id %></code></td>
-                    <td>
-                      <img
-                        src="<%= imgSrc %>"
-                        alt="<%= imgCaption %>"
-                        data-preview-src="<%= imgSrc %>"
-                        data-preview-caption="<%= imgCaption %>"
-                        style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;cursor:pointer;"
-                        onclick="openImagePreviewModal(this.dataset.previewSrc, this.dataset.previewCaption)"
-                        title="Clique para ampliar"
-                      />
-                    </td>
-                    <td><code><%= extractImageFileName(item.file_path) %></code></td>
-                    <td><%= item.caption || "-" %></td>
-                    <td>
-                      <div class="d-flex gap-1">
-                        <button
-                          class="btn btn-outline-secondary btn-sm"
-                          type="button"
-                          data-preview-src="<%= imgSrc %>"
-                          data-preview-caption="<%= imgCaption %>"
-                          onclick="openImagePreviewModal(this.dataset.previewSrc, this.dataset.previewCaption)"
-                        >Ver</button>
-                        <form method="post" action="/admin/report-service/orders/<%= order.id %>/images/<%= (item.ref_id || item.id) %>/delete" class="m-0" onsubmit="return confirm('Excluir esta imagem do banco de tags?');">
-                          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-                          <button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>
-                        </form>
-                      </div>
-                    </td>
-                  </tr>
-                <% }) %>
-              </tbody>
-            </table>
+          <div class="mt-3">
+            <div id="tagImagesGrid"></div>
           </div>
         </div>
       </div>
@@ -850,6 +827,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/quill-better-table@1.2.10/dist/quill-better-table.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
 <script>
   (function () {
     var startBtn = document.getElementById("startTranslateJobBtn");
@@ -997,7 +975,7 @@
   window.reportTagImageIndex = <%- JSON.stringify(
     (getTagImageRegistry() || []).map((item) => ({
       id: Number(item.ref_id || item.id),
-      caption: item.caption || "",
+      caption: stripHtmlTags(item.caption || ""),
       filePath: extractImageFileName(item.file_path)
     }))
   ) %>;
@@ -1059,7 +1037,7 @@
             "Content-Type": file.type || "application/octet-stream",
             "X-CSRF-Token": csrfToken,
             "X-File-Name": encodeURIComponent(file.name || "imagem"),
-            "X-Caption": captionInput.value || ""
+            "X-Caption": encodeURIComponent(captionInput.value || "")
           },
           body: buffer
         });
@@ -1070,6 +1048,93 @@
         status.textContent = "Falha ao importar imagem.";
       } finally {
         button.disabled = false;
+      }
+    });
+  })();
+</script>
+<script>
+  (function () {
+    var host = document.getElementById("tagImagesGrid");
+    if (!host) return;
+    if (!window.gridjs || !window.gridjs.Grid) {
+      host.innerHTML = '<div class="alert alert-warning mb-0">Grid.js nao foi carregado. Recarregue a pagina e verifique o acesso ao CDN.</div>';
+      return;
+    }
+    function esc(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+    var csrfToken = <%- JSON.stringify(csrfToken) %>;
+    var orderId = <%= Number(order.id) %>;
+    var rows = <%- JSON.stringify(
+      (getTagImageRegistry() || []).map((item) => ({
+        id: Number(item.ref_id || item.id),
+        fileName: extractImageFileName(item.file_path),
+        caption: stripHtmlTags(item.caption || "")
+      }))
+    ) %>;
+
+    if (!Array.isArray(rows) || !rows.length) {
+      host.innerHTML = '<div class="border rounded text-center text-muted py-3">Sem imagens cadastradas para tags.</div>';
+      return;
+    }
+
+    var data = rows.map(function (item) {
+      var fileName = String(item.fileName || "");
+      var imgSrc = "/docs/report/img/" + encodeURIComponent(fileName);
+      var safeCaption = esc(item.caption || fileName);
+      var abbrev = fileName.length > 34
+        ? (fileName.slice(0, Math.max(8, 34 - ((fileName.split(".").pop() || "").length + 4))) + "..." + (fileName.includes(".") ? "." + fileName.split(".").pop() : ""))
+        : fileName;
+      return [
+        gridjs.html("<code>" + esc(item.id) + "</code>"),
+        gridjs.html('<img src="' + esc(imgSrc) + '" alt="' + safeCaption + '" data-preview-src="' + esc(imgSrc) + '" data-preview-caption="' + safeCaption + '" class="tag-image-preview-trigger" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;cursor:pointer;" title="Clique para ampliar" />'),
+        gridjs.html('<code title="' + esc(fileName) + '">' + esc(abbrev) + '</code>'),
+        gridjs.html(
+          '<form method="post" action="/admin/report-service/orders/' + orderId + '/images/' + item.id + '/label" class="d-flex gap-1 align-items-center m-0">' +
+            '<input type="hidden" name="_csrf" value="' + esc(csrfToken) + '" />' +
+            '<input class="form-control form-control-sm" name="caption" value="' + safeCaption + '" placeholder="Sem legenda" maxlength="200" />' +
+            '<button class="btn btn-outline-primary btn-sm" type="submit">Salvar</button>' +
+          '</form>'
+        ),
+        gridjs.html(
+          '<div class="d-flex gap-1">' +
+            '<button class="btn btn-outline-secondary btn-sm tag-image-preview-trigger" type="button" data-preview-src="' + esc(imgSrc) + '" data-preview-caption="' + safeCaption + '">Ver</button>' +
+            '<form method="post" action="/admin/report-service/orders/' + orderId + '/images/' + item.id + '/delete" class="m-0 tag-image-delete-form">' +
+              '<input type="hidden" name="_csrf" value="' + esc(csrfToken) + '" />' +
+              '<button class="btn btn-outline-danger btn-sm" type="submit">Excluir</button>' +
+            '</form>' +
+          '</div>'
+        )
+      ];
+    });
+
+    var grid = new window.gridjs.Grid({
+      columns: ["ID", "Preview", "Arquivo", "Legenda", "Ações"],
+      data: data,
+      search: true,
+      sort: true,
+      pagination: { limit: 8 },
+      className: {
+        table: "table table-sm app-table mb-0"
+      }
+    });
+    grid.render(host);
+    host.addEventListener("click", function (event) {
+      var trigger = event.target && event.target.closest ? event.target.closest(".tag-image-preview-trigger") : null;
+      if (!trigger) return;
+      var src = trigger.getAttribute("data-preview-src") || "";
+      var caption = trigger.getAttribute("data-preview-caption") || "";
+      if (src) openImagePreviewModal(src, caption);
+    });
+    host.addEventListener("submit", function (event) {
+      var form = event.target && event.target.closest ? event.target.closest(".tag-image-delete-form") : null;
+      if (!form) return;
+      if (!window.confirm("Excluir esta imagem do banco de tags?")) {
+        event.preventDefault();
       }
     });
   })();
