@@ -96,12 +96,24 @@
             <% if (errors.name) { %><div class="invalid-feedback d-block"><%= errors.name %></div><% } %>
           </div>
 
-          <div class="col-12 col-md-4 d-flex align-items-end gap-2">
-            <button class="btn btn-primary w-100" type="submit"><%= editingProfileId ? t("admin.profileUpdateButton") : t("admin.profileCreateButton") %></button>
-            <% if (editingProfileId) { %>
-              <button class="btn btn-outline-primary" type="button" id="openProfileTranslateModalBtn"><%= t("admin.profileTranslateButton") %></button>
-            <% } %>
-            <% if (editingProfileId) { %><a class="btn btn-outline-secondary" href="/admin/profiles"><%= t("admin.profileCancelButton") %></a><% } %>
+          <div class="col-12">
+            <div class="row g-2">
+              <% if (editingProfileId) { %>
+                <div class="col-12 col-md-4">
+                  <button class="btn btn-primary w-100" type="submit"><%= t("admin.profileUpdateButton") %></button>
+                </div>
+                <div class="col-12 col-md-4">
+                  <button class="btn btn-outline-primary w-100" type="button" id="openProfileTranslateModalBtn" data-bs-toggle="modal" data-bs-target="#profileTranslateModal"><%= t("admin.profileTranslateButton") %></button>
+                </div>
+                <div class="col-12 col-md-4">
+                  <a class="btn btn-outline-secondary w-100" href="/admin/profiles"><%= t("admin.profileCancelButton") %></a>
+                </div>
+              <% } else { %>
+                <div class="col-12 col-md-4">
+                  <button class="btn btn-primary w-100" type="submit"><%= t("admin.profileCreateButton") %></button>
+                </div>
+              <% } %>
+            </div>
           </div>
 
           <% if (errors.fieldIds) { %><div class="col-12 text-danger small"><%= errors.fieldIds %></div><% } %>
@@ -526,10 +538,8 @@
       }
     }
 
-    if (translateButton && translateModalEl && window.bootstrap) {
-      var profileTranslateModal = new bootstrap.Modal(translateModalEl);
-      translateButton.addEventListener("click", function () {
-        profileTranslateModal.show();
+    if (translateButton && translateModalEl) {
+      translateModalEl.addEventListener("show.bs.modal", function () {
         runProfileTranslation();
       });
       if (retryTranslateBtn) {
