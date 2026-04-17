@@ -123,7 +123,7 @@ function createReportPublicController(deps) {
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=850, initial-scale=1.0" />
   <title>${pageTitle || "Relatorio assinado"}</title>
   <link href="/public/css/report-preview.css" rel="stylesheet" />
   <link href="/public/css/report-print.css" rel="stylesheet" />

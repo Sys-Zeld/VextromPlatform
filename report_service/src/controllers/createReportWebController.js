@@ -2955,7 +2955,7 @@ function createReportWebController(deps) {
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=850, initial-scale=1.0" />
   <title>${String(pageTitle).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</title>
   <link href="/public/css/report-preview.css" rel="stylesheet" />
   <link href="/public/css/report-print.css" rel="stylesheet" />

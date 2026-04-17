@@ -14,7 +14,6 @@
 
 .report-doc {
   width: calc(var(--report-a4-width) + 12mm);
-  max-width: 100%;
   margin: 0 auto;
   background: #c7cec8;
   color: #1f2a26;
@@ -442,25 +441,6 @@
   flex-wrap: nowrap;
 }
 
-@media (max-width: 640px) {
-  .report-doc {
-    width: 100%;
-    padding: 10px;
-    gap: 10px;
-  }
-
-  .report-page {
-    width: 100%;
-    min-height: auto;
-    height: auto;
-    padding: 18px 16px;
-  }
-
-  .report-inline-image-row {
-    flex-direction: column;
-    align-items: center;
-  }
-}
 
 .section-title,
 .report-section-title,

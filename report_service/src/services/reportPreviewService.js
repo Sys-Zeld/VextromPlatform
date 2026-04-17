@@ -556,6 +556,29 @@ function wrapImageCardsIntoRows(html) {
   return result;
 }
 
+/**
+ * For block-level tags: replaces the entire <p>...</p> that wraps the tag
+ * (including any inline wrappers like <span style="...">) with the block content.
+ * Falls back to inline replacement for occurrences inside paragraphs that also
+ * contain other text content.
+ *
+ * This prevents invalid HTML like <p><span><p>...</p></span></p> which causes
+ * browsers to discard the outer <p>/<span> and lose inline formatting on nearby
+ * paragraphs.
+ */
+function liftBlockTagFromParagraph(html, tagSrc, inlineReplacer) {
+  const pPattern = new RegExp(
+    `<p[^>]*>(?:<(?!\\/?p)[^>]*>|\\s|&nbsp;)*${tagSrc}(?:<\\/[^>]+>|\\s|&nbsp;)*<\\/p>`,
+    "gi"
+  );
+  const extractPattern = new RegExp(tagSrc, "i");
+  return html.replace(pPattern, (pMatch) => {
+    const m = extractPattern.exec(pMatch);
+    if (!m) return pMatch;
+    return inlineReplacer(...m);
+  });
+}
+
 function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipmentById, timesheetItems, dailyLogsById, dailyLogsOrdered, options = {}, technicianItems = [], orderEquipments = [], siteData = {}) {
   const source = String(contentHtml || "");
   if (!source) return "<p><br></p>";
@@ -577,23 +600,42 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
     const image = imageById.get(id);
     return renderInlineImageCard(image, id, opts.imageLabel || "Imagem");
   });
-  const tableReplacedPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmpr/gi;
-  const tableRequiredPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmpq/gi;
-  const tableSparePattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmps/gi;
-  const withReplacedTable = withImages.replace(tableReplacedPattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "replaced")));
-  const withRequiredTable = withReplacedTable.replace(tableRequiredPattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "required")));
-  const withTables = withRequiredTable.replace(tableSparePattern, () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "spare")));
+
+  // Block-level table tags: lift out of <p> wrappers first, then inline fallback
+  const tblcmprSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmpr/gi.source;
+  const tblcmpqSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmpq/gi.source;
+  const tblcmpsSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*tblcmps/gi.source;
+  const replacedFn = () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "replaced"));
+  const requiredFn = () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "required"));
+  const spareFn = () => renderComponentsInlineTable(getComponentRowsByCategory(componentItems, "spare"));
+  const withReplacedTable = liftBlockTagFromParagraph(withImages, tblcmprSrc, replacedFn);
+  const r1 = withReplacedTable.replace(new RegExp(tblcmprSrc, "gi"), replacedFn);
+  const withRequiredTable = liftBlockTagFromParagraph(r1, tblcmpqSrc, requiredFn);
+  const r2 = withRequiredTable.replace(new RegExp(tblcmpqSrc, "gi"), requiredFn);
+  const withTables = liftBlockTagFromParagraph(r2, tblcmpsSrc, spareFn);
+  const r3 = withTables.replace(new RegExp(tblcmpsSrc, "gi"), spareFn);
+
+  // @tagsequip and @site produce inline text — keep as simple inline replacement
   const equipmentTagsPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*(?:tagsequip|tagequip(?:amentos)?)/gi;
-  const withEquipmentTags = withTables.replace(equipmentTagsPattern, () => renderEquipmentTagsInline(orderEquipments));
+  const withEquipmentTags = r3.replace(equipmentTagsPattern, () => renderEquipmentTagsInline(orderEquipments));
   const siteTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*(?:site|nomesite)/gi;
   const withSite = withEquipmentTags.replace(siteTagPattern, () => renderSiteInline(siteData));
-  const equipmentTablePattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*(?:tblequip(?:amentos)?)/gi;
-  const withEquipmentTable = withSite.replace(equipmentTablePattern, () => renderEquipmentsInlineTable(orderEquipments));
-  const timesheetTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*timesheet/gi;
-  const withTimesheet = withEquipmentTable.replace(timesheetTagPattern, () => renderTimesheetInlineTable(timesheetItems));
-  const techTeamTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*equipetecnica/gi;
-  const withTechTeam = withTimesheet.replace(techTeamTagPattern, () => renderTechTeamInlineTable(technicianItems));
-  if (!opts.expandDailyLogTags) return withTechTeam;
+
+  // Block-level equipment/timesheet/techteam tables: lift out of <p> wrappers
+  const tblequipSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*(?:tblequip(?:amentos)?)/gi.source;
+  const timesheetSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*timesheet/gi.source;
+  const techTeamSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*equipetecnica/gi.source;
+  const equipTableFn = () => renderEquipmentsInlineTable(orderEquipments);
+  const timesheetFn = () => renderTimesheetInlineTable(timesheetItems);
+  const techTeamFn = () => renderTechTeamInlineTable(technicianItems);
+  const withEquipmentTable = liftBlockTagFromParagraph(withSite, tblequipSrc, equipTableFn);
+  const r4 = withEquipmentTable.replace(new RegExp(tblequipSrc, "gi"), equipTableFn);
+  const withTimesheet = liftBlockTagFromParagraph(r4, timesheetSrc, timesheetFn);
+  const r5 = withTimesheet.replace(new RegExp(timesheetSrc, "gi"), timesheetFn);
+  const withTechTeam = liftBlockTagFromParagraph(r5, techTeamSrc, techTeamFn);
+  const r6 = withTechTeam.replace(new RegExp(techTeamSrc, "gi"), techTeamFn);
+
+  if (!opts.expandDailyLogTags) return r6;
 
   const nestedContext = {
     imageById,
@@ -607,20 +649,32 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
     siteData,
     imageLabel: opts.imageLabel || "Imagem"
   };
-  const dailyLogTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi;
-  const withDailyLogs = withTechTeam.replace(dailyLogTagPattern, (_match, rawId) => {
+
+  // @descricaodia=ID: lift out of <p> wrappers, then inline fallback
+  const dailyLogTagSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)/gi.source;
+  const dailyLogReplacer = (_match, rawId) => {
     const id = Number(rawId);
     if (!Number.isInteger(id) || id <= 0) return _match;
     return renderDailyLogInlineItem(dailyLogsById.get(id), id, nestedContext);
-  });
-  const dailyLogsTagAllPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?!((?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)))/gi;
+  };
+  const withDailyLogsP = liftBlockTagFromParagraph(r6, dailyLogTagSrc, dailyLogReplacer);
+  const withDailyLogs = withDailyLogsP.replace(new RegExp(dailyLogTagSrc, "gi"), dailyLogReplacer);
+
+  // @descricaodia (all logs): lift out of <p> wrappers, then inline fallback
   const dailyLogsForAll = dailyLogsOrdered.filter((l) => String(l.notes || "").trim() !== "conclusaogeral");
-  const withAllDailyLogs = withDailyLogs.replace(dailyLogsTagAllPattern, () => renderAllDailyLogsInlineItems(dailyLogsForAll, nestedContext));
+  const dailyLogsAllSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*descricaodia(?!((?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)))/gi.source;
+  const dailyLogsAllFn = () => renderAllDailyLogsInlineItems(dailyLogsForAll, nestedContext);
+  const withAllDailyLogsP = liftBlockTagFromParagraph(withDailyLogs, dailyLogsAllSrc, dailyLogsAllFn);
+  const withAllDailyLogs = withAllDailyLogsP.replace(new RegExp(dailyLogsAllSrc, "gi"), dailyLogsAllFn);
+
+  // @conclusaogeral: lift out of <p> wrappers, then inline fallback
   const conclusaoGeralLog = dailyLogsOrdered.find((l) => String(l.notes || "").trim() === "conclusaogeral");
-  const conclusaoGeralTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*conclusaogeral/gi;
-  const withConclusaoGeral = withAllDailyLogs.replace(conclusaoGeralTagPattern, () =>
-    conclusaoGeralLog ? renderDailyLogInlineItem(conclusaoGeralLog, conclusaoGeralLog.id, nestedContext) : ""
-  );
+  const conclusaoGeralSrc = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*conclusaogeral/gi.source;
+  const conclusaoGeralFn = () =>
+    conclusaoGeralLog ? renderDailyLogInlineItem(conclusaoGeralLog, conclusaoGeralLog.id, nestedContext) : "";
+  const withConclusaoGeralP = liftBlockTagFromParagraph(withAllDailyLogs, conclusaoGeralSrc, conclusaoGeralFn);
+  const withConclusaoGeral = withConclusaoGeralP.replace(new RegExp(conclusaoGeralSrc, "gi"), conclusaoGeralFn);
+
   return wrapImageCardsIntoRows(withConclusaoGeral);
 }
 
