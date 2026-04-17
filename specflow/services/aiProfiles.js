@@ -457,6 +457,140 @@ async function reviseTextWithAi({
   };
 }
 
+function mapTranslateTargetLabel(targetLanguage) {
+  const normalized = String(targetLanguage || "").trim().toLowerCase();
+  if (normalized === "pt" || normalized === "pt-br") return "Portuguese (Brazil)";
+  if (normalized === "fr" || normalized === "fr-fr") return "French";
+  return "English";
+}
+
+function normalizeTranslatableFields(fields) {
+  const source = Array.isArray(fields) ? fields : [];
+  return source
+    .map((item) => {
+      const fieldId = Number(item && item.fieldId);
+      if (!Number.isInteger(fieldId) || fieldId <= 0) return null;
+      const enumOptions = Array.isArray(item.enumOptions)
+        ? item.enumOptions.map((opt) => String(opt === null || opt === undefined ? "" : opt).trim()).filter(Boolean)
+        : [];
+      return {
+        fieldId,
+        label: String(item && item.label ? item.label : "").trim(),
+        section: String(item && item.section ? item.section : "").trim(),
+        fieldType: String(item && item.fieldType ? item.fieldType : "text").trim().toLowerCase(),
+        enumOptions
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildProfileTranslationPrompt({ profileName, fields, targetLanguage }) {
+  const target = mapTranslateTargetLabel(targetLanguage);
+  const payload = {
+    profileName: String(profileName || "").trim(),
+    fields: normalizeTranslatableFields(fields)
+  };
+  return [
+    `Translate this technical form profile to ${target}.`,
+    "Preserve the JSON structure exactly.",
+    "Do not change fieldId.",
+    "Translate only textual content: profileName, label, section and enumOptions.",
+    "Do not modify numeric values, units, codes, acronyms, model references, or electrical notation.",
+    "Keep engineering meaning and terminology consistent.",
+    "Return ONLY valid minified JSON with this exact schema:",
+    "{\"profileName\":\"string\",\"fields\":[{\"fieldId\":1,\"label\":\"string\",\"section\":\"string\",\"enumOptions\":[\"string\"]}]}",
+    "",
+    "JSON to translate:",
+    JSON.stringify(payload)
+  ].join("\n");
+}
+
+function validateTranslatedProfilePayload(parsed, sourceFields) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("A IA retornou estrutura invalida para traducao.");
+  }
+  const translatedFields = Array.isArray(parsed.fields) ? parsed.fields : [];
+  if (!translatedFields.length) {
+    throw new Error("A IA nao retornou os campos traduzidos.");
+  }
+
+  const sourceMap = new Map(sourceFields.map((field) => [Number(field.fieldId), field]));
+  const resultFields = [];
+  translatedFields.forEach((field) => {
+    const fieldId = Number(field && field.fieldId);
+    if (!Number.isInteger(fieldId) || !sourceMap.has(fieldId)) return;
+    const source = sourceMap.get(fieldId);
+    const label = String(field && field.label ? field.label : source.label || "").trim();
+    const section = String(field && field.section ? field.section : source.section || "").trim();
+    const enumOptions = Array.isArray(field && field.enumOptions)
+      ? field.enumOptions.map((opt) => String(opt === null || opt === undefined ? "" : opt).trim()).filter(Boolean)
+      : source.enumOptions;
+    resultFields.push({
+      fieldId,
+      label,
+      section,
+      enumOptions: Array.isArray(enumOptions) ? enumOptions : []
+    });
+  });
+
+  if (!resultFields.length) {
+    throw new Error("A IA nao retornou traducoes validas.");
+  }
+
+  return {
+    profileName: String(parsed.profileName || "").trim(),
+    fields: resultFields
+  };
+}
+
+async function translateProfileFieldsWithAi({ profileName = "", fields = [], targetLanguage = "en" }) {
+  const provider = getActiveProvider();
+  const cfg = getProviderConfig();
+  const providerKeyName = provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+  if (!cfg.apiKey) {
+    const err = new Error(`${providerKeyName} nao configurada no ambiente.`);
+    err.statusCode = 500;
+    throw err;
+  }
+
+  const normalizedFields = normalizeTranslatableFields(fields);
+  if (!normalizedFields.length) {
+    const err = new Error("Nenhum campo valido para traducao.");
+    err.statusCode = 422;
+    throw err;
+  }
+
+  const promptText = buildProfileTranslationPrompt({
+    profileName,
+    fields: normalizedFields,
+    targetLanguage
+  });
+  const payload = await callAiApi({
+    systemPrompt: "You are a technical translator for engineering specification forms. Return only valid JSON.",
+    userParts: [{ type: "text", text: promptText }],
+    maxTokens: Math.min(cfg.maxOutputTokens, cfg.maxOutputTokensCap),
+    temperature: 0.1
+  });
+
+  const rawText = extractAiText(payload);
+  const cleanedText = stripJsonCodeFence(rawText);
+  let parsed;
+  try {
+    parsed = JSON.parse(cleanedText);
+  } catch (_err) {
+    const err = new Error("A IA retornou conteudo que nao e JSON valido.");
+    err.statusCode = 422;
+    err.debug = { rawText, cleanedText, aiResponse: payload };
+    throw err;
+  }
+
+  const translated = validateTranslatedProfilePayload(parsed, normalizedFields);
+  return {
+    translatedProfile: translated,
+    debug: { rawText, cleanedText, aiResponse: payload }
+  };
+}
+
 const SPARE_PARTS_JSON_SCHEMA = JSON.stringify([
   {
     description: "Nome ou descrição da peça",
@@ -604,6 +738,7 @@ module.exports = {
   generateProfileJsonFromDocument,
   buildProfileAiPrompt,
   reviseTextWithAi,
+  translateProfileFieldsWithAi,
   extractSparePartsFromDocument,
   getSparePartsDefaultPrompt,
   getSparePartsJsonSchema

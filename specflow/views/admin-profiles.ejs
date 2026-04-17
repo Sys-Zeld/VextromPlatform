@@ -87,7 +87,7 @@
           </div>
         </div>
 
-        <form method="post" action="<%= editingProfileId ? `/admin/profiles/${editingProfileId}/update` : '/admin/profiles/create' %>" class="row g-3">
+        <form id="profileEditForm" method="post" action="<%= editingProfileId ? `/admin/profiles/${editingProfileId}/update` : '/admin/profiles/create' %>" class="row g-3">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
 
           <div class="col-12 col-md-8">
@@ -98,6 +98,9 @@
 
           <div class="col-12 col-md-4 d-flex align-items-end gap-2">
             <button class="btn btn-primary w-100" type="submit"><%= editingProfileId ? t("admin.profileUpdateButton") : t("admin.profileCreateButton") %></button>
+            <% if (editingProfileId) { %>
+              <button class="btn btn-outline-primary" type="button" id="openProfileTranslateModalBtn"><%= t("admin.profileTranslateButton") %></button>
+            <% } %>
             <% if (editingProfileId) { %><a class="btn btn-outline-secondary" href="/admin/profiles"><%= t("admin.profileCancelButton") %></a><% } %>
           </div>
 
@@ -298,6 +301,34 @@
   </div>
 </div>
 
+<% if (editingProfileId) { %>
+<div class="modal fade" id="profileTranslateModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title mb-0"><%= t("admin.profileTranslateModalTitle") %></h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<%= t('admin.profileCancelButton') %>"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1" for="profileTranslateTarget"><%= t("admin.profileTranslateTargetLabel") %></label>
+          <select id="profileTranslateTarget" class="form-select form-select-sm">
+            <option value="pt"><%= t("admin.profileTranslateTargetPt") %></option>
+            <option value="en"><%= t("admin.profileTranslateTargetEn") %></option>
+            <option value="fr"><%= t("admin.profileTranslateTargetFr") %></option>
+          </select>
+        </div>
+        <div id="profileTranslateStatus" class="small text-muted"></div>
+      </div>
+      <div class="modal-footer py-2">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal"><%= t("admin.profileCancelButton") %></button>
+        <button type="button" class="btn btn-primary btn-sm" id="retryProfileTranslateBtn"><%= t("admin.profileTranslateRetryButton") %></button>
+      </div>
+    </div>
+  </div>
+</div>
+<% } %>
+
 <script>
   (function () {
     function toSlug(input) {
@@ -389,6 +420,128 @@
         };
         reader.readAsText(file);
       });
+    }
+
+    var translateButton = document.getElementById("openProfileTranslateModalBtn");
+    var translateModalEl = document.getElementById("profileTranslateModal");
+    var translateStatus = document.getElementById("profileTranslateStatus");
+    var translateTarget = document.getElementById("profileTranslateTarget");
+    var retryTranslateBtn = document.getElementById("retryProfileTranslateBtn");
+    var profileForm = document.getElementById("profileEditForm");
+    var csrfInput = profileForm ? profileForm.querySelector('input[name="_csrf"]') : null;
+    var profileId = "<%= editingProfileId || '' %>";
+    var isTranslating = false;
+
+    function parseFieldIdFromName(name, prefix) {
+      if (!name || name.indexOf(prefix) !== 0) return null;
+      var raw = String(name).slice(prefix.length);
+      var id = Number(raw);
+      return Number.isInteger(id) && id > 0 ? id : null;
+    }
+
+    function collectProfileFieldsForTranslate() {
+      var labels = Array.prototype.slice.call(document.querySelectorAll('input[name^="pf_label_"]'));
+      return labels.map(function (input) {
+        var id = parseFieldIdFromName(input.name, "pf_label_");
+        if (!id) return null;
+        var sectionInput = document.querySelector('input[name="pf_section_' + id + '"]');
+        var fieldTypeSelect = document.querySelector('select[name="pf_field_type_' + id + '"]');
+        var enumTextarea = document.querySelector('textarea[name="pf_enum_options_' + id + '"]');
+        var enumLines = enumTextarea
+          ? String(enumTextarea.value || "").split(/\r?\n/).map(function (line) { return String(line || "").trim(); }).filter(Boolean)
+          : [];
+        return {
+          fieldId: id,
+          label: String(input.value || "").trim(),
+          section: sectionInput ? String(sectionInput.value || "").trim() : "",
+          fieldType: fieldTypeSelect ? String(fieldTypeSelect.value || "text").trim() : "text",
+          enumOptions: enumLines
+        };
+      }).filter(Boolean);
+    }
+
+    function applyTranslatedFields(payload) {
+      if (!payload || typeof payload !== "object") return;
+      var profileNameInput = document.querySelector('input[name="name"]');
+      if (profileNameInput && typeof payload.profileName === "string" && payload.profileName.trim()) {
+        profileNameInput.value = payload.profileName.trim();
+      }
+      var translatedFields = Array.isArray(payload.fields) ? payload.fields : [];
+      translatedFields.forEach(function (field) {
+        var id = Number(field && field.fieldId);
+        if (!Number.isInteger(id) || id <= 0) return;
+        var labelInput = document.querySelector('input[name="pf_label_' + id + '"]');
+        var sectionInput = document.querySelector('input[name="pf_section_' + id + '"]');
+        var enumTextarea = document.querySelector('textarea[name="pf_enum_options_' + id + '"]');
+        if (labelInput && typeof field.label === "string") {
+          labelInput.value = field.label;
+        }
+        if (sectionInput && typeof field.section === "string") {
+          sectionInput.value = field.section;
+        }
+        if (enumTextarea && Array.isArray(field.enumOptions)) {
+          enumTextarea.value = field.enumOptions.join("\n");
+        }
+      });
+    }
+
+    async function runProfileTranslation() {
+      if (!profileId || !profileForm || !csrfInput || isTranslating) return;
+      isTranslating = true;
+      if (retryTranslateBtn) retryTranslateBtn.disabled = true;
+      if (translateStatus) {
+        translateStatus.className = "small text-muted";
+        translateStatus.textContent = "<%= t('admin.profileTranslateRunning') %>";
+      }
+
+      try {
+        var response = await fetch("/admin/profiles/" + profileId + "/ai/translate", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            _csrf: csrfInput.value,
+            name: (document.querySelector('input[name=\"name\"]') || {}).value || "",
+            targetLanguage: translateTarget ? translateTarget.value : "pt",
+            fields: collectProfileFieldsForTranslate()
+          })
+        });
+        var payload = await response.json().catch(function () { return {}; });
+        if (!response.ok || !payload || !payload.ok || !payload.translatedProfile) {
+          throw new Error((payload && payload.message) || "<%= t('admin.profileTranslateError') %>");
+        }
+        applyTranslatedFields(payload.translatedProfile);
+        if (translateStatus) {
+          translateStatus.className = "small text-success";
+          translateStatus.textContent = "<%= t('admin.profileTranslateSuccess') %>";
+        }
+      } catch (_err) {
+        if (translateStatus) {
+          translateStatus.className = "small text-danger";
+          translateStatus.textContent = "<%= t('admin.profileTranslateError') %>";
+        }
+      } finally {
+        isTranslating = false;
+        if (retryTranslateBtn) retryTranslateBtn.disabled = false;
+      }
+    }
+
+    if (translateButton && translateModalEl && window.bootstrap) {
+      var profileTranslateModal = new bootstrap.Modal(translateModalEl);
+      translateButton.addEventListener("click", function () {
+        profileTranslateModal.show();
+        runProfileTranslation();
+      });
+      if (retryTranslateBtn) {
+        retryTranslateBtn.addEventListener("click", function () {
+          runProfileTranslation();
+        });
+      }
+      if (translateTarget) {
+        translateTarget.addEventListener("change", function () {
+          runProfileTranslation();
+        });
+      }
     }
 
   })();

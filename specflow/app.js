@@ -138,7 +138,14 @@ const {
   deleteBackupFileById,
   syncBackupsFromDirectory
 } = require("./services/backups");
-const { generateProfileJsonFromDocument, reviseTextWithAi, extractSparePartsFromDocument, getSparePartsDefaultPrompt, getSparePartsJsonSchema } = require("./services/aiProfiles");
+const {
+  generateProfileJsonFromDocument,
+  reviseTextWithAi,
+  translateProfileFieldsWithAi,
+  extractSparePartsFromDocument,
+  getSparePartsDefaultPrompt,
+  getSparePartsJsonSchema
+} = require("./services/aiProfiles");
 const { getAiPromptTemplate, setAiPromptTemplate } = require("./services/aiPromptSettings");
 const { registerReportService } = require("../report_service/src/app");
 
@@ -3757,6 +3764,60 @@ app.post("/admin/profiles/:id/update", csrfProtection, requireAdminAuth, asyncHa
       formValues: { name },
       fieldsForForm: profileFields,
       errors: err.details || { generic: err.message }
+    });
+  }
+}));
+
+app.post("/admin/profiles/:id/ai/translate", csrfProtection, requireAdminAuth, asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return sendStandardError(req, res, 400, { json: true });
+  }
+
+  const targetLanguage = sanitizeInput(req.body.targetLanguage || "").toLowerCase();
+  if (targetLanguage !== "pt" && targetLanguage !== "en" && targetLanguage !== "fr") {
+    return sendStandardError(req, res, 422, { json: true });
+  }
+
+  const sourceFields = Array.isArray(req.body.fields) ? req.body.fields : [];
+  const normalizedFields = sourceFields
+    .map((item) => {
+      const fieldId = Number(item && item.fieldId);
+      if (!Number.isInteger(fieldId) || fieldId <= 0) return null;
+      const enumOptions = Array.isArray(item && item.enumOptions)
+        ? item.enumOptions.map((opt) => sanitizeInput(opt)).filter(Boolean)
+        : [];
+      return {
+        fieldId,
+        label: sanitizeInput(item && item.label),
+        section: sanitizeInput(item && item.section),
+        fieldType: sanitizeInput(item && item.fieldType),
+        enumOptions
+      };
+    })
+    .filter(Boolean);
+
+  if (!normalizedFields.length) {
+    return sendStandardError(req, res, 422, { json: true });
+  }
+
+  const profileName = sanitizeInput(req.body.name || "");
+
+  try {
+    const translated = await translateProfileFieldsWithAi({
+      profileName,
+      fields: normalizedFields,
+      targetLanguage
+    });
+    return res.status(200).json({
+      ok: true,
+      targetLanguage,
+      translatedProfile: translated.translatedProfile
+    });
+  } catch (err) {
+    return res.status(err.statusCode || 422).json({
+      ok: false,
+      message: getStandardStatusMessage(req, err.statusCode || 422)
     });
   }
 }));
