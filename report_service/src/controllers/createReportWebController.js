@@ -3129,9 +3129,64 @@ function createReportWebController(deps) {
       font-weight: 600;
     }
     #rpt-print-modal .rpt-modal-confirm:hover { background: #3d6228; }
+    .rich-output img { cursor: zoom-in; }
+    #rpt-image-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      background: rgba(0,0,0,0.75);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #rpt-image-modal.rpt-open { display: flex; }
+    #rpt-image-modal .rpt-image-box {
+      position: relative;
+      width: min(96vw, 1400px);
+      max-height: 92vh;
+      background: #111;
+      border-radius: 10px;
+      padding: 40px 16px 14px;
+      box-shadow: 0 12px 34px rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #rpt-image-modal .rpt-image-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+      font-size: 20px;
+      line-height: 1;
+    }
+    #rpt-image-modal .rpt-image-view {
+      width: 100%;
+      max-height: calc(92vh - 86px);
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+      background: #111;
+      border-radius: 6px;
+    }
+    #rpt-image-modal .rpt-image-caption {
+      margin: 0;
+      color: #eaeaea;
+      font: 500 0.85rem/1.35 sans-serif;
+      text-align: center;
+      word-break: break-word;
+    }
     @media print {
       .rpt-action-bar { display: none !important; }
       #rpt-print-modal { display: none !important; }
+      #rpt-image-modal { display: none !important; }
     }
   </style>
 </head>
@@ -3157,7 +3212,63 @@ function createReportWebController(deps) {
   </div>
 </div>
 ${bodyHtml}
+<div id="rpt-image-modal" role="dialog" aria-modal="true" aria-label="Visualizacao da imagem">
+  <div class="rpt-image-box">
+    <button class="rpt-image-close" type="button" aria-label="Fechar">&times;</button>
+    <img id="rpt-image-view" class="rpt-image-view" src="" alt="" />
+    <p id="rpt-image-caption" class="rpt-image-caption"></p>
+  </div>
+</div>
 <script src="/public/js/report-pagination.js?v=${cacheVersion}"></script>
+<script>
+  (function () {
+    var modal = document.getElementById("rpt-image-modal");
+    var view = document.getElementById("rpt-image-view");
+    var caption = document.getElementById("rpt-image-caption");
+    if (!modal || !view || !caption) return;
+
+    function openModal(src, text) {
+      if (!src) return;
+      view.src = src;
+      view.alt = text || "Imagem";
+      caption.textContent = text || "";
+      modal.classList.add("rpt-open");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeModal() {
+      modal.classList.remove("rpt-open");
+      document.body.style.overflow = "";
+      view.src = "";
+      view.alt = "";
+      caption.textContent = "";
+    }
+
+    document.addEventListener("click", function (event) {
+      var img = event.target && event.target.closest ? event.target.closest(".rich-output img") : null;
+      if (img) {
+        var src = img.getAttribute("src") || "";
+        var text = img.getAttribute("alt") || "";
+        if (!text) {
+          var figure = img.closest ? img.closest("figure") : null;
+          var figcap = figure ? figure.querySelector("figcaption") : null;
+          text = figcap ? String(figcap.textContent || "").trim() : "";
+        }
+        openModal(src, text);
+        return;
+      }
+      if (event.target === modal || (event.target && event.target.closest && event.target.closest(".rpt-image-close"))) {
+        closeModal();
+      }
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && modal.classList.contains("rpt-open")) {
+        closeModal();
+      }
+    });
+  })();
+</script>
 </body>
 </html>`;
 
