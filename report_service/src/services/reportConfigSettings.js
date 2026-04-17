@@ -85,21 +85,6 @@ const DEFAULT_FOOTER_HTML = `<div class="footer-signature">
       display: block;
     }
 
-    @media (max-width: 900px) {
-      .footer-signature {
-        max-height: none;
-        padding: 16px 20px;
-      }
-
-      .footer-content {
-        flex-direction: column;
-        gap: 16px;
-      }
-
-      .footer-column-right {
-        max-width: 100%;
-      }
-    }
   </style>
 
   <div class="footer-content">
