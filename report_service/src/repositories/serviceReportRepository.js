@@ -402,6 +402,7 @@ async function createEquipment(payload) {
         type,
         year_of_manufacture,
         serial_number,
+        power,
         rated_ac_input_voltage,
         input_frequency,
         rated_dc_voltage,
@@ -417,7 +418,7 @@ async function createEquipment(payload) {
         created_at,
         updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),NOW())
       RETURNING *
     `,
     [
@@ -426,6 +427,7 @@ async function createEquipment(payload) {
       payload.type,
       payload.yearOfManufacture || "",
       payload.serialNumber || "",
+      payload.power || "",
       payload.ratedAcInputVoltage || "",
       payload.inputFrequency || "",
       payload.ratedDcVoltage || "",
@@ -453,18 +455,19 @@ async function updateEquipment(id, payload) {
         type = $4,
         year_of_manufacture = $5,
         serial_number = $6,
-        rated_ac_input_voltage = $7,
-        input_frequency = $8,
-        rated_dc_voltage = $9,
-        rated_ac_output_voltage = $10,
-        output_frequency = $11,
-        degree_of_protection = $12,
-        main_label = $13,
-        dt_number = $14,
-        tag_number = $15,
-        manufacturer = $16,
-        model_family = $17,
-        notes = $18,
+        power = $7,
+        rated_ac_input_voltage = $8,
+        input_frequency = $9,
+        rated_dc_voltage = $10,
+        rated_ac_output_voltage = $11,
+        output_frequency = $12,
+        degree_of_protection = $13,
+        main_label = $14,
+        dt_number = $15,
+        tag_number = $16,
+        manufacturer = $17,
+        model_family = $18,
+        notes = $19,
         updated_at = NOW()
       WHERE id = $1
       RETURNING *
@@ -476,6 +479,7 @@ async function updateEquipment(id, payload) {
       payload.type,
       payload.yearOfManufacture || "",
       payload.serialNumber || "",
+      payload.power || "",
       payload.ratedAcInputVoltage || "",
       payload.inputFrequency || "",
       payload.ratedDcVoltage || "",
@@ -929,6 +933,7 @@ async function listOrderEquipments(serviceOrderId) {
         e.customer_id,
         e.site_id,
         e.year_of_manufacture,
+        e.power,
         e.rated_ac_input_voltage,
         e.input_frequency,
         e.rated_dc_voltage,
@@ -1543,7 +1548,7 @@ async function listComponents(serviceReportId) {
         e.serial_number AS equipment_serial,
         e.tag_number AS equipment_tag,
         e.dt_number AS equipment_dt,
-        e.rated_ac_input_voltage AS equipment_power
+        COALESCE(NULLIF(e.power, ''), e.rated_ac_input_voltage) AS equipment_power
       FROM service_report_component_items ci
       LEFT JOIN service_report_equipments e ON e.id = ci.equipment_id
       WHERE ci.service_report_id = $1

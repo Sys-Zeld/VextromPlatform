@@ -17,6 +17,7 @@ const DEFAULTS = {
     type: "UPS",
     yearOfManufacture: "2026",
     serialNumber: "SEED-RS-EQ-0001",
+    power: "30kVA",
     ratedAcInputVoltage: "380V",
     inputFrequency: "60Hz",
     ratedDcVoltage: "240Vcc",
@@ -154,18 +155,19 @@ async function ensureEquipment(customerId, siteId) {
           site_id = $3,
           type = $4,
           year_of_manufacture = $5,
-          rated_ac_input_voltage = $6,
-          input_frequency = $7,
-          rated_dc_voltage = $8,
-          rated_ac_output_voltage = $9,
-          output_frequency = $10,
-          degree_of_protection = $11,
-          main_label = $12,
-          dt_number = $13,
-          tag_number = $14,
-          manufacturer = $15,
-          model_family = $16,
-          notes = $17,
+          power = $6,
+          rated_ac_input_voltage = $7,
+          input_frequency = $8,
+          rated_dc_voltage = $9,
+          rated_ac_output_voltage = $10,
+          output_frequency = $11,
+          degree_of_protection = $12,
+          main_label = $13,
+          dt_number = $14,
+          tag_number = $15,
+          manufacturer = $16,
+          model_family = $17,
+          notes = $18,
           updated_at = NOW()
         WHERE id = $1
       `,
@@ -175,6 +177,7 @@ async function ensureEquipment(customerId, siteId) {
         siteId,
         DEFAULTS.equipment.type,
         DEFAULTS.equipment.yearOfManufacture,
+        DEFAULTS.equipment.power,
         DEFAULTS.equipment.ratedAcInputVoltage,
         DEFAULTS.equipment.inputFrequency,
         DEFAULTS.equipment.ratedDcVoltage,
@@ -196,11 +199,11 @@ async function ensureEquipment(customerId, siteId) {
     `
       INSERT INTO service_report_equipments (
         customer_id, site_id, type, year_of_manufacture, serial_number,
-        rated_ac_input_voltage, input_frequency, rated_dc_voltage, rated_ac_output_voltage,
+        power, rated_ac_input_voltage, input_frequency, rated_dc_voltage, rated_ac_output_voltage,
         output_frequency, degree_of_protection, main_label, dt_number, tag_number,
         manufacturer, model_family, notes, created_at, updated_at
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW(),NOW())
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW(),NOW())
       RETURNING id
     `,
     [
@@ -209,6 +212,7 @@ async function ensureEquipment(customerId, siteId) {
       DEFAULTS.equipment.type,
       DEFAULTS.equipment.yearOfManufacture,
       DEFAULTS.equipment.serialNumber,
+      DEFAULTS.equipment.power,
       DEFAULTS.equipment.ratedAcInputVoltage,
       DEFAULTS.equipment.inputFrequency,
       DEFAULTS.equipment.ratedDcVoltage,

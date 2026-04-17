@@ -426,6 +426,7 @@ function renderEquipmentsInlineTable(orderEquipments) {
 
     const pairs = [
       { label: "Tipo", value: item.type },
+      { label: "Power", value: item.power || item.rated_ac_input_voltage },
       { label: "Fabricante", value: item.manufacturer },
       { label: "Modelo/Família", value: item.model_family },
       { label: "Série", value: item.serial_number },

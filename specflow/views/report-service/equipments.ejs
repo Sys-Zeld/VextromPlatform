@@ -175,6 +175,7 @@
         type: item.type || "",
         year_of_manufacture: item.year_of_manufacture || "",
         serial_number: item.serial_number || "",
+        power: item.power || "",
         rated_ac_input_voltage: item.rated_ac_input_voltage || "",
         input_frequency: item.input_frequency || "",
         rated_dc_voltage: item.rated_dc_voltage || "",
@@ -324,6 +325,7 @@
       row.type = getFieldValue(id, "type");
       row.year_of_manufacture = getFieldValue(id, "year_of_manufacture");
       row.serial_number = getFieldValue(id, "serial_number");
+      row.power = getFieldValue(id, "power");
       row.rated_ac_input_voltage = getFieldValue(id, "rated_ac_input_voltage");
       row.input_frequency = getFieldValue(id, "input_frequency");
       row.rated_dc_voltage = getFieldValue(id, "rated_dc_voltage");
@@ -346,6 +348,7 @@
       payload.set("type", row.type || "");
       payload.set("year_of_manufacture", row.year_of_manufacture || "");
       payload.set("serial_number", row.serial_number || "");
+      payload.set("power", row.power || "");
       payload.set("rated_ac_input_voltage", row.rated_ac_input_voltage || "");
       payload.set("input_frequency", row.input_frequency || "");
       payload.set("rated_dc_voltage", row.rated_dc_voltage || "");
@@ -461,6 +464,7 @@
             type: "<input id=\"eq-" + escapeHtml(row.id) + "-type\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.type || "") + "\"" + disabled + " />",
             year: "<input id=\"eq-" + escapeHtml(row.id) + "-year_of_manufacture\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.year_of_manufacture || "") + "\"" + disabled + " />",
             serial: "<input id=\"eq-" + escapeHtml(row.id) + "-serial_number\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.serial_number || "") + "\"" + disabled + " />",
+            power: "<input id=\"eq-" + escapeHtml(row.id) + "-power\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.power || "") + "\"" + disabled + " />",
             acInVoltage: "<input id=\"eq-" + escapeHtml(row.id) + "-rated_ac_input_voltage\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.rated_ac_input_voltage || "") + "\"" + disabled + " />",
             inputFreq: "<input id=\"eq-" + escapeHtml(row.id) + "-input_frequency\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.input_frequency || "") + "\"" + disabled + " />",
             dcVoltage: "<input id=\"eq-" + escapeHtml(row.id) + "-rated_dc_voltage\" class=\"form-control form-control-sm\" value=\"" + escapeHtml(row.rated_dc_voltage || "") + "\"" + disabled + " />",
@@ -505,6 +509,7 @@
             { id: "type", name: "Type", formatter: function (cell) { return window.gridjs.html(cell); } },
             { id: "year", name: "Year", formatter: function (cell) { return window.gridjs.html(cell); } },
             { id: "serial", name: "Serial", formatter: function (cell) { return window.gridjs.html(cell); } },
+            { id: "power", name: "Power", formatter: function (cell) { return window.gridjs.html(cell); } },
             { id: "acInVoltage", name: "AC Input V", formatter: function (cell) { return window.gridjs.html(cell); } },
             { id: "inputFreq", name: "Input Freq", formatter: function (cell) { return window.gridjs.html(cell); } },
             { id: "dcVoltage", name: "DC V", formatter: function (cell) { return window.gridjs.html(cell); } },
@@ -574,6 +579,7 @@
         type: "Novo Equipamento",
         year_of_manufacture: "",
         serial_number: "",
+        power: "",
         rated_ac_input_voltage: "",
         input_frequency: "",
         rated_dc_voltage: "",

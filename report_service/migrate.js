@@ -57,6 +57,7 @@ async function migrateServiceReport() {
       type TEXT NOT NULL,
       year_of_manufacture TEXT NOT NULL DEFAULT '',
       serial_number TEXT NOT NULL DEFAULT '',
+      power TEXT NOT NULL DEFAULT '',
       rated_ac_input_voltage TEXT NOT NULL DEFAULT '',
       input_frequency TEXT NOT NULL DEFAULT '',
       rated_dc_voltage TEXT NOT NULL DEFAULT '',
@@ -73,6 +74,7 @@ async function migrateServiceReport() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await db.query(`ALTER TABLE service_report_equipments ADD COLUMN IF NOT EXISTS power TEXT NOT NULL DEFAULT '';`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_equipments_customer_id ON service_report_equipments (customer_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_equipments_site_id ON service_report_equipments (site_id);`);
 
