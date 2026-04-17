@@ -50,6 +50,34 @@ function normalizeComponentCategory(value) {
   return normalized;
 }
 
+function normalizeSignerType(value) {
+  const normalized = sanitizeText(value).toLowerCase();
+  const aliases = new Map([
+    ["vextrom_technician", "vextrom_technician"],
+    ["tecnicos_vextrom", "vextrom_technician"],
+    ["tecnico_vextrom", "vextrom_technician"],
+    ["customer_responsible", "customer_responsible"],
+    ["responsavel_cliente", "customer_responsible"],
+    ["project_manager", "project_manager"],
+    ["gerente_projeto", "project_manager"],
+    ["technical_director", "technical_director"],
+    ["diretor_tecnico", "technical_director"]
+  ]);
+  if (aliases.has(normalized)) return aliases.get(normalized);
+
+  const normalizedAllowed = new Set(
+    (SIGNER_TYPES || [])
+      .map((item) => sanitizeText(item).toLowerCase())
+      .filter(Boolean)
+  );
+  if (!normalized || !normalizedAllowed.has(normalized)) {
+    const err = new Error("Tipo de assinatura invalido.");
+    err.statusCode = 422;
+    throw err;
+  }
+  return normalized;
+}
+
 async function createOrder(input = {}) {
   const customerId = repo.toInt(input.customerId);
   if (!customerId) {
@@ -379,13 +407,8 @@ async function updateComponent(id, input = {}) {
 }
 
 async function createSignature(reportId, input = {}) {
-  const signerType = sanitizeText(input.signerType).toLowerCase();
+  const signerType = normalizeSignerType(input.signerType);
   const signerName = sanitizeText(input.signerName);
-  if (!SIGNER_TYPES.includes(signerType)) {
-    const err = new Error("Tipo de assinatura invalido.");
-    err.statusCode = 422;
-    throw err;
-  }
   if (!signerName) {
     const err = new Error("Assinatura exige nome do signatario.");
     err.statusCode = 422;
