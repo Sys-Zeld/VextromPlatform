@@ -81,6 +81,12 @@ function createReportWebController(deps) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "")
     .trim();
+  const normalizePartNumberToken = (value) => String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
   const extractModelTokens = (value) => {
     const raw = String(value || "");
     const parts = raw
@@ -1014,11 +1020,15 @@ function createReportWebController(deps) {
 
       const linkedSpareParts = selectedEquipment ? await repo.listSparePartsByEquipment(selectedEquipment.id) : [];
       const linkedIds = new Set(linkedSpareParts.map((item) => Number(item.id)));
-      const linkedPns = new Set(linkedSpareParts.map((item) => (item.part_number || "").trim().toLowerCase()).filter(Boolean));
+      const linkedPns = new Set(
+        linkedSpareParts
+          .map((item) => normalizePartNumberToken(item.part_number))
+          .filter(Boolean)
+      );
       const availableSpareParts = selectedEquipment
         ? spareParts.filter((item) => {
             if (linkedIds.has(Number(item.id))) return false;
-            const pn = (item.part_number || "").trim().toLowerCase();
+            const pn = normalizePartNumberToken(item.part_number);
             if (pn && linkedPns.has(pn)) return false;
             return true;
           })
@@ -1296,9 +1306,9 @@ function createReportWebController(deps) {
       // Block if equipment already has a spare part with the same PN
       if (sparePart.part_number) {
         const alreadyLinked = await repo.listSparePartsByEquipment(equipmentId);
-        const pnLower = sparePart.part_number.trim().toLowerCase();
+        const pnLower = normalizePartNumberToken(sparePart.part_number);
         const conflict = alreadyLinked.find(
-          (item) => (item.part_number || "").trim().toLowerCase() === pnLower
+          (item) => normalizePartNumberToken(item.part_number) === pnLower
         );
         if (conflict) {
           return res.redirect(`/admin/report-service/spare-parts?equipment_id=${equipmentId}&error=pn_duplicate`);
@@ -1385,12 +1395,20 @@ function createReportWebController(deps) {
 
       const alreadyLinkedRows = await repo.listSparePartsByEquipment(equipmentId);
       const alreadyLinkedIds = new Set(alreadyLinkedRows.map((row) => Number(row.id)));
+      const alreadyLinkedPns = new Set(
+        alreadyLinkedRows
+          .map((row) => normalizePartNumberToken(row.part_number))
+          .filter(Boolean)
+      );
       let linkedCount = 0;
       for (const item of matching) {
-        if (!alreadyLinkedIds.has(Number(item.id))) {
+        const itemId = Number(item.id);
+        const itemPn = normalizePartNumberToken(item.part_number);
+        if (!alreadyLinkedIds.has(itemId) && (!itemPn || !alreadyLinkedPns.has(itemPn))) {
           // eslint-disable-next-line no-await-in-loop
-          await repo.linkSparePartToEquipmentIfMissing(equipmentId, item.id, 1);
-          alreadyLinkedIds.add(Number(item.id));
+          await repo.linkSparePartToEquipmentIfMissing(equipmentId, itemId, 1);
+          alreadyLinkedIds.add(itemId);
+          if (itemPn) alreadyLinkedPns.add(itemPn);
           linkedCount += 1;
         }
       }
