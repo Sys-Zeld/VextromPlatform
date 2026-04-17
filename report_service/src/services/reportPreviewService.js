@@ -570,7 +570,7 @@ function injectTaggedImagesInHtml(contentHtml, imageById, componentItems, equipm
     const label = String(equipment?.tag || equipment?.type || "").trim();
     return label ? escapeHtml(label) : _match;
   });
-  const imageTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*img(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)(?:\s|&nbsp;|<[^>]+>)*(?:imagem)?/gi;
+  const imageTagPattern = /(?:@|&#64;)(?:\s|&nbsp;|<[^>]+>)*img(?:\s|&nbsp;|<[^>]+>)*(?:=|&#61;)(?:\s|&nbsp;|<[^>]+>)*(\d+)(?:\s|&nbsp;)*(?:imagem)?/gi;
   const withImages = withEquipments.replace(imageTagPattern, (_match, rawId) => {
     const id = Number(rawId);
     if (!Number.isInteger(id) || id <= 0) return _match;
