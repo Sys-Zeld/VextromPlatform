@@ -503,7 +503,9 @@ blockquote {
 
 .report-inline-components-table .report-inline-components-part {
   width: 160px;
-  text-align: left;
+  text-align: center;
+  font-size: 0.82rem;
+  font-weight: 700;
   font-family: "Courier New", "Lucida Console", monospace;
 }
 
