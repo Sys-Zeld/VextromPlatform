@@ -46,6 +46,31 @@ function parseDefaultValueInput(value) {
   return value;
 }
 
+function normalizeEnumToken(value) {
+  return String(value === null || value === undefined ? "" : value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function buildEnumOptionLookup(optionsRaw) {
+  const source = Array.isArray(optionsRaw) ? optionsRaw : [];
+  const exactMap = new Map();
+  const normalizedMap = new Map();
+  source.forEach((option) => {
+    const canonical = String(option === null || option === undefined ? "" : option).trim();
+    if (!canonical) return;
+    if (!exactMap.has(canonical)) exactMap.set(canonical, canonical);
+    const normalized = normalizeEnumToken(canonical);
+    if (normalized && !normalizedMap.has(normalized)) {
+      normalizedMap.set(normalized, canonical);
+    }
+  });
+  return { exactMap, normalizedMap };
+}
+
 function normalizeFieldRow(row, lang = "en") {
   return {
     id: Number(row.id),
@@ -102,11 +127,19 @@ function validateTypedValue(field, rawValue, allowEmpty = true) {
 
   if (fieldType === "enum") {
     const selected = String(rawValue).trim();
-    const options = Array.isArray(field.enumOptions || field.enum_options) ? (field.enumOptions || field.enum_options) : [];
-    if (!options.includes(selected)) {
+    const options = field.enumOptions || field.enum_options;
+    const lookup = buildEnumOptionLookup(options);
+    if (lookup.exactMap.has(selected)) {
+      return { hasValue: true, value: lookup.exactMap.get(selected) };
+    }
+    const normalizedSelected = normalizeEnumToken(selected);
+    if (normalizedSelected && lookup.normalizedMap.has(normalizedSelected)) {
+      return { hasValue: true, value: lookup.normalizedMap.get(normalizedSelected) };
+    }
+    if (!lookup.exactMap.size) {
       throw new Error("Invalid enum option.");
     }
-    return { hasValue: true, value: selected };
+    throw new Error("Invalid enum option.");
   }
 
   if (fieldType === "time") {
