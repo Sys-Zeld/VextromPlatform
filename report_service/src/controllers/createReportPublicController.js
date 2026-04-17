@@ -228,7 +228,6 @@ function createReportPublicController(deps) {
 <body>
 <div class="rpt-action-bar">
   <button class="report-print-btn" onclick="document.getElementById('rpt-print-modal').style.display='flex'">&#128424; Imprimir</button>
-  <button class="report-pdf-btn" id="rpt-pdf-btn" onclick="rptGerarPdf()">&#128196; Gerar PDF</button>
 </div>
 <div id="rpt-print-modal" role="dialog" aria-modal="true" aria-labelledby="rpt-modal-title">
   <div class="rpt-modal-box">
@@ -249,40 +248,7 @@ function createReportPublicController(deps) {
 </div>
 ${reportHtml}
 <script src="/public/js/report-pagination.js?v=${cv}"></script>
-<script>
-(function () {
-  var PDF_URL = '/r/signed/${encodeURIComponent(token)}/pdf';
-  var PDF_FILENAME = '${String(signRequest.report_number || "relatorio").replace(/'/g, "")}.pdf';
-  window.rptGerarPdf = function () {
-    var btn = document.getElementById('rpt-pdf-btn');
-    if (!btn || btn.disabled) return;
-    btn.disabled = true;
-    btn.innerHTML = '&#9203; Gerando...';
-    fetch(PDF_URL, { credentials: 'same-origin' })
-      .then(function (r) {
-        if (!r.ok) throw new Error('Erro ' + r.status);
-        return r.blob();
-      })
-      .then(function (blob) {
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = PDF_FILENAME;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-      })
-      .catch(function (e) {
-        alert('Erro ao gerar PDF: ' + e.message);
-      })
-      .finally(function () {
-        btn.disabled = false;
-        btn.innerHTML = '&#128196; Gerar PDF';
-      });
-  };
-}());
-</script>${autoPrint ? `
+${autoPrint ? `
 <script>
 (function () {
   function tryPrint() {
