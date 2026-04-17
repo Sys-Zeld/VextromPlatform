@@ -334,7 +334,7 @@
       </div>
       <div class="modal-footer py-2">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal"><%= t("admin.profileCancelButton") %></button>
-        <button type="button" class="btn btn-primary btn-sm" id="retryProfileTranslateBtn"><%= t("admin.profileTranslateRetryButton") %></button>
+        <button type="button" class="btn btn-primary btn-sm" id="saveProfileTranslateBtn" data-bs-dismiss="modal"><%= t("admin.profileTranslateSaveButton") %></button>
       </div>
     </div>
   </div>
@@ -438,7 +438,7 @@
     var translateModalEl = document.getElementById("profileTranslateModal");
     var translateStatus = document.getElementById("profileTranslateStatus");
     var translateTarget = document.getElementById("profileTranslateTarget");
-    var retryTranslateBtn = document.getElementById("retryProfileTranslateBtn");
+    var saveTranslateBtn = document.getElementById("saveProfileTranslateBtn");
     var profileForm = document.getElementById("profileEditForm");
     var csrfInput = profileForm ? profileForm.querySelector('input[name="_csrf"]') : null;
     var profileId = "<%= editingProfileId || '' %>";
@@ -500,7 +500,7 @@
     async function runProfileTranslation() {
       if (!profileId || !profileForm || !csrfInput || isTranslating) return;
       isTranslating = true;
-      if (retryTranslateBtn) retryTranslateBtn.disabled = true;
+      if (saveTranslateBtn) saveTranslateBtn.disabled = true;
       if (translateStatus) {
         translateStatus.className = "small text-muted";
         translateStatus.textContent = "<%= t('admin.profileTranslateRunning') %>";
@@ -534,7 +534,7 @@
         }
       } finally {
         isTranslating = false;
-        if (retryTranslateBtn) retryTranslateBtn.disabled = false;
+        if (saveTranslateBtn) saveTranslateBtn.disabled = false;
       }
     }
 
@@ -542,11 +542,6 @@
       translateModalEl.addEventListener("show.bs.modal", function () {
         runProfileTranslation();
       });
-      if (retryTranslateBtn) {
-        retryTranslateBtn.addEventListener("click", function () {
-          runProfileTranslation();
-        });
-      }
       if (translateTarget) {
         translateTarget.addEventListener("change", function () {
           runProfileTranslation();
