@@ -201,17 +201,25 @@ function getComponentRowsByCategory(componentItems, categoryKey) {
   const rows = Array.isArray(componentItems) ? componentItems : [];
   const normalized = String(categoryKey || "").trim().toLowerCase();
   if (!normalized) return rows;
+  const normalizeCategory = (value) => String(value || "").trim().toLowerCase();
+  const isCategoryAlias = (value, aliases) => aliases.includes(normalizeCategory(value));
   return rows.filter((item) => {
-    const category = String(item?.category || "").trim().toLowerCase();
-    if (normalized === "replaced") return category === "replaced";
-    if (normalized === "required") return category === "required";
-    if (normalized === "spare") return category === "spare_recommended" || category === "spare";
+    const category = normalizeCategory(item?.category);
+    if (normalized === "replaced") {
+      return isCategoryAlias(category, ["replaced", "substituidos", "substituido"]);
+    }
+    if (normalized === "required") {
+      return isCategoryAlias(category, ["required", "para_troca", "para troca"]);
+    }
+    if (normalized === "spare") {
+      return isCategoryAlias(category, ["spare_recommended", "spare", "recomendados", "recomendado"]);
+    }
     return false;
   });
 }
 
-function renderComponentsInlineTable(componentItems) {
-  const rows = Array.isArray(componentItems) ? componentItems : [];
+function renderSingleEquipmentComponentsTable(componentRows) {
+  const rows = Array.isArray(componentRows) ? componentRows : [];
   const first = rows[0] || {};
   const equipmentName = escapeHtml(first.equipment_type || first.equipment_model_family || "COMPONENTES");
   const powerLabel = escapeHtml(first.equipment_power || "-");
@@ -256,6 +264,25 @@ function renderComponentsInlineTable(componentItems) {
       </table>
     </div>
   `;
+}
+
+function renderComponentsInlineTable(componentItems) {
+  const rows = Array.isArray(componentItems) ? componentItems : [];
+  if (!rows.length) return renderSingleEquipmentComponentsTable([]);
+
+  const groups = new Map();
+  rows.forEach((item) => {
+    const equipmentId = Number(item && item.equipment_id);
+    const key = Number.isInteger(equipmentId) && equipmentId > 0
+      ? `eq:${equipmentId}`
+      : "__no_equipment__";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+
+  return Array.from(groups.values())
+    .map((groupRows) => renderSingleEquipmentComponentsTable(groupRows))
+    .join("");
 }
 
 function formatTimesheetDate(value) {
