@@ -14,6 +14,15 @@ function getPuppeteerOrNull() {
   }
 }
 
+function launchBrowser(puppeteer) {
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
+  return puppeteer.launch({
+    headless: true,
+    executablePath,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  });
+}
+
 function drawTitle(doc, text) {
   doc.font("Helvetica-Bold").fontSize(14).fillColor("#111").text(text || "-", { underline: false });
   doc.moveDown(0.4);
@@ -202,7 +211,7 @@ ${html}
 
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    browser = await launchBrowser(puppeteer);
     const page = await browser.newPage();
     await page.setViewport({
       width: 1240,
@@ -251,7 +260,7 @@ async function buildPdfBufferFromUrl(url, options = {}) {
 
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    browser = await launchBrowser(puppeteer);
     const page = await browser.newPage();
     await page.setViewport({
       width: 1240,
@@ -302,7 +311,7 @@ async function buildAnalyticsPdfBufferFromHtml(html) {
   }
   let browser;
   try {
-    browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+    browser = await launchBrowser(puppeteer);
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: "networkidle0" });

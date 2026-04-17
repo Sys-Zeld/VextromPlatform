@@ -406,18 +406,9 @@ function createReportWebController(deps) {
   }
 
   async function buildPdfFromPreviewRoute(req, orderId, templateKey, payload) {
-    const previewUrl = buildTemplatePreviewAbsoluteUrl(req, orderId, templateKey);
-    try {
-      return await buildPdfBufferFromUrl(previewUrl, {
-        cookieHeader: String(req.headers.cookie || "")
-      });
-    } catch (urlErr) {
-      // eslint-disable-next-line no-console
-      console.error("[report-service] Falha ao gerar PDF pela URL de preview. Fallback HTML acionado.", urlErr);
-      const { reportConfig } = await resolveRenderConfig(templateKey, null);
-      const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
-      return buildPdfBufferFromHtml(htmlSource, payload);
-    }
+    const { reportConfig } = await resolveRenderConfig(templateKey, null);
+    const htmlSource = await renderReportPreviewHtml(payload, { reportConfig, templateKey });
+    return buildPdfBufferFromHtml(htmlSource, payload);
   }
 
   function maskProtectedTokens(inputText) {

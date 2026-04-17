@@ -4,7 +4,7 @@ const service = require("../services/serviceReportService");
 const { renderReportPreviewHtml } = require("../services/reportTemplateService");
 const { getReportConfigSettings } = require("../services/reportConfigSettings");
 const { getReportServiceEmailSettings, getTemplateByPurpose } = require("../services/emailSettings");
-const { buildPdfBufferFromUrl } = require("../services/serviceReportPdfService");
+const { buildPdfBufferFromHtml } = require("../services/serviceReportPdfService");
 const crypto = require("crypto");
 const env = require("../../../specflow/config/env");
 
@@ -319,10 +319,11 @@ ${reportHtml}
         return res.status(403).send("Relatorio nao disponivel.");
       }
 
-      const signedPageUrl = `${resolveRequestBaseUrl(req)}/r/signed/${encodeURIComponent(token)}`;
-      const buffer = await buildPdfBufferFromUrl(signedPageUrl, {
-        cookieHeader: String(req.headers.cookie || "")
-      });
+      const report = await repo.getReportById(signRequest.service_report_id);
+      const payload = await service.buildReportAggregate(report.id);
+      const reportConfig = await getReportConfigSettings();
+      const htmlSource = await renderReportPreviewHtml(payload, { reportConfig });
+      const buffer = await buildPdfBufferFromHtml(htmlSource, payload);
 
       const reportNumber = String(signRequest.report_number || "relatorio").replace(/[^a-zA-Z0-9._-]/g, "_");
       res.setHeader("Content-Type", "application/pdf");
