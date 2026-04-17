@@ -3,6 +3,7 @@ const PDFDocument = require("pdfkit");
 const { formatServiceOrderDisplay } = require("../utils/serviceOrderDisplay");
 const env = require("../../../specflow/config/env");
 const path = require("path");
+const os = require("os");
 
 function getPuppeteerOrNull() {
   try {
@@ -233,6 +234,11 @@ async function compressImageBuffer(buffer, ext) {
 
 const IMG_MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
 let previewStaticAssetsPromise = null;
+let sharedBrowserPromise = null;
+let activePdfJobs = 0;
+const pdfQueue = [];
+const DEFAULT_PDF_CONCURRENCY = Math.max(1, Math.min(4, Number.parseInt(process.env.REPORT_PDF_CONCURRENCY || "", 10) || Math.ceil((os.cpus() || []).length / 2) || 2));
+const IMAGE_PRELOAD_CONCURRENCY = Math.max(1, Number.parseInt(process.env.REPORT_PDF_IMAGE_PRELOAD_CONCURRENCY || "4", 10) || 4);
 
 function buildImageRouteMap() {
   return [
@@ -280,10 +286,24 @@ async function preloadImageCache(html, baseUrl) {
 
   const cache = new Map();
   const base = String(baseUrl || "").replace(/\/+$/, "");
-  await Promise.all([...paths].map(async (urlPath) => {
-    const result = await resolveImageFromPath(urlPath);
-    if (result) cache.set(base + urlPath, result);
-  }));
+  const pathList = [...paths];
+  let cursor = 0;
+  async function worker() {
+    while (cursor < pathList.length) {
+      const index = cursor;
+      cursor += 1;
+      const urlPath = pathList[index];
+      // eslint-disable-next-line no-await-in-loop
+      const result = await resolveImageFromPath(urlPath);
+      if (result) cache.set(base + urlPath, result);
+    }
+  }
+  const workers = [];
+  const workerCount = Math.min(IMAGE_PRELOAD_CONCURRENCY, pathList.length || 1);
+  for (let i = 0; i < workerCount; i += 1) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
   return cache;
 }
 
@@ -300,6 +320,63 @@ async function loadPreviewStaticAssets() {
       });
   }
   return previewStaticAssetsPromise;
+}
+
+async function acquirePdfRenderSlot() {
+  if (activePdfJobs < DEFAULT_PDF_CONCURRENCY) {
+    activePdfJobs += 1;
+    return;
+  }
+  await new Promise((resolve) => pdfQueue.push(resolve));
+  activePdfJobs += 1;
+}
+
+function releasePdfRenderSlot() {
+  activePdfJobs = Math.max(0, activePdfJobs - 1);
+  const next = pdfQueue.shift();
+  if (typeof next === "function") next();
+}
+
+async function withPdfRenderSlot(task) {
+  await acquirePdfRenderSlot();
+  try {
+    return await task();
+  } finally {
+    releasePdfRenderSlot();
+  }
+}
+
+async function getSharedBrowser(puppeteer) {
+  if (!sharedBrowserPromise) {
+    sharedBrowserPromise = launchBrowser(puppeteer)
+      .then((browser) => {
+        browser.on("disconnected", () => {
+          sharedBrowserPromise = null;
+        });
+        return browser;
+      })
+      .catch((err) => {
+        sharedBrowserPromise = null;
+        throw err;
+      });
+  }
+  return sharedBrowserPromise;
+}
+
+async function createPdfPage(puppeteer) {
+  const browser = await getSharedBrowser(puppeteer);
+  return browser.newPage();
+}
+
+async function withPdfPage(puppeteer, task) {
+  return withPdfRenderSlot(async () => {
+    const page = await createPdfPage(puppeteer);
+    try {
+      return await task(page);
+    } finally {
+      await page.close().catch(() => {});
+    }
+  });
 }
 
 async function buildPdfBufferFromHtml(html, fallbackPayload) {
@@ -330,10 +407,7 @@ ${html}
 </body>
 </html>`;
 
-  let browser;
-  try {
-    browser = await launchBrowser(puppeteer);
-    const page = await browser.newPage();
+  return withPdfPage(puppeteer, async (page) => {
 
     // Handler síncrono — sem async, sem risco de timing
     await page.setRequestInterception(true);
@@ -372,9 +446,7 @@ ${html}
       margin: { top: 0, right: 0, bottom: 0, left: 0 }
     });
     return Buffer.from(buffer);
-  } finally {
-    if (browser) await browser.close();
-  }
+  });
 }
 
 async function buildPdfBufferFromUrl(url, options = {}) {
@@ -391,10 +463,7 @@ async function buildPdfBufferFromUrl(url, options = {}) {
 
   const cookieHeader = String(options.cookieHeader || "").trim();
 
-  let browser;
-  try {
-    browser = await launchBrowser(puppeteer);
-    const page = await browser.newPage();
+  return withPdfPage(puppeteer, async (page) => {
     await page.setViewport({
       width: 1240,
       height: 1754,
@@ -424,9 +493,7 @@ async function buildPdfBufferFromUrl(url, options = {}) {
       margin: { top: 0, right: 0, bottom: 0, left: 0 }
     });
     return Buffer.from(buffer);
-  } finally {
-    if (browser) await browser.close();
-  }
+  });
 }
 
 async function generatePdfToFile(payload, outputPath, htmlSource = "") {
@@ -442,10 +509,7 @@ async function buildAnalyticsPdfBufferFromHtml(html) {
   if (!puppeteer) {
     throw new Error("Puppeteer não está instalado. Instale puppeteer para gerar o PDF do dashboard.");
   }
-  let browser;
-  try {
-    browser = await launchBrowser(puppeteer);
-    const page = await browser.newPage();
+  return withPdfPage(puppeteer, async (page) => {
     await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
     await page.setContent(html, { waitUntil: "networkidle0" });
     // Wait for Chart.js to finish rendering all canvases
@@ -456,9 +520,7 @@ async function buildAnalyticsPdfBufferFromHtml(html) {
       margin: { top: "14mm", right: "12mm", bottom: "14mm", left: "12mm" }
     });
     return Buffer.from(buffer);
-  } finally {
-    if (browser) await browser.close();
-  }
+  });
 }
 
 module.exports = {
