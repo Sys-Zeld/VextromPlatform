@@ -37,6 +37,19 @@ function sanitizeText(value) {
   return String(value || "").trim();
 }
 
+function normalizeComponentCategory(value) {
+  const normalized = sanitizeText(value).toLowerCase();
+  const allowed = (COMPONENT_CATEGORIES || [])
+    .map((item) => sanitizeText(item).toLowerCase())
+    .filter(Boolean);
+  if (!normalized || !allowed.includes(normalized)) {
+    const err = new Error("Categoria de componente invalida.");
+    err.statusCode = 422;
+    throw err;
+  }
+  return normalized;
+}
+
 async function createOrder(input = {}) {
   const customerId = repo.toInt(input.customerId);
   if (!customerId) {
@@ -332,12 +345,7 @@ async function deleteReportSection(reportId, sectionKey) {
 }
 
 async function createComponent(reportId, input = {}) {
-  const category = sanitizeText(input.category).toLowerCase();
-  if (!COMPONENT_CATEGORIES.includes(category)) {
-    const err = new Error("Categoria de componente invalida.");
-    err.statusCode = 422;
-    throw err;
-  }
+  const category = normalizeComponentCategory(input.category);
   if (!sanitizeText(input.description)) {
     const err = new Error("Descricao do componente e obrigatoria.");
     err.statusCode = 422;
@@ -356,8 +364,9 @@ async function createComponent(reportId, input = {}) {
 }
 
 async function updateComponent(id, input = {}) {
+  const category = normalizeComponentCategory(input.category);
   return repo.updateComponent(id, {
-    category: sanitizeText(input.category).toLowerCase(),
+    category,
     equipmentId: repo.toInt(input.equipmentId),
     quantity: Number(input.quantity || 1),
     description: sanitizeText(input.description),

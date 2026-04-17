@@ -292,27 +292,89 @@
     return block.querySelector("p, li");
   }
 
+  function collectTextNodes(root) {
+    if (!root) return [];
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    var nodes = [];
+    var current = walker.nextNode();
+    while (current) {
+      nodes.push(current);
+      current = walker.nextNode();
+    }
+    return nodes;
+  }
+
+  function getTotalTextLength(root) {
+    var nodes = collectTextNodes(root);
+    var total = 0;
+    for (var i = 0; i < nodes.length; i += 1) {
+      total += String(nodes[i].textContent || "").length;
+    }
+    return total;
+  }
+
+  function locateTextPosition(root, index) {
+    var nodes = collectTextNodes(root);
+    if (!nodes.length) return null;
+
+    var total = 0;
+    for (var i = 0; i < nodes.length; i += 1) {
+      total += String(nodes[i].textContent || "").length;
+    }
+
+    var bounded = Math.max(0, Math.min(Number(index) || 0, total));
+    var offset = bounded;
+    for (var j = 0; j < nodes.length; j += 1) {
+      var text = String(nodes[j].textContent || "");
+      var len = text.length;
+      if (offset <= len) return { node: nodes[j], offset: offset };
+      offset -= len;
+    }
+
+    var last = nodes[nodes.length - 1];
+    return { node: last, offset: String(last.textContent || "").length };
+  }
+
+  function sliceRichHtml(root, start, end) {
+    var startPos = locateTextPosition(root, start);
+    var endPos = locateTextPosition(root, end);
+    if (!startPos || !endPos) return "";
+
+    var range = document.createRange();
+    range.setStart(startPos.node, startPos.offset);
+    range.setEnd(endPos.node, endPos.offset);
+
+    var container = document.createElement("div");
+    container.appendChild(range.cloneContents());
+    return container.innerHTML;
+  }
+
+  function hasVisibleText(root) {
+    if (!root) return false;
+    return String(root.textContent || "").replace(/\s+/g, "").length > 0;
+  }
+
   function splitParagraphBlock(block, pageEl, reportDoc, sectionMeta) {
     var target = findParagraphTarget(block);
     if (!target) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
+    if (!hasVisibleText(target)) return pageEl;
 
-    var text = String(target.textContent || "").trim();
-    if (!text) return pageEl;
+    var totalLength = getTotalTextLength(target);
+    if (!totalLength) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
 
-    var words = text.split(/\s+/);
     var firstPart = block.cloneNode(true);
     var firstTarget = findParagraphTarget(firstPart);
     if (!firstTarget) return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
 
-    firstTarget.textContent = "";
+    firstTarget.innerHTML = "";
     appendAndCheck(firstPart, pageEl);
 
     var low = 1;
-    var high = words.length;
+    var high = totalLength;
     var best = 0;
     while (low <= high) {
       var mid = Math.floor((low + high) / 2);
-      firstTarget.textContent = words.slice(0, mid).join(" ");
+      firstTarget.innerHTML = sliceRichHtml(target, 0, mid);
       var fit = !isFlowOverflowing(getFlow(pageEl), pageEl) && !isPageOverflowing(pageEl);
       if (fit) {
         best = mid;
@@ -327,14 +389,14 @@
       return moveWholeBlockToNextPage(block, pageEl, reportDoc, sectionMeta);
     }
 
-    firstTarget.textContent = words.slice(0, best).join(" ");
-    var remaining = words.slice(best).join(" ");
-    if (!remaining) return pageEl;
+    firstTarget.innerHTML = sliceRichHtml(target, 0, best);
+    var remainingHtml = sliceRichHtml(target, best, totalLength);
+    if (!String(remainingHtml || "").replace(/<[^>]*>/g, "").trim()) return pageEl;
 
     var rest = block.cloneNode(true);
     var restTarget = findParagraphTarget(rest);
     if (!restTarget) return pageEl;
-    restTarget.textContent = remaining;
+    restTarget.innerHTML = remainingHtml;
     var nextPage = ensureNextPageForSection(pageEl, reportDoc, sectionMeta, true);
     return appendBlockWithPagination(rest, nextPage, reportDoc, null, sectionMeta);
   }

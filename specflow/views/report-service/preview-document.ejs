@@ -127,3 +127,71 @@
     </section>
   <% }) %>
 </article>
+
+<div class="modal fade" id="previewImageModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title mb-0" id="previewImageModalLabel">Visualizacao da imagem</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body text-center p-3">
+        <img
+          id="previewImageModalImg"
+          src=""
+          alt=""
+          style="max-width:100%;max-height:82vh;object-fit:contain;width:auto;height:auto;border-radius:6px;"
+        />
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    function initImagePreviewModal() {
+      var modalEl = document.getElementById("previewImageModal");
+      var modalImg = document.getElementById("previewImageModalImg");
+      var modalLabel = document.getElementById("previewImageModalLabel");
+      if (!modalEl || !modalImg || !modalLabel) return;
+
+      function resolveCaptionFromImage(img) {
+        var alt = img.getAttribute("alt") || "";
+        if (alt) return alt;
+        var figure = img.closest ? img.closest("figure") : null;
+        var caption = figure ? figure.querySelector("figcaption") : null;
+        return caption ? String(caption.textContent || "").trim() : "";
+      }
+
+      document.addEventListener("click", function (event) {
+        var img = event.target && event.target.closest ? event.target.closest(".rich-output img") : null;
+        if (!img) return;
+        var src = img.getAttribute("src") || "";
+        if (!src) return;
+        var alt = resolveCaptionFromImage(img);
+
+        if (!window.bootstrap || !window.bootstrap.Modal) {
+          window.open(src, "_blank", "noopener");
+          return;
+        }
+
+        modalImg.src = src;
+        modalImg.alt = alt || "Imagem";
+        modalLabel.textContent = alt || "Visualizacao da imagem";
+        window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+      });
+
+      modalEl.addEventListener("hidden.bs.modal", function () {
+        modalImg.src = "";
+        modalImg.alt = "";
+      });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initImagePreviewModal, { once: true });
+    } else {
+      initImagePreviewModal();
+    }
+  })();
+</script>
+

@@ -698,6 +698,7 @@ blockquote {
   height: auto;
   display: block;
   margin: 8px auto;
+  cursor: zoom-in;
 }
 
 .rich-output th,
