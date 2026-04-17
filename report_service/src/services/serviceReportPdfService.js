@@ -183,6 +183,106 @@ function htmlToPlainText(html) {
     .trim();
 }
 
+// Pixels acima deste limite disparam a compressão
+const IMAGE_COMPRESS_THRESHOLD_PX = 1200;
+// Largura máxima após redimensionamento (mantém proporção)
+const IMAGE_MAX_WIDTH_PX = 1200;
+
+function getSharpOrNull() {
+  try {
+    // eslint-disable-next-line global-require, import/no-extraneous-dependencies
+    return require("sharp");
+  } catch (_) {
+    return null;
+  }
+}
+
+async function compressImageBuffer(buffer, ext) {
+  const sharp = getSharpOrNull();
+  if (!sharp) return { buffer, mime: ext === "png" ? "image/png" : "image/jpeg" };
+
+  try {
+    const img = sharp(buffer);
+    const meta = await img.metadata();
+    const w = meta.width || 0;
+    const h = meta.height || 0;
+
+    if (w <= IMAGE_COMPRESS_THRESHOLD_PX && h <= IMAGE_COMPRESS_THRESHOLD_PX) {
+      // Imagem pequena — retorna original sem reprocessar
+      const mime = ext === "png" ? "image/png" : "image/jpeg";
+      return { buffer, mime };
+    }
+
+    // Redimensiona e comprime
+    const pipeline = img.resize({ width: IMAGE_MAX_WIDTH_PX, withoutEnlargement: true });
+    let outBuffer;
+    let mime;
+    if (ext === "png") {
+      outBuffer = await pipeline.png({ compressionLevel: 8, adaptiveFiltering: true }).toBuffer();
+      mime = "image/png";
+    } else {
+      outBuffer = await pipeline.jpeg({ quality: 75, mozjpeg: true }).toBuffer();
+      mime = "image/jpeg";
+    }
+    return { buffer: outBuffer, mime };
+  } catch (_) {
+    return { buffer, mime: ext === "png" ? "image/png" : "image/jpeg" };
+  }
+}
+
+const IMG_MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml" };
+
+function buildImageRouteMap() {
+  const path = require("path");
+  return [
+    { prefix: "/docs/report/img/", dir: path.join(process.cwd(), "docs", "report", "img") },
+    { prefix: "/public/", dir: path.resolve(__dirname, "..", "..", "..", "specflow", "public") }
+  ];
+}
+
+async function resolveImageFromPath(urlPath) {
+  const path = require("path");
+  const routeMap = buildImageRouteMap();
+  for (const route of routeMap) {
+    if (urlPath.startsWith(route.prefix)) {
+      const rel = decodeURIComponent(urlPath.slice(route.prefix.length));
+      const filePath = path.join(route.dir, rel);
+      if (!fs.existsSync(filePath)) return null;
+      const ext = path.extname(filePath).replace(".", "").toLowerCase();
+      const mime = IMG_MIME[ext];
+      if (!mime) return null;
+      const raw = fs.readFileSync(filePath);
+      if (ext === "svg") return { body: raw, mime };
+      const compressExt = ext === "png" ? "png" : "jpeg";
+      const { buffer, mime: outMime } = await compressImageBuffer(raw, compressExt);
+      return { body: buffer, mime: outMime };
+    }
+  }
+  return null;
+}
+
+// Pré-carrega e comprime todas as imagens referenciadas no HTML.
+// Retorna um Map de URL-absoluta -> { body, mime } para uso síncrono no handler.
+async function preloadImageCache(html, baseUrl) {
+  const srcRegex = /src=(["'])([^"']+)\1/gi;
+  const paths = new Set();
+  let m;
+  // eslint-disable-next-line no-cond-assign
+  while ((m = srcRegex.exec(html)) !== null) {
+    const src = m[2];
+    if (/^data:/i.test(src) || /^https?:\/\//i.test(src)) continue;
+    if (src.startsWith("/")) paths.add(src);
+  }
+
+  const cache = new Map();
+  const base = String(baseUrl || "").replace(/\/+$/, "");
+  await Promise.all([...paths].map(async (urlPath) => {
+    const result = await resolveImageFromPath(urlPath);
+    if (result) cache.set(base + urlPath, result);
+  }));
+  return cache;
+}
+
 async function buildPdfBufferFromHtml(html, fallbackPayload) {
   const puppeteer = getPuppeteerOrNull();
   if (!puppeteer) {
@@ -192,14 +292,19 @@ async function buildPdfBufferFromHtml(html, fallbackPayload) {
   const cssPreview = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-preview.css"), "utf8");
   const cssPrint = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "css", "report-print.css"), "utf8");
   const paginationJs = fs.readFileSync(path.resolve(__dirname, "..", "..", "..", "specflow", "public", "js", "report-pagination.js"), "utf8");
-  const appBaseUrl = String(env.appBaseUrl || "http://localhost:3000").replace(/\/+$/, "") + "/";
+
+  // Base URL fictícia — só usada internamente para que o Puppeteer resolva as URLs das imagens
+  const appBaseUrl = String(env.appBaseUrl || "http://localhost:3000").replace(/\/+$/, "");
+
+  // Pré-carrega imagens ANTES de abrir o browser (handler síncrono)
+  const imageCache = await preloadImageCache(html, appBaseUrl);
 
   const fullHtml = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=960, initial-scale=1.0" />
-  <base href="${appBaseUrl}" />
+  <base href="${appBaseUrl}/" />
   <style>${cssPreview}</style>
   <style>${cssPrint}</style>
 </head>
@@ -213,12 +318,23 @@ ${html}
   try {
     browser = await launchBrowser(puppeteer);
     const page = await browser.newPage();
-    await page.setViewport({
-      width: 1240,
-      height: 1754,
-      deviceScaleFactor: 1
+
+    // Handler síncrono — sem async, sem risco de timing
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      const reqUrl = req.url();
+      const cached = imageCache.get(reqUrl);
+      if (cached) {
+        req.respond({ status: 200, contentType: cached.mime, body: cached.body });
+      } else {
+        req.abort();
+      }
     });
-    await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+
+    await page.setViewport({ width: 1240, height: 1754, deviceScaleFactor: 1 });
+    await page.setContent(fullHtml, { waitUntil: "domcontentloaded" });
+
+    // Aguarda todas as imagens carregarem (ou falharem) + fonts + paginação
     await page.evaluate(async () => {
       const images = Array.from(document.images || []);
       await Promise.all(images.map((img) => {
@@ -233,6 +349,7 @@ ${html}
       }
     });
     await page.waitForFunction(() => window.__reportPaginationDone === true, { timeout: 10000 }).catch(() => {});
+
     const buffer = await page.pdf({
       format: "A4",
       printBackground: true,
