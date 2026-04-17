@@ -84,6 +84,11 @@ async function saveEquipmentSpecification(equipmentId, payloadValues) {
   if (!keys.length) {
     return { updated: 0 };
   }
+  const equipment = await getEquipmentById(equipmentId);
+  const profileFields = equipment && equipment.profileId
+    ? await listProfileFieldsForSpecification(equipment.profileId)
+    : [];
+  const profileFieldMap = new Map(profileFields.map((field) => [Number(field.id), field]));
 
   const client = await db.connect();
   let updated = 0;
@@ -92,7 +97,10 @@ async function saveEquipmentSpecification(equipmentId, payloadValues) {
     for (const fieldIdText of keys) {
       const fieldId = Number(fieldIdText);
       if (!Number.isInteger(fieldId) || fieldId <= 0) continue;
-      const field = await getFieldById(fieldId);
+      let field = profileFieldMap.get(fieldId) || null;
+      if (!field) {
+        field = await getFieldById(fieldId);
+      }
       if (!field) {
         const err = new Error(`Field ${fieldId} not found.`);
         err.statusCode = 404;
