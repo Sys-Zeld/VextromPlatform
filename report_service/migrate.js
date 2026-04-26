@@ -476,6 +476,21 @@ async function migrateServiceReport() {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_sign_requests_report_id ON service_report_sign_requests (service_report_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sr_sign_requests_token ON service_report_sign_requests (token);`);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS service_report_translation_jobs (
+      id TEXT PRIMARY KEY,
+      order_id BIGINT NOT NULL,
+      target_language TEXT NOT NULL DEFAULT 'pt',
+      status TEXT NOT NULL DEFAULT 'queued',
+      progress INTEGER NOT NULL DEFAULT 0,
+      message TEXT NOT NULL DEFAULT '',
+      error TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      finished_at TIMESTAMPTZ
+    );
+  `);
+
   await seedServiceReportEquipment();
   await seedServiceReportSample();
 }

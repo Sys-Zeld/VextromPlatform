@@ -60,6 +60,7 @@
     "api:key:revoke": "node scripts/api-key-revoke.js",
     "api:key:delete": "node scripts/api-key-delete.js",
     "admin:sessions:clear": "node scripts/clear-admin-sessions.js",
+    "admin:auth:reset": "node scripts/reset-auth-state.js",
     "admin:public-limit:reset": "node scripts/reset-public-token-limit.js",
     "token:set-sent": "node scripts/token-set-sent.js",
     "token:set-draft": "node scripts/token-set-draft.js",

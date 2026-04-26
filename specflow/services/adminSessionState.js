@@ -6,7 +6,6 @@ const STATE_FILE = env.admin.sessionStateFile;
 const STATE_DIR = path.dirname(STATE_FILE);
 let cachedState = {};
 let initialized = false;
-let pendingWrite = Promise.resolve();
 
 function loadStateFromDiskSync() {
   try {
@@ -24,14 +23,9 @@ function ensureInitialized() {
   cachedState = loadStateFromDiskSync();
 }
 
-function persistStateAsync(state) {
-  pendingWrite = pendingWrite
-    .catch(() => {})
-    .then(async () => {
-      await fs.promises.mkdir(STATE_DIR, { recursive: true });
-      await fs.promises.writeFile(STATE_FILE, JSON.stringify(state, null, 2), "utf8");
-    })
-    .catch(() => {});
+function persistStateSync(state) {
+  fs.mkdirSync(STATE_DIR, { recursive: true });
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2), "utf8");
 }
 
 function getAdminSessionNotBefore() {
@@ -44,11 +38,27 @@ function invalidateAllAdminSessions() {
   ensureInitialized();
   const now = Date.now();
   cachedState.adminSessionNotBefore = now;
-  persistStateAsync(cachedState);
+  persistStateSync(cachedState);
+  return now;
+}
+
+function getRateLimiterResetAfter() {
+  ensureInitialized();
+  const value = Number(cachedState.rateLimiterResetAfter || 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function requestAllRateLimitersReset() {
+  ensureInitialized();
+  const now = Date.now();
+  cachedState.rateLimiterResetAfter = now;
+  persistStateSync(cachedState);
   return now;
 }
 
 module.exports = {
   getAdminSessionNotBefore,
-  invalidateAllAdminSessions
+  invalidateAllAdminSessions,
+  getRateLimiterResetAfter,
+  requestAllRateLimitersReset
 };

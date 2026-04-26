@@ -215,6 +215,7 @@ Validacao de seguranca no restore:
 ### Operacao admin
 
 - `npm run admin:sessions:clear`
+- `npm run admin:auth:reset` — invalida logins ativos e zera os rate limiters do app
 - `npm run admin:public-limit:reset`
 
 ### API keys

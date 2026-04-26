@@ -7,7 +7,6 @@ const express = require("express");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const csrf = require("csurf");
-const rateLimit = require("express-rate-limit");
 const dayjs = require("dayjs");
 
 const env = require("./config/env");
@@ -18,6 +17,10 @@ const { buildSubmissionQrPayload, normalizeQrTheme } = require("./services/qr");
 const { generatePdfBuffer } = require("./services/pdf");
 const { sendSubmissionEmail, sendSmtpTestEmail } = require("./services/email");
 const { getAdminSessionNotBefore } = require("./services/adminSessionState");
+const {
+  createResettableRateLimit,
+  resetRegisteredRateLimitersIfRequested
+} = require("./services/rateLimitRegistry");
 const {
   getAdminUserAccessByUsername,
   getAdminUserByUsername,
@@ -309,6 +312,11 @@ app.use((req, res, next) => {
     }
     next();
   }).catch(next);
+});
+
+app.use((_req, _res, next) => {
+  resetRegisteredRateLimitersIfRequested();
+  next();
 });
 
 function signAdminSessionPayload(payload) {
@@ -2148,7 +2156,7 @@ app.get("/admin/login", csrfProtection, (req, res) => {
   });
 });
 
-const adminLoginLimiter = rateLimit({
+const adminLoginLimiter = createResettableRateLimit("admin-login", {
   windowMs: 15 * 60 * 1000,
   limit: 10,
   standardHeaders: true,
@@ -4805,7 +4813,7 @@ app.get("/form/:token/review", csrfProtection, asyncHandler(async (req, res) => 
   });
 }));
 
-const emailLimiter = rateLimit({
+const emailLimiter = createResettableRateLimit("form-send-email", {
   windowMs: 15 * 60 * 1000,
   limit: 8,
   standardHeaders: true,
@@ -4858,7 +4866,7 @@ app.post("/form/:token/send-email", csrfProtection, emailLimiter, asyncHandler(a
   }
 }));
 
-const pdfLimiter = rateLimit({
+const pdfLimiter = createResettableRateLimit("form-pdf", {
   windowMs: 60 * 1000,
   limit: 5,
   standardHeaders: true,

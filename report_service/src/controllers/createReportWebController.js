@@ -3,6 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 const { v4: uuidv4 } = require("uuid");
+const db = require("../../db");
 const repo = require("../repositories/serviceReportRepository");
 const service = require("../services/serviceReportService");
 const {
@@ -136,7 +137,57 @@ function createReportWebController(deps) {
     fr: { key: "fr", label: "Francês" }
   });
   const REPORT_LANGUAGE_KEYS = Object.keys(REPORT_LANGUAGES);
-  const translationJobs = new Map();
+  async function dbSetJob(job) {
+    await db.query(
+      `INSERT INTO service_report_translation_jobs
+         (id, order_id, target_language, status, progress, message, error, created_at, updated_at, finished_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (id) DO UPDATE SET
+         status      = EXCLUDED.status,
+         progress    = EXCLUDED.progress,
+         message     = EXCLUDED.message,
+         error       = EXCLUDED.error,
+         updated_at  = EXCLUDED.updated_at,
+         finished_at = EXCLUDED.finished_at`,
+      [
+        job.id,
+        job.orderId,
+        job.targetLanguage,
+        job.status,
+        job.progress,
+        job.message,
+        job.error,
+        job.createdAt,
+        job.updatedAt,
+        job.finishedAt || null
+      ]
+    );
+  }
+
+  async function dbGetJob(jobId) {
+    const { rows } = await db.query(
+      `SELECT * FROM service_report_translation_jobs WHERE id = $1`,
+      [jobId]
+    );
+    if (!rows.length) return null;
+    const row = rows[0];
+    return {
+      id: row.id,
+      orderId: Number(row.order_id),
+      targetLanguage: row.target_language,
+      status: row.status,
+      progress: Number(row.progress),
+      message: row.message,
+      error: row.error,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      finishedAt: row.finished_at || ""
+    };
+  }
+
+  async function dbDeleteJob(jobId) {
+    await db.query(`DELETE FROM service_report_translation_jobs WHERE id = $1`, [jobId]);
+  }
 
   function normalizeReportLanguage(value, fallback = "pt") {
     const normalized = String(value || "").trim().toLowerCase();
@@ -740,7 +791,7 @@ function createReportWebController(deps) {
     return { changed: true, targetLanguage: normalizedTarget };
   }
 
-  function createTranslationJob({ orderId, targetLanguage }) {
+  async function createTranslationJob({ orderId, targetLanguage }) {
     const jobId = uuidv4();
     const nowIso = new Date().toISOString();
     const job = {
@@ -755,18 +806,20 @@ function createReportWebController(deps) {
       updatedAt: nowIso,
       finishedAt: ""
     };
-    translationJobs.set(jobId, job);
+    await dbSetJob(job);
 
     (async () => {
       try {
         job.status = "running";
         job.message = "Iniciando tradução com IA...";
         job.updatedAt = new Date().toISOString();
+        await dbSetJob(job);
         const result = await translatePersistedReportContent(orderId, targetLanguage, {
-          onProgress(state) {
+          async onProgress(state) {
             job.progress = Number(state && state.progress ? state.progress : job.progress);
             job.message = String(state && state.message ? state.message : job.message);
             job.updatedAt = new Date().toISOString();
+            await dbSetJob(job);
           }
         });
         job.status = "completed";
@@ -779,8 +832,9 @@ function createReportWebController(deps) {
       } finally {
         job.updatedAt = new Date().toISOString();
         job.finishedAt = new Date().toISOString();
+        await dbSetJob(job);
         setTimeout(() => {
-          translationJobs.delete(jobId);
+          dbDeleteJob(jobId).catch(() => {});
         }, 30 * 60 * 1000);
       }
     })();
@@ -2464,7 +2518,7 @@ function createReportWebController(deps) {
       if (!targetLanguage) {
         return res.status(422).json({ ok: false, message: "Idioma de tradução inválido." });
       }
-      const job = createTranslationJob({ orderId, targetLanguage });
+      const job = await createTranslationJob({ orderId, targetLanguage });
       return res.status(202).json({
         ok: true,
         jobId: job.id,
@@ -2477,7 +2531,7 @@ function createReportWebController(deps) {
     async getTranslateReportJob(req, res) {
       const orderId = Number(req.params.id);
       const jobId = String(req.params.jobId || "");
-      const job = translationJobs.get(jobId);
+      const job = await dbGetJob(jobId);
       if (!job || Number(job.orderId) !== orderId) {
         return res.status(404).json({ ok: false, message: "Job de tradução não encontrado." });
       }
