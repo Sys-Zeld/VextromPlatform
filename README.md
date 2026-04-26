@@ -216,10 +216,51 @@ Validacao de seguranca no restore:
 
 - `npm run admin:sessions:clear`
 - `npm run admin:public-limit:reset`
-- `npm run api:key:create`
-- `npm run api:key:list`
-- `npm run api:key:revoke -- <id>`
-- `npm run api:key:delete -- <id>`
+
+### API keys
+
+Criar uma API key:
+
+```bash
+npm run api:key:create -- --name "Integracao externa" --scopes fields:read,spec:read
+```
+
+Criar uma API key com validade customizada:
+
+```bash
+npm run api:key:create -- --name "Report Service Read" --scopes report-service:read --ttl-days 90
+```
+
+Criar uma API key com leitura e escrita no Report Service:
+
+```bash
+npm run api:key:create -- --name "Report Service Write" --scopes report-service:read,report-service:write --ttl-days 30
+```
+
+Listar API keys cadastradas:
+
+```bash
+npm run api:key:list
+```
+
+Revogar uma API key sem apagar o registro:
+
+```bash
+npm run api:key:revoke -- 3
+```
+
+Deletar uma API key:
+
+```bash
+npm run api:key:delete -- 3
+```
+
+Observacoes:
+
+- o valor completo da API key aparece apenas no momento da criacao
+- use `revoke` quando quiser desativar mantendo historico
+- use `delete` quando quiser remover o registro da chave
+- escopos comuns: `fields:read`, `spec:read`, `report-service:read`, `report-service:write`
 
 ## Configuracoes de ambiente (chaves criticas)
 

@@ -11,6 +11,10 @@ dist/
 build/
 coverage/
 
+testes/
+
+falhasecurity.md
+
 tmp/
 temp/
 .cache/
