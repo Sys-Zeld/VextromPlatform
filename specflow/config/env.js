@@ -49,6 +49,7 @@ module.exports = {
   nodeEnv,
   port: Number(process.env.PORT || 3000),
   appBaseUrl,
+  corsAllowedOrigins: process.env.CORS_ALLOWED_ORIGINS || "",
   specflowEnabled: String(process.env.SPECFLOW_ENABLED || "true").toLowerCase() === "true",
   moduleSpecEnabled: String(process.env.MODULE_SPEC_ENABLED || "false").toLowerCase() === "true",
   reportServiceEnabled: String(process.env.REPORT_SERVICE_ENABLED || "true").toLowerCase() === "true",

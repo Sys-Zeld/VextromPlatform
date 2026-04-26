@@ -521,7 +521,8 @@ function sendStandardError(req, res, statusCode, options = {}) {
 function getRequestOrigin(req) {
   const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
   const proto = forwardedProto || req.protocol || (req.secure ? "https" : "http");
-  const host = req.get("host");
+  const forwardedHost = String(req.headers["x-forwarded-host"] || "").split(",")[0].trim();
+  const host = forwardedHost || req.get("host");
   return host ? `${proto}://${host}` : "";
 }
 
@@ -533,6 +534,11 @@ function isTrustedBrowserOrigin(req, value) {
       new URL(env.appBaseUrl).origin,
       getRequestOrigin(req)
     ].filter(Boolean));
+    if (env.corsAllowedOrigins) {
+      env.corsAllowedOrigins.split(",").forEach(o => {
+        if (o.trim()) allowedOrigins.add(new URL(o.trim()).origin);
+      });
+    }
     return allowedOrigins.has(suppliedOrigin);
   } catch (_err) {
     return false;
@@ -541,8 +547,10 @@ function isTrustedBrowserOrigin(req, value) {
 
 app.use((req, res, next) => {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
-  const origin = req.headers.origin;
+  // Alguns navegadores ou redirecionamentos mandam a string "null". Tratamos como vazio para cair no check do Referer.
+  const origin = req.headers.origin === "null" ? undefined : req.headers.origin;
   const referer = req.headers.referer;
+  
   if (origin && !isTrustedBrowserOrigin(req, origin)) {
     return sendStandardError(req, res, 403);
   }
