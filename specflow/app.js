@@ -207,6 +207,10 @@ app.use(helmet({
   noSniff: true,
   referrerPolicy: { policy: "no-referrer" }
 }));
+app.use((req, res, next) => {
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  next();
+});
 app.use(express.urlencoded({ extended: false, limit: "25mb" }));
 app.use(express.json({ limit: "25mb" }));
 app.use(cookieParser());
@@ -299,6 +303,10 @@ app.use((req, res, next) => {
     res.locals.appVersion = appVersionRaw;
     res.locals.appVersionShort = appVersionShort;
     res.locals.moduleSpecEnabled = env.moduleSpecEnabled;
+    if (req.path.startsWith("/admin")) {
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Pragma", "no-cache");
+    }
     next();
   }).catch(next);
 });
@@ -501,6 +509,40 @@ function sendStandardError(req, res, statusCode, options = {}) {
   }
   return res.status(statusCode).send(message);
 }
+
+function getRequestOrigin(req) {
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const proto = forwardedProto || req.protocol || (req.secure ? "https" : "http");
+  const host = req.get("host");
+  return host ? `${proto}://${host}` : "";
+}
+
+function isTrustedBrowserOrigin(req, value) {
+  if (!value) return true;
+  try {
+    const suppliedOrigin = new URL(value).origin;
+    const allowedOrigins = new Set([
+      new URL(env.appBaseUrl).origin,
+      getRequestOrigin(req)
+    ].filter(Boolean));
+    return allowedOrigins.has(suppliedOrigin);
+  } catch (_err) {
+    return false;
+  }
+}
+
+app.use((req, res, next) => {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  if (origin && !isTrustedBrowserOrigin(req, origin)) {
+    return sendStandardError(req, res, 403);
+  }
+  if (!origin && referer && !isTrustedBrowserOrigin(req, referer)) {
+    return sendStandardError(req, res, 403);
+  }
+  return next();
+});
 
 function requireMaintenanceAdmin(req, res, next) {
   const role = String(req.adminRole || "").toLowerCase();
@@ -2115,7 +2157,7 @@ const adminLoginLimiter = rateLimit({
 });
 
 
-app.post("/admin/login", csrfProtection, adminLoginLimiter, asyncHandler(async (req, res) => {
+app.post("/admin/login", csrfProtection, adminLoginLimiter,  asyncHandler(async (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = sanitizeInput(req.body.password);
 
@@ -4816,7 +4858,14 @@ app.post("/form/:token/send-email", csrfProtection, emailLimiter, asyncHandler(a
   }
 }));
 
-app.get("/form/:token/pdf", asyncHandler(async (req, res) => {
+const pdfLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.get("/form/:token/pdf", pdfLimiter, asyncHandler(async (req, res) => {
   const equipment = await resolveEquipmentByTokenOr404(req, res);
   if (!equipment) return;
   const specification = await getEquipmentSpecification(equipment.id, null, req.lang);
