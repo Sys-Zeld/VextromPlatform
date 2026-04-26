@@ -2114,8 +2114,8 @@ const adminLoginLimiter = rateLimit({
   handler: (req, res) => res.redirect("/admin/login?rate=1")
 });
 
-//app.post("/admin/login", csrfProtection, adminLoginLimiter, asyncHandler(async (req, res) =>
-app.post("/admin/login", csrfProtection, asyncHandler(async (req, res) => {
+
+app.post("/admin/login", csrfProtection, adminLoginLimiter, asyncHandler(async (req, res) => {
   const username = sanitizeInput(req.body.username);
   const password = sanitizeInput(req.body.password);
 
